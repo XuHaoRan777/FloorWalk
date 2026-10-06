@@ -1,0 +1,15 @@
+#!/bin/sh
+# commit-msg 钩子：修正模式提交（信息含 `Mode: fix`）改了代码却没追加 docs/testlog.md 时拒绝。
+# 只做这一件事，不改提交信息、不碰 specs。安装：
+#   cp scripts/hooks/commit-msg .git/hooks/commit-msg && chmod +x .git/hooks/commit-msg
+# 或 git config core.hooksPath scripts/hooks
+
+msg_file="$1"
+grep -qi '^Mode: *fix *$' "$msg_file" || exit 0
+
+staged=$(git diff --cached --name-only)
+echo "$staged" | grep -qvE '^docs/|\.md$' || exit 0          # 没改代码，放行
+echo "$staged" | grep -qx 'docs/testlog.md' && exit 0        # 已追加 testlog，放行
+
+echo "commit-msg: Mode: fix 提交改了代码但未追加 docs/testlog.md（AGENTS.md 第 3 节）" >&2
+exit 1

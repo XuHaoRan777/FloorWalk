@@ -1,0 +1,177 @@
+# ============================================================================
+# Shared project rules
+# ============================================================================
+
+# IDE and editor files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+#*.trae
+#*.husky
+#*.cursor
+#*.changeset
+*~
+.playwright-mcp
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+logs/
+.cache/
+
+# ============================================================================
+# Node.js projects (shared by React, Vue, NestJS and other Node apps)
+# ============================================================================
+
+# Dependencies and package-manager state
+node_modules/
+.pnpm-store/
+.npm/
+.npm-cache/
+**/.yarn/cache/
+**/.yarn/unplugged/
+**/.yarn/install-state.gz
+**/.yarn/build-state.yml
+.pnp.*
+
+# Package-manager and Node.js logs/state
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.node_repl_history
+
+# ============================================================================
+# React projects
+# ============================================================================
+
+# Umi Max and utoopack generated state
+.umi/
+.umi-production/
+.umi-test/
+.umi-undefined/
+.turbopack/
+apps/admin/mock/requestRecord.mock.js
+
+# ============================================================================
+# Next.js projects
+# ============================================================================
+
+# Next.js build output, local deployment state and caches
+.next/
+out/
+.vercel/
+.expo/
+.expo-shared/
+.parcel-cache/
+.eslintcache
+*.tsbuildinfo
+
+# WeChat DevTools local settings
+project.private.config.json
+*.private.config.json
+
+# ============================================================================
+# Vue projects
+# ============================================================================
+
+# Nuxt and Vue tooling output
+.nuxt/
+.output/
+.vite/
+
+# ============================================================================
+# NestJS projects
+# ============================================================================
+
+# NestJS uses the standard TypeScript build directory.
+dist/
+
+# ============================================================================
+# Java projects
+# ============================================================================
+
+# Maven / Gradle output and local build state
+target/
+.gradle/
+out/
+*.class
+
+# Keep the Maven Wrapper binary when it is present.
+!.mvn/wrapper/maven-wrapper.jar
+
+# Eclipse / Spring Tool Suite metadata
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+.apt_generated/
+
+# Spring Initializr helper output
+HELP.md
+
+# ============================================================================
+# Python projects
+# ============================================================================
+
+# Virtual environments: ignore the entire environment, not only Lib/.
+.venv/
+venv/
+env/
+ENV/
+.env
+.env.*
+!.env.example
+**/.env.dev
+**/.env.prod
+
+# WeChat Pay merchant keys (ERR-073)
+**/certs/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.tox/
+.nox/
+
+# Python packaging and test output
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+.coverage
+.coverage.*
+htmlcov/
+
+# ============================================================================
+# Generic build and test output
+# ============================================================================
+
+build/
+coverage/
+.nyc_output/
+
+# Local tool state
+.lsp.json
+nul
+
+# Local docker image exports from deploy/deploy.ps1
+/errand-*.tar
+/deploy/errand-*.tar*
