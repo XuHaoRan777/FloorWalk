@@ -1,0 +1,30 @@
+{
+  "name": "floorwalk",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": "24.x",
+    "pnpm": "11.21.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @libs/shared build && concurrently --kill-others --names shared,api,web,mobile \"pnpm --filter @libs/shared dev\" \"pnpm --filter @apps/api dev\" \"pnpm --filter @apps/web dev\" \"pnpm --filter @apps/mobile dev\"",
+    "dev:api": "pnpm --filter @libs/shared build && pnpm --filter @apps/api dev",
+    "dev:web": "pnpm --filter @libs/shared build && pnpm --filter @apps/web dev",
+    "dev:mobile": "pnpm --filter @libs/shared build && pnpm --filter @apps/mobile dev",
+    "dev:shared": "pnpm --filter @libs/shared dev",
+    "typecheck": "pnpm --filter @libs/shared build && pnpm -r typecheck",
+    "lint": "eslint apps packages",
+    "format:check": "prettier --check package.json pnpm-workspace.yaml eslint.config.mjs .prettierrc.json apps packages",
+    "build": "pnpm --filter @libs/shared build && pnpm --filter @apps/* --workspace-concurrency=1 -r build"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "concurrently": "10.0.5",
+    "eslint": "10.12.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
+    "prettier": "3.9.9",
+    "typescript-eslint": "8.58.2"
+  }
+}

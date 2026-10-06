@@ -129,7 +129,8 @@ Subagent 只做当前任务内的调查、审查或局部实现：未说明写�
 | --- | --- |
 | 产品定位、禁区、演示租户 | [`docs/context/product.md`](docs/context/product.md) |
 | 环境、端口、验证命令 | [`docs/context/dev-environment.md`](docs/context/dev-environment.md) |
+| 本地安装、启动、构建产物运行、骨架验收 | [`docs/howto/local-development.md`](docs/howto/local-development.md) |
 
-机器门按受影响模块：尚无业务代码；API、Web、Mobile、shared 的验证入口在骨架建立后登记到 [`docs/context/dev-environment.md`](docs/context/dev-environment.md)。认证、支付、权限和外部回调的失败与越权路径必须在 `spec.md` 的 AC 里逐条列出，验证只覆盖列出的。
+机器门按受影响模块：当前只有工程骨架，尚无业务功能；API、Web、Mobile、shared 的验证入口已登记到 [`docs/context/dev-environment.md`](docs/context/dev-environment.md)。认证、支付、权限和外部回调的失败与越权路径必须在 `spec.md` 的 AC 里逐条列出，验证只覆盖列出的。
 
 代码规范：2 空格缩进、单引号、必须分号、尾随逗号。各模块 lint / 格式化工具随骨架选型确定。跨包类型进 `@libs/shared`。数据库 schema 名 `floorwalk`。改文件遵循该文件既有模式。

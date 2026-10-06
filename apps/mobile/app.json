@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "FloorWalk",
+    "slug": "floorwalk",
+    "version": "0.0.0",
+    "scheme": "floorwalk",
+    "userInterfaceStyle": "light",
+    "plugins": ["expo-router"]
+  }
+}

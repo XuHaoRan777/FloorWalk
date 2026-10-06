@@ -1,0 +1,10 @@
+The gluestack-ui provider, button components and theme are adapted from:
+https://github.com/gluestack/gluestack-ui/tree/b712c8541c85d57becbd1a1b2ba150a369223eb6/apps/starter-kit-expo
+
+The upstream README at that commit states:
+"Licensed under the MIT License, Copyright © 2026 GeekyAnts."
+https://github.com/gluestack/gluestack-ui/blob/b712c8541c85d57becbd1a1b2ba150a369223eb6/README.md
+
+The root LICENSE link in that README was unavailable at integration time.
+This notice preserves the upstream statement without attributing the CLI's
+separate copyright to the starter components.
