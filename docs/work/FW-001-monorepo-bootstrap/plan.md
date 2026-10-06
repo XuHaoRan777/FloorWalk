@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- 工作单元状态：`blocked`
+- 工作单元状态：`verified`
 - 归档状态：`active`
-- 当前任务：T07 独立审查完成；T06 保留原生验收阻塞
-- 阻塞：用户明确本次只验证服务启动，Android 页面与按钮尚未验收，AC-05 及 AC-02 的 Mobile 原生显示证据仍未完成；系统级 Android 环境安装未获授权。本轮先做独立审查并提交推送，不归档。
-- 下一步：按已获授权提交推送本轮成果；后续补齐 Android 原生验收，再 Promote 与归档。B 验收不改为 A，不重新执行已完成的整轮审查。
+- 当前任务：T01—T07 完成；用户真机确认已补齐 T06，待完成归档提交
+- 阻塞：无。2026-10-06 用户确认真机 Expo Go 加载成功、首页体验按钮无误并授权归档提交推送；原生证据按 spec 最新批准记录接受用户验收，未记录设备操作系统。
+- 下一步：提交修正、验收与 Promote 文档，干净工作树通过归档门后归档，再提交推送；不重复已完成的整轮审查。
 
 2026-10-06 执行预检：Node `24.19.0`、pnpm `11.21.0`；文档校验通过，Git HEAD `1778848`，工作区起始干净，已有 origin。此前编排时“尚无 Git 工作树”的情况已解除。本轮没有与单元无关的未提交修改。
 
@@ -23,8 +23,8 @@ Android 调查：PATH、ANDROID_HOME / ANDROID_SDK_ROOT / ANDROID_AVD_HOME、默
 | T03 | 建立 NestJS 12 API，接入 shared 并提供进程探针 | `done` | T02 | AC-03：模块类型检查；开发和构建入口、HTTP 响应的完整运行证据在 T06 收口 |
 | T04 | 集成 shadcn-admin，建立宣传首页占位与控制台演示壳，接入 shared | `done` | T02；执行顺序在 T03 后 | AC-04：受影响模块类型 / lint 检查；页面、导航、刷新和 preview 验证在 T06 收口；保留 MIT 声明 |
 | T05 | 建立 Expo / React Native 应用，接入 gluestack v5、路由和 shared | `done` | T02；执行顺序在 T04 后 | AC-05：Expo 版本匹配检查与模块类型检查；Android bundle 与设备运行在 T06 收口；环境不可用时记录 blocked，不以 Metro 或 Web 替代 |
-| T06 | 完成统一启动命令、B 验收、资源清理和本地运行说明 | `blocked` | T03、T04、T05 的所需实现；可先验证不受阻 AC | AC-01—AC-06：冻结安装、shared 正常修改 / 恢复、根检查和构建一次、API HTTP 响应、Web 浏览器、Android 原生交互和多进程协同；每条 AC 一行证据 |
-| T07 | 最终代码审查 | `done` | T06 全部 AC 通过；本轮按用户收尾指令先行审查，原生证据核实不阻塞只读审查 | 独立只读上下文读取 spec、plan、完整差异，按 AGENTS 七域逐项结论；无新增 finding；原生验收仍阻塞 verified 与归档 |
+| T06 | 完成统一启动命令、B 验收、资源清理和本地运行说明 | `done` | T03、T04、T05 的所需实现；可先验证不受阻 AC | AC-01—AC-06：冻结安装、shared 正常修改 / 恢复、根检查和构建一次、API HTTP 响应、Web 浏览器、Android 原生交互和多进程协同；每条 AC 一行证据 |
+| T07 | 最终代码审查 | `done` | T06 全部 AC 通过；本轮按用户收尾指令先行审查，原生证据核实不阻塞只读审查 | 独立只读上下文读取 spec、plan、完整差异，按 AGENTS 七域逐项结论；无新增 finding；原生证据已于本次用户验收补齐 |
 
 按上述顺序一次推进一个任务。独立调查可只读委派，局部实现同一时刻最多一个写入型代理；任何代理都不改本单元状态或 Backlog。T01—T05 只跑相应机器门，不安排任务级复审。
 
@@ -35,10 +35,10 @@ Android 调查：PATH、ANDROID_HOME / ANDROID_SDK_ROOT / ANDROID_AVD_HOME、默
 | 任务 | status | command | artifact | 备注 |
 | --- | --- | --- | --- | --- |
 | T01/T06 AC-01 | passed | `pnpm install --frozen-lockfile`；`Get-FileHash pnpm-lock.yaml -Algorithm SHA256`；`pnpm peers check`；`pnpm -r list --depth -1` | 命令输出；根锁文件与四包清单 | 冻结安装退出 0，前后哈希均为 `9F84A11920A8D6150A552E5E497A2DB515BB86E59E3A8AE3595FC262951A4CAA`；无 peer 问题；Node 24.19.0 / pnpm 11.21.0；上游 commit 与工具版本见下方决策及开发环境 |
-| T02/T06 AC-02 | blocked | `pnpm dev` 中 shared watch；正常修改并恢复 APP_NAME；三个应用目录 `node --input-type=module -e "import('@libs/shared').then(m => console.log(m.APP_NAME))"` | shared ESM/CJS/声明；API 日志；Web 浏览器观测 | watch 重建后三个包均导入 FloorWalk Watch，API 日志及 Web 两页实际更新；恢复后重新输出 FloorWalk。Mobile 页面已引用、Android bundle 成功，但缺原生环境，尚未证明原生页面实际显示；无 shared 框架/UI 依赖 |
+| T02/T06 AC-02 | passed | `pnpm dev` 中 shared watch；正常修改并恢复 APP_NAME；三个应用目录 `node --input-type=module -e "import('@libs/shared').then(m => console.log(m.APP_NAME))"` | shared ESM/CJS/声明；API 日志；Web 浏览器观测 | watch 重建后三个包均导入 FloorWalk Watch，API 日志及 Web 两页实际更新；恢复后重新输出 FloorWalk。Mobile 页面引用 shared，Android bundle 成功；2026-10-06 用户真机确认加载与首页按钮正常，补齐原生显示证据；无 shared 框架/UI 依赖 |
 | T03/T06 AC-03 | passed | `pnpm dev`；`pnpm --filter @apps/api start`；`Invoke-WebRequest -NoProxy http://127.0.0.1:3000/health` | 开发与构建运行日志、HTTP 输出 | 两种入口均启动，HTTP 200 且精确 JSON `{"status":"ok"}`；日志均消费 shared 名称；仅一个业务无关探针 |
 | T04/T06 AC-04 | passed | Codex 浏览器验证 5173/4173 的 `/` 与 `/console`、点击导航、直接访问、刷新 | 浏览器 AX/DOM、一次控制台画面、错误日志为空；`apps/web/LICENSE` | 首页无后台栏，控制台使用上游布局并显示“演示骨架，尚未接入登录”；返回链接和 sidebar trigger 可操作；开发与 preview 均通过；无 Clerk/模拟登录/真实用户数据 |
-| T05/T06 AC-05 | blocked | `pnpm --filter @apps/mobile typecheck`；`pnpm --filter @apps/mobile check`；根构建中的 `expo export --platform android --output-dir dist`；Android 环境只读检查 | Expo 配套检查 passed；2092 模块、4.5MB Android Hermes bundle；环境调查输出 | Expo / RN / React 及 gluestack 已接入，类型/配套/bundle 通过；无已定位原生执行环境，尚未看到原生页面和按钮反馈。运行判据见本地开发说明；不以 Metro/Expo Web 代替 |
+| T05/T06 AC-05 | passed | `pnpm --filter @apps/mobile typecheck`；`pnpm --filter @apps/mobile check`；根构建中的 `expo export --platform android --output-dir dist`；Android 环境只读检查 | Expo 配套检查 passed；2092 模块、4.5MB Android Hermes bundle；环境调查输出 | Expo / RN / React 及 gluestack 已接入，类型/配套/bundle 通过；修正后 Mobile typecheck 与单 worker Android Hermes 导出再次通过。2026-10-06 用户确认“移动端真机expo go加载成功，首页体验按钮无误”，并授权归档；按最新批准记录接受用户原生验收，不冒称 Agent 亲测或双平台通过。Expo Web 修复后未采集浏览器交互证据，非本单元原生验收替代项 |
 | T06 AC-06 | passed | `pnpm typecheck`；`pnpm lint`；`pnpm format:check`；`pnpm build` 修复 filter 后从应用构建续跑；`pnpm dev`；端口/进程核对与清理 | 根命令、构建输出、多进程日志；[本地启动说明](../../howto/local-development.md) | 全量类型/lint/格式各一次通过；shared/API/Web/Android bundle 均构建；统一入口并发运行，三个应用各占独立端口；记录见下表。原生展示缺口在 AC-05；根构建 filter 问题与修复已记下方。后续只对受工具改动的 Mobile tsconfig 做格式归一与类型复核 |
 
 ### T07 独立七域审查
@@ -55,7 +55,7 @@ Android 调查：PATH、ANDROID_HOME / ANDROID_SDK_ROOT / ANDROID_AVD_HOME、默
 | 敏感数据与日志 | 已读差异未见凭据或敏感日志；启动日志仅输出项目名、地址与端口；env 内容未读取。 |
 | 范围与结构膨胀 | 四包、shared 常量、探针、两页演示壳、Mobile UI 与工具配置对应 AC-01—06，环境化配置对应后续用户批准；无业务 schema、DTO 或新增业务契约。 |
 
-锁文件直接核对 importers，并静态解析完整 11696 行：1080 个 package、1104 个 snapshot、2688 条依赖边均有目标；无额外包来源 URL，仅三个 shared workspace link。审查无文件写入、状态修改或外部副作用。剩余风险沿用已有记录：AC-02/AC-05 原生运行未验证；Mobile 导出曾出现 0xC0000005，单 worker 已通过但根因未确认。
+锁文件直接核对 importers，并静态解析完整 11696 行：1080 个 package、1104 个 snapshot、2688 条依赖边均有目标；无额外包来源 URL，仅三个 shared workspace link。审查无文件写入、状态修改或外部副作用。审查当时的剩余风险：AC-02/AC-05 原生运行未验证（后由用户真机确认解除）；Mobile 导出曾出现 0xC0000005，单 worker 已通过但根因未确认。
 
 ### 本轮资源记录
 
@@ -73,6 +73,8 @@ Android 调查：PATH、ANDROID_HOME / ANDROID_SDK_ROOT / ANDROID_AVD_HOME、默
 结束后 3000/5173/8081/4173 均无监听；仅清理本任务启动的资源。未启动数据库、容器或 Android 工具。构建产物在各包忽略的 dist 中，可由根构建再生成；无临时测试实例或验证脚手架。
 
 ## 决策与偏差
+
+- 2026-10-06 最终收尾：用户明确确认真机加载与体验按钮并授权归档提交推送，替代此前“保留原生验收阻塞”的指令；验收来源与平台证据边界记入 spec 批准记录。T06、AC-02、AC-05 改为通过，沿用已完成 T07。本次修正按修正模式无独立复审；未命中 schema/权限/认证等硬线。已生成 workspace 当前事实，环境化配置及 LAN/主题修正纳入长期文档，清空 testlog 缓冲。下列记录保留当时执行过程，不代表当前阻塞。
 
 - 2026-10-06 用户对归档条件的明确回复：“只验了服务启动；保留原生验收阻塞，先提交推送”。T06/AC-02/AC-05 保持 blocked，归档状态保持 active；本轮不 Promote specs、不清空 testlog，不执行归档操作。修正记录随此次工程提交保存，后续最终归档再同步。
 - 提交前差异检查发现 Web MIT 文本末尾多一个空行，已仅清理 EOF 空行，许可内容不变；不触发代码测试。

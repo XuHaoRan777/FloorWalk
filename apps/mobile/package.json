@@ -4,8 +4,8 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "node --env-file=.env.development node_modules/expo/bin/cli start --localhost",
-    "android": "node --env-file=.env.development node_modules/expo/bin/cli start --android --localhost",
+    "dev": "node --env-file=.env.development node_modules/expo/bin/cli start --lan",
+    "android": "node --env-file=.env.development node_modules/expo/bin/cli start --android --lan",
     "build": "node --env-file=.env.production node_modules/expo/bin/cli export --platform android --output-dir dist --max-workers 1",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

@@ -6,5 +6,3 @@
 
 | 日期 | 场景 | 改动 | 验证 | specs | 审查 |
 | --- | --- | --- | --- | --- | --- |
-| 2026-10-06 | 本地开发启动端口 | 按用户要求将 API 改为 3018、Web dev 改为 3019、Mobile Metro（含 android 入口）改为 3020；同步 API 日志、开发环境和 adb reverse 说明；Web preview 仍为 4173 | API / Web / Mobile 各包 typecheck 通过；对应文件无既有测试，未新增测试或重跑构建；未启动服务 | 无（工程环境配置，已同步 context/howto；workspace 规格尚未生成） | 无 |
-| 2026-10-06 | 三端开发与生产配置 | 按用户批准接入每应用 .env.development / .env.production；API/Web 使用 PORT，Mobile 开发用 RCT_METRO_PORT；Web preview 统一 3019，实际文件忽略、模板可提交；同步加载和生效时机说明 | 三包类型通过；API/Web 构建及 dev、生产 start/preview HTTP 通过；Metro 3020 status 通过；Mobile 默认 worker 导出 0xC0000005，单 worker 导出成功并固化命令；无对应既有测试，未新增测试；全部测试进程清理 | 无（工程环境配置已同步 context/howto；workspace 归档时生成） | 无 |

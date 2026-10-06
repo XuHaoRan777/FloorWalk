@@ -26,6 +26,22 @@
 
 ## 陷阱清单
 
-### 其他
+### Expo 真机扫码与主题
 
-当前无记录。
+- 触发条件：Expo 57 在 Windows 以 localhost 模式启动，手机通过同一 Wi-Fi 的 Expo Go 扫码；或 gluestack Provider 同时用于原生与 react-native-web 0.21.2。
+- 现象：真机无法加载且 Metro 无应用日志；Expo Web 报 Appearance.default.setColorScheme is not a function。
+- 根因：回环监听地址无法被另一台设备访问；react-native-web 的 Appearance 只有读取与监听接口，没有原生主题设置方法。
+- 规避方式：真机默认使用 LAN 并重启扫码；Provider 按平台设置主题，Web 使用已有根样式类，原生 system 映射为 RN 0.86.3 的 unspecified。不要用类型强转掩盖参数不匹配。
+- 验证方式：Mobile 类型与 Android bundle 通过；用户确认真机首页与按钮通过。Expo Web 修复后浏览器交互尚未另行采集，不将静态检查当作浏览器验收。
+- 失效条件：网络入口或 Appearance API 随依赖升级发生变化。
+- 首次记录：`FW-001`
+
+### Windows pnpm 包筛选
+
+- 触发条件：Windows package script 用单引号包裹 pnpm filter。
+- 现象：未匹配任何包，命令仍可能退出 0，应用没有构建。
+- 根因：Windows 脚本的单引号没有按预期作为 shell 引号去除。
+- 规避方式：使用不带单引号的包名筛选，例如 `@apps/*`，并检查实际包输出。
+- 验证方式：修正后 shared、API、Web 与 Android bundle 均生成，命令不能仅看退出码。
+- 失效条件：切换 shell 或 pnpm 参数解析行为变化。
+- 首次记录：`FW-001`

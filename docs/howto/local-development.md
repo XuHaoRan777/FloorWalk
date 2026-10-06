@@ -71,9 +71,11 @@ pnpm dev
 | `pnpm dev:shared` | `packages/shared` | 监听并生成 ESM/CJS 与声明；不监听 HTTP 端口 |
 | `pnpm dev:api` | `apps/api` | `http://127.0.0.1:3018/health` |
 | `pnpm dev:web` | `apps/web` | `http://127.0.0.1:3019/` 与 `/console` |
-| `pnpm dev:mobile` | `apps/mobile` | Metro，`localhost:3020`；需要另有 Android 执行环境 |
+| `pnpm dev:mobile` | `apps/mobile` | Metro，LAN 模式，端口 `3020`；同一局域网真机 Expo Go 扫码 |
 
 三个独立应用入口也会先构建 shared。直接执行包内命令时，先运行 `pnpm --filter @libs/shared build`。
+
+真机扫码：电脑与手机接入同一 Wi-Fi，在原终端停止旧 Metro 后重新启动，扫描新二维码；地址应为电脑局域网 IP 加 `3020`，不能是 `localhost` 或 `127.0.0.1`。修改启动命令不会改变已运行进程。若仍在加载阶段报错，先用手机浏览器访问 `http://<电脑局域网IP>:3020/status`，预期 `packager-status:running`；不可达时检查 Windows 专用网络防火墙、Wi-Fi 客户端隔离和 VPN。若可达但 Expo Go 拒绝打开，再核对 Expo Go 是否支持本项目 SDK 57，并记录完整报错。连接不上 Metro 时尚未执行应用 JS，终端没有 JS 日志不能说明应用已经启动。
 
 构建后的 API：`pnpm --filter @apps/api start`，同样占用 3018，先结束开发 API。
 构建后的 Web：`pnpm --filter @apps/web preview`，访问 `http://127.0.0.1:3019/` 与 `/console`。
@@ -83,9 +85,9 @@ pnpm dev
 - API 开发及构建产物：`GET /health` 应为 HTTP 200，JSON 为 `{"status":"ok"}`；日志项目名来自 shared。它只证明进程可响应。
 - Web 开发及 preview：首页不含后台侧边栏；点击“查看控制台演示”进入 `/console`，显示“演示骨架，尚未接入登录”。返回公开首页、直接输入两页 URL、刷新均能显示页面；控制台侧边栏可开关。
 - shared watch：正常修改 `packages/shared/src/index.ts` 的 APP_NAME，观察 watch 重新输出；应用重新载入后应取得新值，结束后恢复 `FloorWalk`。不要求所有平台无刷新热更新。
-- Android：已有 SDK/adb 和模拟器或已连接设备，且有支持 SDK 57 的 Expo Go 时，在 shared 构建后运行 `pnpm --filter @apps/mobile android`。若使用已连接设备与 localhost Metro，按设备连接情况配置 adb reverse 3020。预期页面可见 `FloorWalk`、有实际样式的 gluestack 按钮，点击“体验按钮”后出现“按钮响应成功”。预期画面为标题、按钮及反馈文本同屏可见。只有 Metro、二维码或 JS bundle 不满足原生判据。
+- Android：真机安装支持 SDK 57 的 Expo Go 后，可运行 `pnpm dev:mobile` 并扫码，无需电脑安装 Android SDK/adb；通过命令自动打开模拟器或 USB 设备时，需已有 SDK/adb，在 shared 构建后运行 `pnpm --filter @apps/mobile android`。若另行改用 localhost Metro 与 USB 设备，需配置 adb reverse 3020。预期页面可见 `FloorWalk`、有实际样式的 gluestack 按钮，点击“体验按钮”后出现“按钮响应成功”。预期画面为标题、按钮及反馈文本同屏可见。只有 Metro、二维码或 JS bundle 不满足原生判据。
 
-当前 Android SDK/adb/模拟器入口未定位，不能照此说明宣称原生验收已通过。不要未经授权安装系统级 Android 环境。
+本机 Android SDK/adb/模拟器入口未定位，但用户已于 2026-10-06 通过同一 Wi-Fi 的 Expo Go 真机完成首页与按钮验收；设备系统版本未记录。该结论来自用户实际操作，不是从本说明或 bundle 推断。不要未经授权安装系统级 Android 环境。
 
 ## 上游来源
 

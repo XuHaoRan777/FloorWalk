@@ -22,7 +22,7 @@
 
 | ID | 工作单元 | 状态 | 依赖 | 下一步 |
 | --- | --- | --- | --- | --- |
-| FW-001 | [Monorepo 骨架与各模块启动](work/FW-001-monorepo-bootstrap/spec.md) | `blocked` | 无 | T01—T05、T07 完成；本轮先提交推送；T06 等待 Android 原生验收 |
+| FW-001 | [Monorepo 骨架与各模块启动](work/FW-001-monorepo-bootstrap/spec.md) | `verified` | 无 | 用户已确认真机加载与按钮；待干净工作树归档门通过后归档 |
 
 ## 待开单元（未批准，按建议顺序）
 
@@ -44,7 +44,6 @@ Agent 做不了的验收登记在这里；用户一句确认后回写对应 `pla
 
 | 单元 / 任务 | 验收内容 | 脚本位置 |
 | --- | --- | --- |
-| FW-001 / T06 | Android 原生页面显示 FloorWalk，点击 gluestack 按钮出现“按钮响应成功”；服务启动已由用户确认，原生证据仍缺失，保留原 B 验收标准 | [本地启动与骨架验收](howto/local-development.md) |
 
 ## 已归档
 

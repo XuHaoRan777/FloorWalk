@@ -2,13 +2,13 @@
 
 本目录是项目唯一的"现在是什么"。每份文档写代码能观察到的行为、契约和缺口，不写目标或计划。**代码和这里不一致时，代码是事实，修这里。**
 
-当前没有业务代码，因此没有模块规格。产品意图见 [`../context/product.md`](../context/product.md)；上线缺口见 [`../backlog.md`](../backlog.md)。
+当前已有可运行工程骨架，尚无业务功能。产品意图见 [`../context/product.md`](../context/product.md)；上线缺口见 [`../backlog.md`](../backlog.md)。
 
 ## 索引
 
 | 文档 | 覆盖 |
 | --- | --- |
-| （无） | 尚无运行时模块 |
+| [工程骨架](workspace.md) | 包边界、shared 消费、API 探针、Web 页面壳与 Mobile 运行 |
 
 ## 两层内容，两种维护方式
 
