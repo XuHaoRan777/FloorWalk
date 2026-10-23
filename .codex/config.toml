@@ -1,0 +1,19 @@
+# Codex 项目级配置（多 Agent 协同试行，2026-10-23）。只对 Codex 生效；改动须用户批准。
+approval_policy = "on-request"       # 只有越界操作才发审批请求
+approvals_reviewer = "auto_review"   # 审批请求交给自动审核，不弹给用户
+default_permissions = "floorwalk"    # 任何一层配置再写 sandbox_mode，下面的权限配置会整份失效
+
+[permissions.floorwalk]
+description = "FloorWalk：工作区可写；主仓库 .git、pnpm store 可写；开网络"
+extends = ":workspace"               # .codex、.agents 保持只读，agent 改不了自己的权限
+
+[permissions.floorwalk.filesystem]
+'F:\project\FloorWalk\.git' = "write"   # worktree 的提交、分支、tag 都写在主仓库 .git
+'E:\dev-cache\pnpm-store' = "write"     # pnpm store-dir
+
+# 0 号单元归档后由用户加上这两行，让契约目录对 agent 只读：
+# [permissions.floorwalk.filesystem.":workspace_roots"]
+# '<契约目录>' = "read"
+
+[permissions.floorwalk.network]
+enabled = true                       # npm 源、GitHub、本机 Postgres 5432
