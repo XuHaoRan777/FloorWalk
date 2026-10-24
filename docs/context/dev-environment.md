@@ -7,7 +7,8 @@
 - 已建立 pnpm workspace：`apps/api`、`apps/web`、`apps/mobile`、`packages/shared`；只有工程骨架，没有门店巡检业务实现。
 - 本轮实测 Node `24.19.0`、pnpm `11.21.0`；根 packageManager 锁定 pnpm，`.node-version` 记录 Node。TypeScript：API/Web/shared `5.9.3`，Mobile 按 Expo 配套使用 `6.0.3`。
 - 本地 API `127.0.0.1:3018`；Web dev `127.0.0.1:3019`；Web preview `127.0.0.1:3019`（与 dev 择一启动）；Metro 默认 LAN 模式、端口 `3020`，供同一局域网真机扫码。2026-10-06 用户已确认同一 Wi-Fi 真机 Expo Go 加载成功。
-- 没有数据库、缓存、容器或部署环境。后续数据库 schema 名仍预定 `floorwalk`，本轮未创建。
+- 数据库：本机 Docker 容器 `local-pg18`（PostgreSQL 18），宿主端口 `5433`；角色 `floorwalk`（非超级用户，不能建库），库 `floorwalk`（开发）和 `floorwalk_e2e_1`～`floorwalk_e2e_3`（e2e 槽位，见 [并行组](../howto/parallel.md)）。2026-10-23 用户创建；schema 名预定 `floorwalk`，尚未建表。没有缓存、对象存储、邮件服务或部署环境。
+- 开发 Agent：Codex 桌面版，权限用完全访问（2026-10-23 用户决定），没有沙箱，边界见 [`AGENTS.md`](../../AGENTS.md) 第 12 节。并行单元的对话工作位置选「新建本地工作树」，Codex 建工作树时按 [`.worktreeinclude`](../../.worktreeinclude) 复制各端 env 文件。
 - 只读参考仓库：`F:\react_project\Gift2CashApp`；本轮未读取或复制其源码。
 
 ## 环境配置
@@ -45,7 +46,7 @@ Web 固定源码 commit `e16c87f213a5ba5e45964e9b67c792105ec74d26`，gluestack �
 | Mobile 配套 | `pnpm --filter @apps/mobile check` |
 | 统一开发 | `pnpm dev`，shared 构建后启动四个进程；停止一组用 Ctrl+C |
 | 独立开发 | `pnpm dev:api`、`pnpm dev:web`、`pnpm dev:mobile`、`pnpm dev:shared` |
-| 文档 | `python scripts/validate_docs.py`；满足归档前提时 `--archive-gate`；改校验器后 `python -m unittest scripts.tests.test_validate_docs` |
+| 文档 | `python scripts/validate_docs.py`；归档前 `--archive-gate`；改校验器、钩子或 `scripts/workflow.conf` 后 `python -m unittest discover -s scripts/tests -t .` |
 
 本轮未新建测试框架，使用框架命令、HTTP、浏览器和原生判据。构建成功与 Metro 可响应不等于 Android 原生验收完成。
 
@@ -63,7 +64,7 @@ Web 固定源码 commit `e16c87f213a5ba5e45964e9b67c792105ec74d26`，gluestack �
 
 ## 工作流配套
 
-- 上游模板：`F:\project\workflow\template`；同步日期：2026-10-06。项目协议中的授权与产品边界保留为本地配置。
-- 本地适配：上下文压缩后落盘并继续；testlog 阈值按校验器使用“超过 5 条 / 超过 2 天”；长期事实不链接工作单元快照。
+- 上游模板：`F:\project\workflow\template`；同步日期：2026-10-23（workflow `ba5d74a`）。项目协议中的授权与产品边界保留为本地配置。
+- 本地适配（并行组试行，只在本项目）：[并行组](../howto/parallel.md)；`scripts/workflow.conf` 的 `active-units-max 4`，校验器读取它（模板写死 3）；内核第 7 节 Subagent 写入限制按会话计；第 12 节加完全访问下的边界。
 - Git 工作树已存在，执行起点 HEAD `1778848`，起始工作区干净，已配置 origin；用户于 2026-10-06 确认真机验收并授权当前单元归档、提交与推送。
-- `scripts/hooks/commit-msg` 已提供，本轮未修改 hooksPath；它只检查 Mode: fix 的代码提交是否同时暂存 testlog，不检查是否真正追加记录。启用须按用户授权办理。
+- `scripts/hooks/commit-msg` 已提供，未启用（`core.hooksPath` 未设）：`Mode: fix` 的代码提交须暂存 testlog；改到 `scripts/workflow.conf` 登记的 `hardline` 路径须有「硬线：」行。启用须按用户授权办理：`git config core.hooksPath scripts/hooks`，工作树共用这项设置。

@@ -36,4 +36,4 @@
 
 工作单元 `spec.md` 的「涉及的当前事实」列出会改动的文档和小节；实现并验证后先改这里，再归档单元。功能细节只住在这里，工作单元文档只链接。
 
-修正模式收尾时，以 [`../testlog.md`](../testlog.md) 为 Promote 输入，规则见 [`AGENTS.md`](../../AGENTS.md) 第 3 节。当前事实文档不链接工作单元快照，无论其是否归档。
+修正模式收尾时，以 [`../testlog.md`](../testlog.md) 为 Promote 输入，步骤见 [`../howto/fix-promote.md`](../howto/fix-promote.md)。当前事实文档不链接工作单元快照，无论其是否归档。

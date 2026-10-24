@@ -1,0 +1,4 @@
+# Codex 桌面版建本地工作树时，复制下面这些被 git 忽略的文件（.gitignore 语法）。
+# 并行单元的根构建和 e2e 要用各端 env 文件；端口和库名由 e2e 按槽位覆盖，见 docs/howto/parallel.md。
+apps/*/.env.development
+apps/*/.env.production

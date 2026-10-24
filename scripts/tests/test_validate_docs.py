@@ -25,11 +25,13 @@ def write_file(root: Path, relative_path: str, content: str = "# Document\n") ->
 
 
 KERNEL = "# 内核\n\n见 [索引](docs/index.md)。\n"
+CONF = "# 注释\nkernel-max-chars 6500\nhardline db/migrations/*\n"
 
 
 def create_valid_root(root: Path) -> None:
     write_file(root, "AGENTS.md", KERNEL)
     write_file(root, "CLAUDE.md", "@AGENTS.md\n")
+    write_file(root, "scripts/workflow.conf", CONF)
     write_file(root, "docs/index.md", "# 索引\n\n[backlog](backlog.md)\n")
     write_file(root, "docs/backlog.md", "# Backlog\n\n## 当前工作\n\n当前无活动工作单元。\n")
 
@@ -176,6 +178,22 @@ class ValidateDocsTests(unittest.TestCase):
         register_backlog(self.root, [(n[:6], n, "in_progress") for n in names])
         self.assertEqual(self.codes(), [])
 
+    def test_active_units_max_from_conf_raises_limit(self) -> None:
+        write_file(self.root, "scripts/workflow.conf", CONF + "active-units-max 4\n")
+        names = [f"EX-00{i}-unit{i}" for i in range(1, 5)]
+        for name in names:
+            create_work_unit(self.root, name)
+        register_backlog(self.root, [(n[:6], n, "in_progress") for n in names])
+        self.assertEqual(self.codes(), [])
+
+    def test_active_units_max_from_conf_still_caps(self) -> None:
+        write_file(self.root, "scripts/workflow.conf", CONF + "active-units-max 4\n")
+        names = [f"EX-00{i}-unit{i}" for i in range(1, 6)]
+        for name in names:
+            create_work_unit(self.root, name)
+        register_backlog(self.root, [(n[:6], n, "in_progress") for n in names])
+        self.assertIn("active-units", self.codes())
+
     # 5. 当前事实不指向工作单元
     def test_spec_linking_to_work_unit_is_reported(self) -> None:
         create_work_unit(self.root, work_status="verified", archive_status="archived")
@@ -216,7 +234,37 @@ class ValidateDocsTests(unittest.TestCase):
         self._testlog([])
         self.assertEqual(self.codes(today=date(2026, 10, 4)), [])
 
-    # 7. 归档门
+    # 7. 内核字数
+    def _kernel_limit(self, limit: str) -> None:
+        write_file(self.root, "scripts/workflow.conf", f"hardline db/*\nkernel-max-chars {limit}  # 只降不升\n")
+
+    def test_kernel_over_limit_is_reported(self) -> None:
+        self._kernel_limit(str(len(KERNEL) - 1))
+        self.assertEqual(self.codes(), ["kernel-size"])
+
+    def test_kernel_at_limit_passes(self) -> None:
+        self._kernel_limit(str(len(KERNEL)))
+        self.assertEqual(self.codes(), [])
+
+    def test_kernel_size_counts_characters_not_bytes(self) -> None:
+        write_file(self.root, "AGENTS.md", "内" * 30)
+        self._kernel_limit("40")
+        self.assertEqual(self.codes(), [])
+
+    def test_kernel_size_ignores_line_ending_style(self) -> None:
+        (self.root / "AGENTS.md").write_bytes(KERNEL.replace("\n", "\r\n").encode("utf-8"))
+        self._kernel_limit(str(len(KERNEL)))
+        self.assertEqual(self.codes(), [])
+
+    def test_missing_conf_is_reported(self) -> None:
+        (self.root / "scripts/workflow.conf").unlink()
+        self.assertEqual(self.codes(), ["kernel-size"])
+
+    def test_non_integer_limit_is_reported(self) -> None:
+        self._kernel_limit("6.5k")
+        self.assertEqual(self.codes(), ["kernel-size"])
+
+    # 8. 归档门
     def test_archive_gate_requires_clean_worktree(self) -> None:
         subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
         self.assertIn("archive-gate", self.codes(archive_gate=True))

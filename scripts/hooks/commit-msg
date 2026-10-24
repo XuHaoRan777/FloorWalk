@@ -1,15 +1,48 @@
 #!/bin/sh
-# commit-msg 钩子：修正模式提交（信息含 `Mode: fix`）改了代码却没追加 docs/testlog.md 时拒绝。
-# 只做这一件事，不改提交信息、不碰 specs。安装：
-#   cp scripts/hooks/commit-msg .git/hooks/commit-msg && chmod +x .git/hooks/commit-msg
-# 或 git config core.hooksPath scripts/hooks
+# commit-msg 钩子（AGENTS.md 第 3 节），只做两件事，不改提交信息、不碰 specs：
+#   1. 提交信息任意位置有 `Mode: fix`（含写在标题末尾），改了代码却没追加 docs/testlog.md，拒绝。
+#   2. 暂存区改到 scripts/workflow.conf 登记的 hardline 路径，提交信息没有一行 `硬线：<动了什么>`，拒绝。
+# 注释行和 `git commit -v` 附带的 diff 不算提交信息。安装：git config core.hooksPath scripts/hooks
 
 msg_file="$1"
-grep -qi '^Mode: *fix *$' "$msg_file" || exit 0
+conf="scripts/workflow.conf"
 
-staged=$(git diff --cached --name-only)
-echo "$staged" | grep -qvE '^docs/|\.md$' || exit 0          # 没改代码，放行
-echo "$staged" | grep -qx 'docs/testlog.md' && exit 0        # 已追加 testlog，放行
+# 合并提交里的改动已在各自的提交上检查过
+[ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ] && exit 0
 
-echo "commit-msg: Mode: fix 提交改了代码但未追加 docs/testlog.md（AGENTS.md 第 3 节）" >&2
-exit 1
+# 去掉 CR、注释行，截断到 -v 的剪刀线为止
+msg=$(tr -d '\r' < "$msg_file" | sed -e '/^# -\{8,\} >8 -\{8,\}$/,$d' -e '/^#/d')
+# --no-renames：把迁移移出目录也算改了原路径
+staged=$(git -c core.quotepath=off diff --cached --name-only --no-renames)
+[ -n "$staged" ] || exit 0
+status=0
+
+# 1. 修正模式提交要追加 testlog。左边不设词边界：errand 出现过把 "\n\nMode: fix" 原样写进标题的提交
+if printf '%s\n' "$msg" | grep -qiE 'mode: *fix([^[:alnum:]]|$)'; then
+  if printf '%s\n' "$staged" | grep -qvE '^docs/|\.md$' &&
+     ! printf '%s\n' "$staged" | grep -qx 'docs/testlog.md'; then
+    echo "commit-msg: Mode: fix 提交改了代码但未追加 docs/testlog.md（AGENTS.md 第 3 节；活动单元的回修不写 Mode: fix，写单元号）" >&2
+    status=1
+  fi
+fi
+
+# 2. 硬线路径要有「硬线：」行
+if [ -f "$conf" ]; then
+  patterns=$(sed -n 's/^[[:space:]]*hardline[[:space:]]\{1,\}\([^[:space:]#][^[:space:]]*\).*$/\1/p' "$conf")
+  if [ -n "$patterns" ]; then
+    set -f  # 模式按 case 匹配，不让 shell 先对仓库文件展开
+    hits=$(printf '%s\n' "$staged" | while IFS= read -r path; do
+      for pattern in $patterns; do
+        # shellcheck disable=SC2254
+        case "$path" in $pattern) printf '%s\n' "$path"; break ;; esac
+      done
+    done)
+    if [ -n "$hits" ] && ! printf '%s\n' "$msg" | grep -qE '^硬线(:|：)[[:space:]]*[^[:space:]]'; then
+      echo "commit-msg: 改到硬线路径，提交信息需要一行「硬线：<动了什么>」（AGENTS.md 第 3 节）：" >&2
+      printf '%s\n' "$hits" | head -10 | sed 's/^/  /' >&2
+      status=1
+    fi
+  fi
+fi
+
+exit $status

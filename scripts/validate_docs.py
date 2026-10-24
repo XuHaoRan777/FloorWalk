@@ -12,9 +12,11 @@
 4. Backlog 当前工作表与各单元 `plan.md` 的活动集合和状态一致。
 5. `specs/`、`context/`、`adr/`、`pitfalls.md` 不链接到 `docs/work/`。
 6. `docs/testlog.md` 的 `待同步` 行不超过 5 条，最早一行不超过 2 天。
-7. `--archive-gate`：工作树必须干净。
+7. `AGENTS.md` 字数不超过 `scripts/workflow.conf` 的 `kernel-max-chars`（按字符计）。
+8. `--archive-gate`：工作树必须干净。
 
-`CLAUDE.md` 只含 `@AGENTS.md` 导入，不再需要内核同步检查。
+`CLAUDE.md` 只含 `@AGENTS.md` 导入，不再需要内核同步检查。`workflow.conf` 的
+`hardline` 路径由 `scripts/hooks/commit-msg` 检查，不在这里。
 
 用法：
     python scripts/validate_docs.py [--root DIR] [--archive-gate] [--today YYYY-MM-DD]
@@ -53,6 +55,8 @@ MAX_TESTLOG_AGE_DAYS = 2
 # 这些位置是"现在是什么"或长期基线，不得指向工作单元快照。
 NO_WORK_LINK_PREFIXES = ("docs/specs/", "docs/context/", "docs/adr/", "docs/pitfalls.md")
 TESTLOG_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# 机械阈值与硬线路径表，校验器与 commit-msg 钩子共用。
+WORKFLOW_CONF = "scripts/workflow.conf"
 
 PRIVATE_KEY_PATTERN = re.compile(
     r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----", re.IGNORECASE
@@ -167,6 +171,23 @@ def is_safe_placeholder(value: str) -> bool:
 
 def split_table_row(line: str) -> list[str]:
     return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def read_workflow_conf(root: Path) -> dict[str, list[str]] | None:
+    """读取 `scripts/workflow.conf`：每行「键 值」，`#` 开头为注释，同一个键可出现多次。
+
+    值只取第一个空白分隔的词，与钩子的解析一致。文件不存在时返回 None。
+    """
+    path = root / WORKFLOW_CONF
+    if not path.is_file():
+        return None
+    values: dict[str, list[str]] = {}
+    for line in read_text(path).splitlines():
+        parts = line.split()
+        if not parts or parts[0].startswith("#"):
+            continue
+        values.setdefault(parts[0], []).append(parts[1] if len(parts) > 1 else "")
+    return values
 
 
 def parse_backlog_rows(content: str) -> list[list[str]]:
@@ -284,9 +305,12 @@ def check_work_units(root: Path, issues: list[Issue]) -> dict[str, tuple[str, st
         if work_status in VALID_WORK_STATUSES and archive_status in VALID_ARCHIVE_STATUSES:
             states[unit.name] = (archive_status, work_status)
     active = sorted(name for name, (archive, _) in states.items() if archive == "active")
-    if len(active) > MAX_ACTIVE_UNITS:
+    # 上限默认 MAX_ACTIVE_UNITS；workflow.conf 的 active-units-max 可改（FloorWalk 并行组试行：3 个并行单元 + 1 个集成单元）
+    raw = (read_workflow_conf(root) or {}).get("active-units-max", [""])[-1]
+    limit = int(raw) if raw.isdigit() else MAX_ACTIVE_UNITS
+    if len(active) > limit:
         issues.append(
-            Issue("active-units", "docs/work", f"同时 active 的单元 {len(active)} 个，上限 {MAX_ACTIVE_UNITS}：{', '.join(active)}")
+            Issue("active-units", "docs/work", f"同时 active 的单元 {len(active)} 个，上限 {limit}：{', '.join(active)}")
         )
     return states
 
@@ -315,6 +339,28 @@ def check_testlog(root: Path, issues: list[Issue], *, today: _dt.date) -> None:
     age = (today - min(dates)).days
     if age > MAX_TESTLOG_AGE_DAYS:
         issues.append(Issue("testlog-debt", where, f"最早一行已 {age} 天，上限 {MAX_TESTLOG_AGE_DAYS} 天，该收一下了"))
+
+
+def check_kernel_size(root: Path, issues: list[Issue]) -> None:
+    """内核字数不得超过 `kernel-max-chars`；上限缺失也报错，否则检查会悄悄消失。"""
+    kernel = root / "AGENTS.md"
+    if not kernel.is_file():
+        return
+    conf = read_workflow_conf(root)
+    raw = (conf or {}).get("kernel-max-chars", [""])[-1]
+    if not raw.isdigit():
+        issues.append(Issue("kernel-size", WORKFLOW_CONF, "缺少 kernel-max-chars 或取值不是整数"))
+        return
+    limit = int(raw)
+    size = len(read_text(kernel))
+    if size > limit:
+        issues.append(
+            Issue(
+                "kernel-size",
+                "AGENTS.md",
+                f"{size} 字，上限 {limit}：先删，或把按时机执行的步骤移进 docs/howto/，不调高上限",
+            )
+        )
 
 
 def check_backlog(root: Path, states: dict[str, tuple[str, str]], issues: list[Issue]) -> None:
@@ -390,6 +436,7 @@ def validate_repository(
     states = check_work_units(root, issues)
     check_backlog(root, states, issues)
     check_testlog(root, issues, today=today)
+    check_kernel_size(root, issues)
 
     if archive_gate:
         check_worktree_clean(root, issues)
