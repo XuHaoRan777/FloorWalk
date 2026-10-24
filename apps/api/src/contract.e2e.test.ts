@@ -343,6 +343,18 @@ describe('inspection contract API', () => {
     const todayBody = todayResponseSchema.parse(today.body);
     expect(todayBody.site.code).toBe('NB-001');
     expect(todayBody.submittedToday).toBe(false);
+    const seededDetail = await request(app.getHttpServer())
+      .get(`/api/inspections/${inspectionId}`)
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(200);
+    const seededDetailBody = inspectionDetailSchema.parse(seededDetail.body);
+    expect(seededDetailBody.reviews.length).toBeGreaterThan(0);
+    expect(seededDetailBody.reviews).toEqual(
+      [...seededDetailBody.reviews].sort(
+        (left, right) =>
+          Date.parse(left.createdAt) - Date.parse(right.createdAt),
+      ),
+    );
     const seedSigned = await request(app.getHttpServer())
       .get(`/api/evidence/${seedEvidenceId}`)
       .set('Authorization', `Bearer ${inspectorToken}`)
@@ -365,6 +377,57 @@ describe('inspection contract API', () => {
       .expect(201);
     createdInspectionId = inspectionSchema.parse(created.body).id;
 
+    const shanghaiParts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      })
+        .formatToParts(new Date())
+        .filter((part) => part.type !== 'literal')
+        .map((part) => [part.type, Number(part.value)]),
+    );
+    const shanghaiMidnight = new Date(
+      Date.UTC(shanghaiParts.year, shanghaiParts.month - 1, shanghaiParts.day) -
+        8 * 60 * 60 * 1000,
+    );
+    const boundaryPool = createPool();
+    try {
+      await boundaryPool.query(
+        'UPDATE floorwalk.inspections SET submitted_at = $1 WHERE id = $2',
+        [new Date(shanghaiMidnight.getTime() - 1), createdInspectionId],
+      );
+    } finally {
+      await boundaryPool.end();
+    }
+    const beforeShanghaiDay = await request(app.getHttpServer())
+      .get('/api/inspector/today')
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(200);
+    expect(
+      todayResponseSchema.parse(beforeShanghaiDay.body).submittedToday,
+    ).toBe(false);
+    const insideDayPool = createPool();
+    try {
+      await insideDayPool.query(
+        'UPDATE floorwalk.inspections SET submitted_at = $1 WHERE id = $2',
+        [
+          new Date(shanghaiMidnight.getTime() + 60 * 60 * 1000),
+          createdInspectionId,
+        ],
+      );
+    } finally {
+      await insideDayPool.end();
+    }
+    const insideShanghaiDay = await request(app.getHttpServer())
+      .get('/api/inspector/today')
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(200);
+    expect(
+      todayResponseSchema.parse(insideShanghaiDay.body).submittedToday,
+    ).toBe(true);
+
     const detail = await request(app.getHttpServer())
       .get(`/api/inspections/${createdInspectionId}`)
       .set('Authorization', `Bearer ${inspectorToken}`)
@@ -373,7 +436,8 @@ describe('inspection contract API', () => {
     expect(detailBody.site.code).toBe('NB-001');
     expect(detailBody.reviews).toEqual(
       [...detailBody.reviews].sort(
-        (left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt),
+        (left, right) =>
+          Date.parse(left.createdAt) - Date.parse(right.createdAt),
       ),
     );
     const createdItemId = detail.body.items[0].id as string;
