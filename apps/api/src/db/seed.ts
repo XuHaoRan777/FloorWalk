@@ -110,66 +110,51 @@ export async function seedDatabase(databaseUrl = getDatabaseUrl()) {
           siteId,
           templateId,
           inspectorId,
-          status: index === 1 ? 'passed' : 'failed',
+          status: index === 12 ? 'failed' : 'passed',
           score: null,
           createdAt: nextTime(),
-          failPosition: index === 1 ? 8 : 3,
+          failPosition: index === 1 ? 8 : index === 12 ? 3 : null,
           reviewerId: supervisorResult.rows[0].id,
-          reviewAction: index === 1 ? 'approve' : 'fail',
+          reviewAction: index === 12 ? 'fail' : 'approve',
         },
         itemRows.rows,
       );
-      if (index === 1) continue;
-      for (let extra = 0; extra < 2; extra += 1) {
-        await insertInspection(
-          client,
-          storageDir,
-          {
-            siteId,
-            templateId,
-            inspectorId,
-            status: 'failed',
-            score: null,
-            createdAt: nextTime(),
-            failPosition: 3,
-            reviewerId: supervisorResult.rows[0].id,
-            reviewAction: 'fail',
-          },
-          itemRows.rows,
-        );
-        await insertInspection(
-          client,
-          storageDir,
-          {
-            siteId,
-            templateId,
-            inspectorId,
-            status: 'rework',
-            score: null,
-            createdAt: nextTime(),
-            failPosition: 3,
-            reviewerId: supervisorResult.rows[0].id,
-            reviewAction: 'rework',
-          },
-          itemRows.rows,
-        );
-        await insertInspection(
-          client,
-          storageDir,
-          {
-            siteId,
-            templateId,
-            inspectorId,
-            status: 'submitted',
-            score: null,
-            createdAt: nextTime(),
-            failPosition: null,
-            reviewerId: null,
-            reviewAction: null,
-          },
-          itemRows.rows,
-        );
-      }
+    }
+
+    const extras = [
+      { code: 'NB-012', status: 'failed' as const },
+      { code: 'NB-012', status: 'failed' as const },
+      { code: 'NB-002', status: 'rework' as const },
+      { code: 'NB-003', status: 'rework' as const },
+      { code: 'NB-004', status: 'submitted' as const },
+      { code: 'NB-005', status: 'submitted' as const },
+    ];
+    for (const extra of extras) {
+      const siteId = sites.get(extra.code);
+      const inspectorId = inspectors.get(extra.code);
+      if (!siteId || !inspectorId) throw new Error(`门店 ${extra.code} 创建失败。`);
+      await insertInspection(
+        client,
+        storageDir,
+        {
+          siteId,
+          templateId,
+          inspectorId,
+          status: extra.status,
+          score: null,
+          createdAt: nextTime(),
+          failPosition: extra.status === 'submitted' ? null : 3,
+          reviewerId:
+            extra.status === 'submitted' ? null : supervisorResult.rows[0].id,
+          reviewAction:
+            extra.status === 'failed'
+              ? 'fail'
+              : extra.status === 'rework'
+                ? 'rework'
+                : null,
+        },
+        itemRows.rows,
+      );
     }
 
     await client.query('COMMIT');

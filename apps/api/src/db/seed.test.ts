@@ -65,20 +65,33 @@ describe('Northbean seed', () => {
     );
     expect(nb001.rows).toEqual([{ status: 'passed', score: 88 }]);
 
-    const extraStatuses = await pool.query<{
-      code: string;
-      status: string;
-      count: string;
-    }>(
-      `SELECT s.code, i.status, COUNT(*)::text AS count
+    const extraStatuses = await pool.query<{ status: string; count: string }>(
+      `SELECT i.status, COUNT(*)::text AS count
        FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
        WHERE s.code <> 'NB-001' AND i.status IN ('failed', 'rework', 'submitted')
-       GROUP BY s.code, i.status ORDER BY s.code, i.status`,
+       GROUP BY i.status ORDER BY i.status`,
     );
-    expect(extraStatuses.rows).toHaveLength(33);
-    expect(
-      extraStatuses.rows.every((row) => ['2', '3'].includes(row.count)),
-    ).toBe(true);
+    expect(extraStatuses.rows).toEqual([
+      { status: 'failed', count: '3' },
+      { status: 'rework', count: '2' },
+      { status: 'submitted', count: '2' },
+    ]);
+    const total = await pool.query<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM floorwalk.inspections',
+    );
+    expect(total.rows[0].count).toBe('18');
+
+    const dashboard = await pool.query<{ status: string; count: string }>(
+      `SELECT status, COUNT(*)::text AS count FROM (
+         SELECT DISTINCT ON (site_id) site_id, status
+         FROM floorwalk.inspections WHERE status IN ('passed', 'failed')
+         ORDER BY site_id, decided_at DESC
+       ) latest GROUP BY status ORDER BY status`,
+    );
+    expect(dashboard.rows).toEqual([
+      { status: 'failed', count: '1' },
+      { status: 'passed', count: '11' },
+    ]);
 
     const timestamps = await pool.query<{
       inspections: string;
