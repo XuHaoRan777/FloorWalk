@@ -29,6 +29,7 @@ pnpm format:check
 pnpm build
 pnpm e2e:slots
 pnpm e2e:mobile
+pnpm e2e:cors
 ```
 
 根构建先生成 shared，再构建 API、Android JS bundle 和 Web；Android JS bundle 不是 APK，不代表原生交互已验收。首次安装仅允许 esbuild 的安装脚本。
@@ -77,7 +78,9 @@ pnpm dev
 | `pnpm --filter @apps/api db:migrate` | `apps/api` | 按 Drizzle 迁移建立 `floorwalk` schema 和 8 张表 |
 | `pnpm --filter @apps/api db:seed` | `apps/api` | 重建 Northbean 演示店、账号、模板和历史单 |
 | `pnpm e2e:slots` | 根目录 | 并发运行 `FW_SLOT=1|2|3` 的隔离设施测试 |
-| `pnpm e2e:mobile` | 根目录 | 自动启动 Expo Web，点击按钮并写入 FW-002 截图证据 |
+| `FW_SLOT=1 pnpm e2e:demo` | 根目录 | 按槽位启动 API，运行完整演示链；FW-004 前预期在业务分数断言失败 |
+| `pnpm e2e:cors` | 根目录 | 启动 API、Vite Web 和 Expo Web，浏览器读取 `/api/me` 并断言 CORS |
+| `pnpm e2e:mobile` | 根目录 | 按 `FW_SLOT` 自动启动 Expo Web，点击按钮并写入 FW-003 截图证据 |
 
 三个独立应用入口也会先构建 shared。直接执行包内命令时，先运行 `pnpm --filter @libs/shared build`。
 

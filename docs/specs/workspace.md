@@ -12,7 +12,7 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 
 ## API 进程探针
 
-`GET /health` 返回 HTTP 200 和 `{"status":"ok"}`。登录、当前用户、巡检、审核队列、证据链接和看板端点由 `packages/shared/src/contract/` 定义；登录校验当前用户，受保护请求读取数据库中的当前角色与门店绑定。骨架端点返回固定或种子数据，业务规则留给 FW-003，细节见[巡检主链](inspection.md)。API 监听 `HOST`（缺省 `127.0.0.1`），启动日志输出 shared 项目名及监听地址；PORT 必须为 1—65535 的整数。
+`GET /health` 返回 HTTP 200 和 `{"status":"ok"}`。登录、当前用户、巡检、审核队列、证据链接和看板端点由 `packages/shared/src/contract/` 定义；登录校验当前用户，受保护请求读取数据库中的当前角色与门店绑定。契约修订已完成，提交锁分、审核状态变更和真实看板业务规则留给并行组 FW-004，细节见[巡检主链](inspection.md)。API 监听 `HOST`（缺省 `127.0.0.1`），启动日志输出 shared 项目名及监听地址；PORT 必须为 1—65535 的整数。
 
 ## Web 页面壳
 
@@ -46,3 +46,4 @@ Expo Router 首页显示 shared 项目名、工程演示说明和 gluestack“�
 | --- | --- |
 | 2026-10-06 | 建立三应用与 shared 可运行骨架：健康探针、公开首页与控制台演示壳、真机首页与按钮反馈；修复 Expo Web 主题初始化调用并支持 LAN 扫码。 |
 | 2026-10-24 | 建立巡检主链契约、PostgreSQL 迁移与 Northbean 种子；API 提供登录、角色校验及固定数据骨架接口，Mobile Expo Web 具备 Playwright 取证入口。 |
+| 2026-10-24 | FW-003 完成 `/api` 契约接口、统一错误与 CORS；SDK 57 依赖对齐，Mobile Expo Web 与三端 CORS 有独立 e2e 验证。 |

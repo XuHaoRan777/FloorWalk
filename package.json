@@ -20,6 +20,7 @@
     "e2e": "node --env-file=apps/api/.env.development --import=tsx node_modules/@playwright/test/cli.js test",
     "e2e:slots": "node scripts/e2e-slots.mjs",
     "e2e:demo": "node --env-file=apps/api/.env.development scripts/demo-chain.mjs",
+    "e2e:cors": "playwright test --config=playwright.cors.config.ts",
     "e2e:mobile": "pnpm exec playwright test --config=playwright.mobile.config.ts"
   },
   "devDependencies": {

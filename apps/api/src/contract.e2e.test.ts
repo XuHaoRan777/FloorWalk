@@ -1,26 +1,31 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { rm } from 'node:fs/promises';
+import path from 'node:path';
 import { Test } from '@nestjs/testing';
-import { JwtModule } from '@nestjs/jwt';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { JwtService } from '@nestjs/jwt';
 import { AppModule } from './app.module.js';
+import { HttpErrorFilter } from './http-exception.filter.js';
 import { createPool } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import { seedDatabase } from './db/seed.js';
 import {
+  apiRoutes,
   dashboardSitesResponseSchema,
   evidenceSchema,
   inspectionDetailSchema,
   inspectionSchema,
   loginResponseSchema,
   reviewQueueResponseSchema,
-  reviewRequestSchema,
+  reviewResponseSchema,
   signedEvidenceResponseSchema,
   submitInspectionResponseSchema,
   todayResponseSchema,
-  updateInspectionItemRequestSchema,
+  updateInspectionItemResponseSchema,
   userSchema,
+  errorResponseSchema,
+  userRoles,
 } from '@libs/shared';
 
 describe('inspection contract API', () => {
@@ -30,199 +35,412 @@ describe('inspection contract API', () => {
   let hqToken: string;
   let inspectionId: string;
   let otherSiteInspectionId: string;
-  let evidenceId: string;
-  let otherSiteEvidenceId: string;
+  let templateId: string;
+  let createdInspectionId: string | undefined;
+  let createdEvidenceId: string | undefined;
+  let createdEvidenceStorageKey: string | undefined;
 
   beforeAll(async () => {
     await runMigrations();
     await seedDatabase();
     const moduleRef = await Test.createTestingModule({
-      imports: [
-        AppModule,
-        JwtModule.register({ secret: process.env.JWT_SECRET }),
-      ],
+      imports: [AppModule],
     }).compile();
     app = moduleRef.createNestApplication<NestExpressApplication>();
+    app.enableCors({ origin: ['http://127.0.0.1:3019'] });
+    app.useGlobalFilters(new HttpErrorFilter());
     await app.init();
-    const inspector = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({
-        email: 'inspector@northbean.example',
-        password: 'northbean-demo',
-      })
-      .expect(201);
-    const supervisor = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({
-        email: 'supervisor@northbean.example',
-        password: 'northbean-demo',
-      })
-      .expect(201);
-    const hq = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: 'hq@northbean.example', password: 'northbean-demo' })
-      .expect(201);
-    inspectorToken = loginResponseSchema.parse(inspector.body).token;
-    supervisorToken = loginResponseSchema.parse(supervisor.body).token;
-    hqToken = loginResponseSchema.parse(hq.body).token;
+
+    const login = async (email: string) => {
+      const response = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({ email, password: 'northbean-demo' })
+        .expect(201);
+      return loginResponseSchema.parse(response.body).token;
+    };
+    inspectorToken = await login('inspector@northbean.example');
+    supervisorToken = await login('supervisor@northbean.example');
+    hqToken = await login('hq@northbean.example');
+
     const pool = createPool();
     try {
+      const template = await pool.query<{ id: string }>(
+        'SELECT id FROM floorwalk.templates LIMIT 1',
+      );
+      templateId = template.rows[0].id;
       const result = await pool.query<{ id: string; code: string }>(
-        `SELECT i.id
-                , s.code
-         FROM floorwalk.inspections i
-         JOIN floorwalk.sites s ON s.id = i.site_id
-         ORDER BY i.created_at`,
+        `SELECT i.id, s.code FROM floorwalk.inspections i
+         JOIN floorwalk.sites s ON s.id = i.site_id ORDER BY i.created_at`,
       );
       inspectionId = result.rows.find((row) => row.code === 'NB-001')!.id;
       otherSiteInspectionId = result.rows.find(
         (row) => row.code !== 'NB-001',
       )!.id;
-      const itemRows = await pool.query<{
-        id: string;
-        inspection_id: string;
-      }>(
-        `SELECT ii.id, ii.inspection_id
-         FROM floorwalk.inspection_items ii
-         WHERE ii.inspection_id = ANY($1::uuid[])
-         ORDER BY ii.created_at`,
-        [[inspectionId, otherSiteInspectionId]],
-      );
-      for (const item of itemRows.rows) {
-        const inserted = await pool.query<{ id: string }>(
-          `INSERT INTO floorwalk.evidence (inspection_item_id, storage_key, mime, size)
-           VALUES ($1, $2, 'image/jpeg', 1) RETURNING id`,
-          [item.id, `contract-test/${item.inspection_id}.jpg`],
-        );
-        if (item.inspection_id === inspectionId)
-          evidenceId = inserted.rows[0].id;
-        else otherSiteEvidenceId = inserted.rows[0].id;
-      }
     } finally {
       await pool.end();
     }
-  });
+  }, 60000);
 
   afterAll(async () => {
-    await app.close();
-    if (evidenceId && otherSiteEvidenceId) {
-      const pool = createPool();
-      try {
+    const pool = createPool();
+    try {
+      if (createdInspectionId) {
         await pool.query(
-          'DELETE FROM floorwalk.evidence WHERE id = ANY($1::uuid[])',
-          [[evidenceId, otherSiteEvidenceId]],
+          `DELETE FROM floorwalk.evidence WHERE inspection_item_id IN
+           (SELECT id FROM floorwalk.inspection_items WHERE inspection_id = $1)`,
+          [createdInspectionId],
         );
-      } finally {
-        await pool.end();
+        await pool.query(
+          'DELETE FROM floorwalk.inspection_items WHERE inspection_id = $1',
+          [createdInspectionId],
+        );
+        await pool.query('DELETE FROM floorwalk.inspections WHERE id = $1', [
+          createdInspectionId,
+        ]);
       }
+      if (createdEvidenceStorageKey) {
+        await rm(
+          path.resolve(
+            process.env.STORAGE_DIR ?? path.join('apps', 'api', '.storage'),
+            createdEvidenceStorageKey,
+          ),
+          { force: true },
+        );
+      }
+    } finally {
+      await pool.end();
+      await app.close();
     }
   });
 
-  it('authenticates the three roles and rejects invalid access', async () => {
+  it('publishes the complete route table under /api', () => {
+    expect(Object.keys(apiRoutes)).toHaveLength(12);
+    for (const route of Object.values(apiRoutes)) {
+      expect(route.path.startsWith('/api/')).toBe(true);
+      expect(route.responseSchema).toBeDefined();
+      expect([200, 201]).toContain(route.successStatus);
+    }
+  });
+
+  it('authenticates roles and enforces site and role access', async () => {
     const me = await request(app.getHttpServer())
-      .get('/me')
+      .get('/api/me')
       .set('Authorization', `Bearer ${inspectorToken}`)
       .expect(200);
     expect(userSchema.parse(me.body).role).toBe('inspector');
     await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: 'inspector@northbean.example', password: 'wrong' })
-      .expect(401)
+      .get(`/api/inspections/${otherSiteInspectionId}`)
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(403)
       .expect(({ body }) =>
-        expect(body.message.code ?? body.code).toBe('UNAUTHENTICATED'),
+        expect(errorResponseSchema.parse(body).code).toBe('FORBIDDEN'),
       );
-    await request(app.getHttpServer()).get('/me').expect(401);
+    await request(app.getHttpServer())
+      .get('/api/dashboard/sites')
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(403);
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${inspectionId}/review`)
+      .set('Authorization', `Bearer ${hqToken}`)
+      .send({ action: 'approve' })
+      .expect(403);
+    await request(app.getHttpServer()).get('/api/me').expect(401);
     const expiredToken = new JwtService({
       secret: process.env.JWT_SECRET,
     }).sign({ id: '00000000-0000-0000-0000-000000000001' }, { expiresIn: -1 });
     await request(app.getHttpServer())
-      .get('/me')
+      .get('/api/me')
       .set('Authorization', `Bearer ${expiredToken}`)
       .expect(401);
-    await request(app.getHttpServer())
-      .get(`/inspections/${otherSiteInspectionId}`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
-      .expect(403);
-    await request(app.getHttpServer())
-      .get('/dashboard/sites')
-      .set('Authorization', `Bearer ${inspectorToken}`)
-      .expect(403);
-    await request(app.getHttpServer())
-      .get(`/evidence/${otherSiteEvidenceId}`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
-      .expect(403);
-    await request(app.getHttpServer())
-      .post(`/inspections/${inspectionId}/review`)
-      .set('Authorization', `Bearer ${hqToken}`)
-      .send({ action: 'approve' })
-      .expect(403);
-    await request(app.getHttpServer())
-      .post(`/inspections/${inspectionId}/review`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
-      .send({ action: 'approve' })
-      .expect(403);
-  });
 
-  it('exposes every contracted endpoint with a schema-shaped response', async () => {
-    const routes = [
-      request(app.getHttpServer())
-        .get('/inspector/today')
-        .set('Authorization', `Bearer ${inspectorToken}`),
-      request(app.getHttpServer())
-        .post('/inspections')
-        .set('Authorization', `Bearer ${inspectorToken}`)
-        .send({ templateId: '00000000-0000-0000-0000-000000000001' }),
-      request(app.getHttpServer())
-        .get(`/inspections/${inspectionId}`)
-        .set('Authorization', `Bearer ${inspectorToken}`),
-      request(app.getHttpServer())
-        .patch(
-          `/inspections/${inspectionId}/items/00000000-0000-0000-0000-000000000002`,
-        )
-        .set('Authorization', `Bearer ${inspectorToken}`)
-        .send({ result: 'pass' }),
-      request(app.getHttpServer())
-        .post(
-          `/inspections/${inspectionId}/items/00000000-0000-0000-0000-000000000002/evidence`,
-        )
-        .set('Authorization', `Bearer ${inspectorToken}`),
-      request(app.getHttpServer())
-        .get(`/evidence/${evidenceId}`)
-        .set('Authorization', `Bearer ${inspectorToken}`),
-      request(app.getHttpServer())
-        .post(`/inspections/${inspectionId}/submit`)
-        .set('Authorization', `Bearer ${inspectorToken}`),
-      request(app.getHttpServer())
-        .get('/review/queue')
-        .set('Authorization', `Bearer ${supervisorToken}`),
-      request(app.getHttpServer())
-        .post(`/inspections/${inspectionId}/review`)
-        .set('Authorization', `Bearer ${supervisorToken}`)
-        .send({ action: 'start' }),
-      request(app.getHttpServer())
-        .get('/dashboard/sites')
-        .set('Authorization', `Bearer ${supervisorToken}`),
-    ];
-    const responses = await Promise.all(routes);
-    expect(responses[0].status).toBe(200);
-    todayResponseSchema.parse(responses[0].body);
-    expect(responses[1].status).toBe(201);
-    inspectionSchema.parse(responses[1].body);
-    expect(responses[2].status).toBe(200);
-    inspectionDetailSchema.parse(responses[2].body);
-    expect(responses[3].status).toBe(200);
-    updateInspectionItemRequestSchema.parse(responses[3].body);
-    expect(responses[4].status).toBe(201);
-    evidenceSchema.parse(responses[4].body);
-    expect(responses[5].status).toBe(200);
-    signedEvidenceResponseSchema.parse(responses[5].body);
-    expect(responses[6].status).toBe(201);
-    submitInspectionResponseSchema.parse(responses[6].body);
-    expect(responses[7].status).toBe(200);
-    reviewQueueResponseSchema.parse(responses[7].body);
-    expect(responses[8].status).toBe(201);
-    reviewRequestSchema.parse(responses[8].body);
-    expect(responses[9].status).toBe(200);
-    dashboardSitesResponseSchema.parse(responses[9].body);
+    const deniedByRoute = new Map<
+      string,
+      Partial<
+        Record<
+          (typeof userRoles)[number],
+          () => Promise<{ status: number; body: unknown }>
+        >
+      >
+    >([
+      [
+        'today',
+        {
+          supervisor: async () => {
+            const response = await request(app.getHttpServer())
+              .get('/api/inspector/today')
+              .set('Authorization', `Bearer ${supervisorToken}`);
+            return { status: response.status, body: response.body };
+          },
+          hq: async () => {
+            const response = await request(app.getHttpServer())
+              .get('/api/inspector/today')
+              .set('Authorization', `Bearer ${hqToken}`);
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'createInspection',
+        {
+          supervisor: async () => {
+            const response = await request(app.getHttpServer())
+              .post('/api/inspections')
+              .set('Authorization', `Bearer ${supervisorToken}`)
+              .send({ templateId });
+            return { status: response.status, body: response.body };
+          },
+          hq: async () => {
+            const response = await request(app.getHttpServer())
+              .post('/api/inspections')
+              .set('Authorization', `Bearer ${hqToken}`)
+              .send({ templateId });
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'updateInspectionItem',
+        {
+          supervisor: async () => {
+            const response = await request(app.getHttpServer())
+              .patch(
+                `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000`,
+              )
+              .set('Authorization', `Bearer ${supervisorToken}`)
+              .send({ result: 'pass' });
+            return { status: response.status, body: response.body };
+          },
+          hq: async () => {
+            const response = await request(app.getHttpServer())
+              .patch(
+                `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000`,
+              )
+              .set('Authorization', `Bearer ${hqToken}`)
+              .send({ result: 'pass' });
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'addEvidence',
+        {
+          supervisor: async () => {
+            const response = await request(app.getHttpServer())
+              .post(
+                `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000/evidence`,
+              )
+              .set('Authorization', `Bearer ${supervisorToken}`);
+            return { status: response.status, body: response.body };
+          },
+          hq: async () => {
+            const response = await request(app.getHttpServer())
+              .post(
+                `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000/evidence`,
+              )
+              .set('Authorization', `Bearer ${hqToken}`);
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'submitInspection',
+        {
+          supervisor: async () => {
+            const response = await request(app.getHttpServer())
+              .post(`/api/inspections/${inspectionId}/submit`)
+              .set('Authorization', `Bearer ${supervisorToken}`);
+            return { status: response.status, body: response.body };
+          },
+          hq: async () => {
+            const response = await request(app.getHttpServer())
+              .post(`/api/inspections/${inspectionId}/submit`)
+              .set('Authorization', `Bearer ${hqToken}`);
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'reviewQueue',
+        {
+          inspector: async () => {
+            const response = await request(app.getHttpServer())
+              .get('/api/review/queue')
+              .set('Authorization', `Bearer ${inspectorToken}`);
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'reviewInspection',
+        {
+          inspector: async () => {
+            const response = await request(app.getHttpServer())
+              .post(`/api/inspections/${inspectionId}/review`)
+              .set('Authorization', `Bearer ${inspectorToken}`)
+              .send({ action: 'approve' });
+            return { status: response.status, body: response.body };
+          },
+          hq: async () => {
+            const response = await request(app.getHttpServer())
+              .post(`/api/inspections/${inspectionId}/review`)
+              .set('Authorization', `Bearer ${hqToken}`)
+              .send({ action: 'approve' });
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'dashboardSites',
+        {
+          inspector: async () => {
+            const response = await request(app.getHttpServer())
+              .get('/api/dashboard/sites')
+              .set('Authorization', `Bearer ${inspectorToken}`);
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+    ]);
+    for (const [routeKey, route] of Object.entries(apiRoutes)) {
+      if (route.roles.length === 0) continue;
+      for (const role of userRoles) {
+        if ((route.roles as readonly string[]).includes(role)) continue;
+        const deniedRequest = deniedByRoute.get(routeKey)?.[role];
+        expect(deniedRequest, `${routeKey} denied for ${role}`).toBeDefined();
+        if (!deniedRequest) continue;
+        const response = await deniedRequest();
+        expect(response.status).toBe(403);
+        expect(errorResponseSchema.parse(response.body).code).toBe('FORBIDDEN');
+      }
+    }
+  }, 60000);
+
+  it('exposes every contracted endpoint with its response schema', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: 'inspector@northbean.example',
+        password: 'northbean-demo',
+      })
+      .expect(201);
+    const me = await request(app.getHttpServer())
+      .get('/api/me')
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(200);
+    const today = await request(app.getHttpServer())
+      .get('/api/inspector/today')
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(200);
+    const todayBody = todayResponseSchema.parse(today.body);
+    const created = await request(app.getHttpServer())
+      .post('/api/inspections')
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .send({ templateId })
+      .expect(201);
+    createdInspectionId = inspectionSchema.parse(created.body).id;
+
+    const detail = await request(app.getHttpServer())
+      .get(`/api/inspections/${createdInspectionId}`)
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(200);
+    inspectionDetailSchema.parse(detail.body);
+    const createdItemId = detail.body.items[0].id as string;
+    const updated = await request(app.getHttpServer())
+      .patch(`/api/inspections/${createdInspectionId}/items/${createdItemId}`)
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .send({ result: 'pass' })
+      .expect(200);
+    updateInspectionItemResponseSchema.parse(updated.body);
+
+    const evidence = await request(app.getHttpServer())
+      .post(
+        `/api/inspections/${createdInspectionId}/items/${createdItemId}/evidence`,
+      )
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .attach('file', Buffer.from('contract-test'), {
+        filename: 'contract.jpg',
+        contentType: 'image/jpeg',
+      })
+      .expect(201);
+    const createdEvidence = evidenceSchema.parse(evidence.body);
+    createdEvidenceId = createdEvidence.id;
+    createdEvidenceStorageKey = createdEvidence.storageKey;
+    const signed = await request(app.getHttpServer())
+      .get(`/api/evidence/${createdEvidenceId}`)
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(200);
+    signedEvidenceResponseSchema.parse(signed.body);
+
+    const submitted = await request(app.getHttpServer())
+      .post(`/api/inspections/${createdInspectionId}/submit`)
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(201);
+    submitInspectionResponseSchema.parse(submitted.body);
+    const queue = await request(app.getHttpServer())
+      .get('/api/review/queue')
+      .set('Authorization', `Bearer ${supervisorToken}`)
+      .expect(200);
+    reviewQueueResponseSchema.parse(queue.body);
+    const reviewed = await request(app.getHttpServer())
+      .post(`/api/inspections/${createdInspectionId}/review`)
+      .set('Authorization', `Bearer ${supervisorToken}`)
+      .send({ action: 'start' })
+      .expect(201);
+    reviewResponseSchema.parse(reviewed.body);
+    const dashboard = await request(app.getHttpServer())
+      .get('/api/dashboard/sites')
+      .set('Authorization', `Bearer ${supervisorToken}`)
+      .expect(200);
+    dashboardSitesResponseSchema.parse(dashboard.body);
+    expect(todayBody.template.items).toHaveLength(8);
+
+    const routeResponses = {
+      login,
+      me,
+      today,
+      createInspection: created,
+      getInspection: detail,
+      updateInspectionItem: updated,
+      addEvidence: evidence,
+      getEvidence: signed,
+      submitInspection: submitted,
+      reviewQueue: queue,
+      reviewInspection: reviewed,
+      dashboardSites: dashboard,
+    };
+    for (const [routeKey, route] of Object.entries(apiRoutes)) {
+      const response = routeResponses[routeKey as keyof typeof routeResponses];
+      expect(response.status).toBe(route.successStatus);
+      route.responseSchema.parse(response.body);
+    }
+  }, 60000);
+
+  it('normalizes validation, not found, and CORS responses', async () => {
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email: 'invalid' })
+      .expect(400)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
+      );
+    await request(app.getHttpServer())
+      .get('/api/inspections/00000000-0000-0000-0000-000000000000')
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(404)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+      );
+    await request(app.getHttpServer())
+      .get('/api/inspections/not-a-uuid')
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(400)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
+      );
+    await request(app.getHttpServer())
+      .get('/api/me')
+      .set('Origin', 'http://127.0.0.1:3019')
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect('access-control-allow-origin', 'http://127.0.0.1:3019');
   });
 });

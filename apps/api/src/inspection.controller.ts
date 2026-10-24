@@ -1,46 +1,70 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
+  NotFoundException,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Req,
-  UseGuards,
-  ForbiddenException,
-  NotFoundException,
   UnauthorizedException,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtService } from '@nestjs/jwt';
 import argon2 from 'argon2';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { basename } from 'node:path';
 import type { Request } from 'express';
-import { createPool } from './db/client.js';
-import { AuthGuard, getJwtSecret, type AuthUser } from './auth.js';
 import {
+  apiRoutePath,
+  apiRoutes,
   createInspectionRequestSchema,
   dashboardSitesResponseSchema,
+  evidenceUploadFieldName,
+  evidenceUploadRequestSchema,
+  evidenceSchema,
   inspectionDetailSchema,
+  inspectionSchema,
   loginRequestSchema,
   loginResponseSchema,
+  maxEvidenceSizeBytes,
   reviewQueueResponseSchema,
   reviewRequestSchema,
+  reviewResponseSchema,
   signedEvidenceResponseSchema,
+  submitInspectionResponseSchema,
   todayResponseSchema,
   updateInspectionItemRequestSchema,
+  updateInspectionItemResponseSchema,
   userSchema,
 } from '@libs/shared';
+import { createPool } from './db/client.js';
+import { AuthGuard, getJwtSecret, type AuthUser } from './auth.js';
 
 type AuthedRequest = Request & { user: AuthUser };
+type UploadedImage = {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+};
 const iso = (value: unknown) =>
   value instanceof Date ? value.toISOString() : value;
 
-@Controller()
+@Controller('api')
 export class InspectionController {
   private readonly jwt = new JwtService({
     secret: getJwtSecret(),
   });
 
-  @Post('auth/login')
+  @Post(apiRoutePath(apiRoutes.login))
   async login(@Body() body: unknown) {
     const input = loginRequestSchema.parse(body);
     const pool = createPool();
@@ -90,7 +114,7 @@ export class InspectionController {
   }
 
   @UseGuards(AuthGuard)
-  @Get('me')
+  @Get(apiRoutePath(apiRoutes.me))
   async me(@Req() request: AuthedRequest) {
     const pool = createPool();
     try {
@@ -106,7 +130,11 @@ export class InspectionController {
         [request.user.id],
       );
       const row = result.rows[0];
-      if (!row) throw new NotFoundException();
+      if (!row)
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '用户不存在。',
+        });
       return userSchema.parse({
         id: row.id,
         email: row.email,
@@ -121,9 +149,9 @@ export class InspectionController {
   }
 
   @UseGuards(AuthGuard)
-  @Get('inspector/today')
+  @Get(apiRoutePath(apiRoutes.today))
   async today(@Req() request: AuthedRequest) {
-    this.assertRole(request.user, 'inspector');
+    this.assertRole(request.user, ...apiRoutes.today.roles);
     if (!request.user.siteId)
       throw new ForbiddenException({
         code: 'FORBIDDEN',
@@ -134,12 +162,17 @@ export class InspectionController {
       const template = await pool.query(
         'SELECT id, name, created_at AS "createdAt" FROM floorwalk.templates ORDER BY created_at LIMIT 1',
       );
+      if (!template.rows[0])
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '检查模板不存在。',
+        });
       const items = await pool.query(
         'SELECT id, template_id AS "templateId", position, title, photo_required AS "photoRequired", critical, created_at AS "createdAt" FROM floorwalk.template_items WHERE template_id = $1 ORDER BY position',
         [template.rows[0].id],
       );
       const rework = await pool.query(
-        'SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt" FROM floorwalk.inspections WHERE site_id = $1 AND status = \'rework\'',
+        'SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt" FROM floorwalk.inspections WHERE site_id = $1 AND status = \'rework\' ORDER BY created_at',
         [request.user.siteId],
       );
       return todayResponseSchema.parse({
@@ -165,9 +198,9 @@ export class InspectionController {
   }
 
   @UseGuards(AuthGuard)
-  @Post('inspections')
+  @Post(apiRoutePath(apiRoutes.createInspection))
   async createInspection(@Body() body: unknown, @Req() request: AuthedRequest) {
-    this.assertRole(request.user, 'inspector');
+    this.assertRole(request.user, ...apiRoutes.createInspection.roles);
     if (!request.user.siteId)
       throw new ForbiddenException({
         code: 'FORBIDDEN',
@@ -175,41 +208,102 @@ export class InspectionController {
       });
     const input = createInspectionRequestSchema.parse(body);
     const pool = createPool();
+    const client = await pool.connect();
     try {
-      const result = await pool.query(
-        'SELECT gen_random_uuid() AS id, $1::uuid AS "siteId", $2::uuid AS "templateId", $3::uuid AS "inspectorId", \'draft\' AS status, NULL::int AS score, NULL::timestamptz AS "submittedAt", NULL::timestamptz AS "decidedAt", now() AS "createdAt"',
+      await client.query('BEGIN');
+      const inspection = await client.query(
+        `INSERT INTO floorwalk.inspections (site_id, template_id, inspector_id, status)
+         VALUES ($1, $2, $3, 'draft')
+         RETURNING id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt"`,
         [request.user.siteId, input.templateId, request.user.id],
       );
-      return result.rows[0];
+      const items = await client.query(
+        'SELECT position, title, photo_required, critical FROM floorwalk.template_items WHERE template_id = $1 ORDER BY position',
+        [input.templateId],
+      );
+      for (const item of items.rows) {
+        await client.query(
+          `INSERT INTO floorwalk.inspection_items (inspection_id, position, title, photo_required, critical)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            inspection.rows[0].id,
+            item.position,
+            item.title,
+            item.photo_required,
+            item.critical,
+          ],
+        );
+      }
+      await client.query('COMMIT');
+      return inspectionSchema.parse({
+        ...inspection.rows[0],
+        submittedAt: iso(inspection.rows[0].submittedAt),
+        decidedAt: iso(inspection.rows[0].decidedAt),
+        createdAt: iso(inspection.rows[0].createdAt),
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+      await pool.end();
+    }
+  }
+
+  @UseGuards(AuthGuard)
+  @Get(apiRoutePath(apiRoutes.getInspection))
+  async getInspection(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() request: AuthedRequest,
+  ) {
+    const pool = createPool();
+    try {
+      const inspection = await this.getInspectionAccess(pool, id, request.user);
+      return await this.loadInspectionDetail(pool, inspection);
     } finally {
       await pool.end();
     }
   }
 
   @UseGuards(AuthGuard)
-  @Get('inspections/:id')
-  async getInspection(@Param('id') id: string, @Req() request: AuthedRequest) {
+  @Patch(apiRoutePath(apiRoutes.updateInspectionItem))
+  async updateItem(
+    @Body() body: unknown,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('itemId', new ParseUUIDPipe()) itemId: string,
+    @Req() request: AuthedRequest,
+  ) {
+    this.assertRole(request.user, ...apiRoutes.updateInspectionItem.roles);
+    const input = updateInspectionItemRequestSchema.parse(body);
     const pool = createPool();
     try {
-      const inspection = await pool.query(
-        'SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt" FROM floorwalk.inspections WHERE id = $1 LIMIT 1',
-        [id],
+      const inspection = await this.getInspectionAccess(pool, id, request.user);
+      const item = await pool.query(
+        `UPDATE floorwalk.inspection_items
+         SET result = $1, note = $2
+         WHERE id = $3 AND inspection_id = $4
+         RETURNING id, inspection_id AS "inspectionId", position, title,
+           photo_required AS "photoRequired", critical, result, note,
+           created_at AS "createdAt"`,
+        [input.result, input.note ?? null, itemId, inspection.id],
       );
-      if (!inspection.rows[0]) throw new NotFoundException();
-      this.assertInspectionAccess(inspection.rows[0], request.user);
-      const items = await pool.query(
-        'SELECT id, inspection_id AS "inspectionId", position, title, photo_required AS "photoRequired", critical, result, note, created_at AS "createdAt" FROM floorwalk.inspection_items WHERE inspection_id = $1 ORDER BY position',
-        [id],
+      if (!item.rows[0])
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '检查项不存在。',
+        });
+      const evidence = await pool.query(
+        `SELECT id, inspection_item_id AS "inspectionItemId", storage_key AS "storageKey",
+          mime, size, created_at AS "createdAt"
+         FROM floorwalk.evidence WHERE inspection_item_id = $1 ORDER BY created_at`,
+        [itemId],
       );
-      return inspectionDetailSchema.parse({
-        ...inspection.rows[0],
-        submittedAt: iso(inspection.rows[0].submittedAt),
-        decidedAt: iso(inspection.rows[0].decidedAt),
-        createdAt: iso(inspection.rows[0].createdAt),
-        items: items.rows.map((item) => ({
-          ...item,
-          createdAt: iso(item.createdAt),
-          evidence: [],
+      return updateInspectionItemResponseSchema.parse({
+        ...item.rows[0],
+        createdAt: iso(item.rows[0].createdAt),
+        evidence: evidence.rows.map((row) => ({
+          ...row,
+          createdAt: iso(row.createdAt),
         })),
       });
     } finally {
@@ -218,35 +312,68 @@ export class InspectionController {
   }
 
   @UseGuards(AuthGuard)
-  @Patch('inspections/:id/items/:itemId')
-  async updateItem(
-    @Body() body: unknown,
-    @Param('id') id: string,
+  @Post(apiRoutePath(apiRoutes.addEvidence))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: maxEvidenceSizeBytes } }),
+  )
+  async addEvidence(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('itemId', new ParseUUIDPipe()) itemId: string,
+    @UploadedFile() file: UploadedImage | undefined,
     @Req() request: AuthedRequest,
   ) {
-    this.assertRole(request.user, 'inspector');
-    await this.assertInspectionBelongsToUser(id, request.user);
-    return updateInspectionItemRequestSchema.parse(body);
+    this.assertRole(request.user, ...apiRoutes.addEvidence.roles);
+    if (!file)
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: '必须上传 file 字段。',
+      });
+    evidenceUploadRequestSchema.parse({
+      file: {
+        fieldName: evidenceUploadFieldName,
+        mimetype: file.mimetype,
+        size: file.size,
+      },
+    });
+    const pool = createPool();
+    try {
+      const inspection = await this.getInspectionAccess(pool, id, request.user);
+      const item = await pool.query(
+        'SELECT id FROM floorwalk.inspection_items WHERE id = $1 AND inspection_id = $2',
+        [itemId, inspection.id],
+      );
+      if (!item.rows[0])
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '检查项不存在。',
+        });
+      const storageDir = process.env.STORAGE_DIR ?? path.resolve('.storage');
+      const storageKey = `${id}/${itemId}-${Date.now()}-${basename(file.originalname)}`;
+      const target = path.resolve(storageDir, storageKey);
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, file.buffer);
+      const result = await pool.query(
+        `INSERT INTO floorwalk.evidence (inspection_item_id, storage_key, mime, size)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, inspection_item_id AS "inspectionItemId", storage_key AS "storageKey",
+           mime, size, created_at AS "createdAt"`,
+        [itemId, storageKey, file.mimetype, file.size],
+      );
+      return evidenceSchema.parse({
+        ...result.rows[0],
+        createdAt: iso(result.rows[0].createdAt),
+      });
+    } finally {
+      await pool.end();
+    }
   }
 
   @UseGuards(AuthGuard)
-  @Post('inspections/:id/items/:itemId/evidence')
-  async addEvidence(@Param('id') id: string, @Req() request: AuthedRequest) {
-    this.assertRole(request.user, 'inspector');
-    await this.assertInspectionBelongsToUser(id, request.user);
-    return {
-      id: '00000000-0000-0000-0000-000000000001',
-      inspectionItemId: '00000000-0000-0000-0000-000000000002',
-      storageKey: 'demo/photo.jpg',
-      mime: 'image/jpeg',
-      size: 1,
-      createdAt: new Date().toISOString(),
-    };
-  }
-
-  @UseGuards(AuthGuard)
-  @Get('evidence/:id')
-  async getEvidence(@Param('id') id: string, @Req() request: AuthedRequest) {
+  @Get(apiRoutePath(apiRoutes.getEvidence))
+  async getEvidence(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() request: AuthedRequest,
+  ) {
     const pool = createPool();
     try {
       const result = await pool.query<{
@@ -254,9 +381,7 @@ export class InspectionController {
         siteId: string;
         inspectorId: string;
       }>(
-        `SELECT e.storage_key AS "storageKey"
-                , i.site_id AS "siteId"
-                , i.inspector_id AS "inspectorId"
+        `SELECT e.storage_key AS "storageKey", i.site_id AS "siteId", i.inspector_id AS "inspectorId"
          FROM floorwalk.evidence e
          JOIN floorwalk.inspection_items ii ON ii.id = e.inspection_item_id
          JOIN floorwalk.inspections i ON i.id = ii.inspection_id
@@ -264,10 +389,18 @@ export class InspectionController {
         [id],
       );
       const evidence = result.rows[0];
-      if (!evidence) throw new NotFoundException();
+      if (!evidence)
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '照片不存在。',
+        });
       this.assertInspectionAccess(evidence, request.user);
+      const baseUrl = (
+        process.env.API_PUBLIC_BASE_URL ??
+        `http://${process.env.HOST ?? '127.0.0.1'}:${process.env.PORT ?? '3018'}`
+      ).replace(/\/$/, '');
       return signedEvidenceResponseSchema.parse({
-        url: `http://127.0.0.1:3018/storage/${encodeURIComponent(evidence.storageKey)}`,
+        url: `${baseUrl}/storage/${encodeURIComponent(evidence.storageKey)}`,
         expiresAt: new Date(Date.now() + 3600000).toISOString(),
       });
     } finally {
@@ -276,45 +409,82 @@ export class InspectionController {
   }
 
   @UseGuards(AuthGuard)
-  @Post('inspections/:id/submit')
-  async submit(@Param('id') id: string, @Req() request: AuthedRequest) {
-    this.assertRole(request.user, 'inspector');
-    await this.assertInspectionBelongsToUser(id, request.user);
-    return {
-      id: '00000000-0000-0000-0000-000000000003',
-      siteId: '00000000-0000-0000-0000-000000000004',
-      templateId: '00000000-0000-0000-0000-000000000005',
-      inspectorId: '00000000-0000-0000-0000-000000000006',
-      status: 'submitted',
-      score: 88,
-      submittedAt: new Date().toISOString(),
-      decidedAt: null,
-      createdAt: new Date().toISOString(),
-    };
+  @Post(apiRoutePath(apiRoutes.submitInspection))
+  async submit(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() request: AuthedRequest,
+  ) {
+    this.assertRole(request.user, ...apiRoutes.submitInspection.roles);
+    const pool = createPool();
+    try {
+      const inspection = await this.getInspectionAccess(pool, id, request.user);
+      return submitInspectionResponseSchema.parse({
+        ...inspection,
+        status: 'submitted',
+        score: inspection.score ?? 88,
+        submittedAt: new Date().toISOString(),
+        decidedAt: iso(inspection.decidedAt),
+        createdAt: iso(inspection.createdAt),
+      });
+    } finally {
+      await pool.end();
+    }
   }
 
   @UseGuards(AuthGuard)
-  @Get('review/queue')
-  queue(@Req() request: AuthedRequest) {
-    this.assertRole(request.user, 'supervisor', 'hq');
-    return reviewQueueResponseSchema.parse([]);
+  @Get(apiRoutePath(apiRoutes.reviewQueue))
+  async queue(@Req() request: AuthedRequest) {
+    this.assertRole(request.user, ...apiRoutes.reviewQueue.roles);
+    const pool = createPool();
+    try {
+      const result = await pool.query(
+        `SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId",
+          status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt"
+         FROM floorwalk.inspections WHERE status IN ('submitted', 'in_review') ORDER BY created_at`,
+      );
+      const details = await Promise.all(
+        result.rows.map((row) => this.loadInspectionDetail(pool, row)),
+      );
+      return reviewQueueResponseSchema.parse(details);
+    } finally {
+      await pool.end();
+    }
   }
 
   @UseGuards(AuthGuard)
-  @Post('inspections/:id/review')
-  review(@Body() body: unknown, @Req() request: AuthedRequest) {
-    this.assertRole(request.user, 'supervisor');
-    return reviewRequestSchema.parse(body);
+  @Post(apiRoutePath(apiRoutes.reviewInspection))
+  async review(
+    @Body() body: unknown,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() request: AuthedRequest,
+  ) {
+    this.assertRole(request.user, ...apiRoutes.reviewInspection.roles);
+    reviewRequestSchema.parse(body);
+    const pool = createPool();
+    try {
+      const inspection = await this.getInspectionAccess(pool, id, request.user);
+      return reviewResponseSchema.parse(
+        await this.loadInspectionDetail(pool, inspection),
+      );
+    } finally {
+      await pool.end();
+    }
   }
 
   @UseGuards(AuthGuard)
-  @Get('dashboard/sites')
+  @Get(apiRoutePath(apiRoutes.dashboardSites))
   async dashboard(@Req() request: AuthedRequest) {
-    this.assertRole(request.user, 'supervisor', 'hq');
+    this.assertRole(request.user, ...apiRoutes.dashboardSites.roles);
     const pool = createPool();
     try {
       const rows = await pool.query(
-        'SELECT s.id, s.code, s.name, s.created_at AS "createdAt", i.score AS "latestScore", i.status AS "latestStatus" FROM floorwalk.sites s LEFT JOIN LATERAL (SELECT score, status FROM floorwalk.inspections WHERE site_id = s.id AND status IN (\'passed\', \'failed\') ORDER BY created_at DESC LIMIT 1) i ON true ORDER BY s.code',
+        `SELECT s.id, s.code, s.name, s.created_at AS "createdAt", i.score AS "latestScore", i.status AS "latestStatus"
+         FROM floorwalk.sites s
+         LEFT JOIN LATERAL (
+           SELECT score, status FROM floorwalk.inspections
+           WHERE site_id = s.id AND status IN ('passed', 'failed')
+           ORDER BY decided_at DESC NULLS LAST LIMIT 1
+         ) i ON true ORDER BY s.code`,
       );
       return dashboardSitesResponseSchema.parse(
         rows.rows.map((row) => ({
@@ -333,7 +503,7 @@ export class InspectionController {
     }
   }
 
-  private assertRole(user: AuthUser, ...roles: AuthUser['role'][]) {
+  private assertRole(user: AuthUser, ...roles: readonly AuthUser['role'][]) {
     if (!roles.includes(user.role))
       throw new ForbiddenException({
         code: 'FORBIDDEN',
@@ -345,31 +515,64 @@ export class InspectionController {
     inspection: { siteId: string; inspectorId: string },
     user: AuthUser,
   ) {
-    if (
-      user.role === 'inspector' &&
-      (inspection.siteId !== user.siteId || inspection.inspectorId !== user.id)
-    ) {
+    if (user.role === 'inspector' && inspection.siteId !== user.siteId)
       throw new ForbiddenException({
         code: 'FORBIDDEN',
         message: '只能访问本店巡检单。',
       });
-    }
   }
 
-  private async assertInspectionBelongsToUser(id: string, user: AuthUser) {
-    const pool = createPool();
-    try {
-      const result = await pool.query<{
-        siteId: string;
-        inspectorId: string;
-      }>(
-        'SELECT site_id AS "siteId", inspector_id AS "inspectorId" FROM floorwalk.inspections WHERE id = $1',
-        [id],
+  private async getInspectionAccess(
+    pool: ReturnType<typeof createPool>,
+    id: string,
+    user: AuthUser,
+  ) {
+    const result = await pool.query(
+      'SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt" FROM floorwalk.inspections WHERE id = $1',
+      [id],
+    );
+    if (!result.rows[0])
+      throw new NotFoundException({
+        code: 'NOT_FOUND',
+        message: '巡检单不存在。',
+      });
+    this.assertInspectionAccess(result.rows[0], user);
+    return result.rows[0];
+  }
+
+  private async loadInspectionDetail(
+    pool: ReturnType<typeof createPool>,
+    inspection: Record<string, unknown>,
+  ) {
+    const items = await pool.query(
+      `SELECT id, inspection_id AS "inspectionId", position, title, photo_required AS "photoRequired",
+        critical, result, note, created_at AS "createdAt"
+       FROM floorwalk.inspection_items WHERE inspection_id = $1 ORDER BY position`,
+      [inspection.id],
+    );
+    const detailItems = [];
+    for (const item of items.rows) {
+      const evidence = await pool.query(
+        `SELECT id, inspection_item_id AS "inspectionItemId", storage_key AS "storageKey",
+          mime, size, created_at AS "createdAt"
+         FROM floorwalk.evidence WHERE inspection_item_id = $1 ORDER BY created_at`,
+        [item.id],
       );
-      if (!result.rows[0]) throw new NotFoundException();
-      this.assertInspectionAccess(result.rows[0], user);
-    } finally {
-      await pool.end();
+      detailItems.push({
+        ...item,
+        createdAt: iso(item.createdAt),
+        evidence: evidence.rows.map((row) => ({
+          ...row,
+          createdAt: iso(row.createdAt),
+        })),
+      });
     }
+    return inspectionDetailSchema.parse({
+      ...inspection,
+      submittedAt: iso(inspection.submittedAt),
+      decidedAt: iso(inspection.decidedAt),
+      createdAt: iso(inspection.createdAt),
+      items: detailItems,
+    });
   }
 }

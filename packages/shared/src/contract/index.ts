@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z, type ZodTypeAny } from 'zod';
 
 const uuid = z.string().uuid();
 const timestamp = z.string().datetime({ offset: true });
@@ -20,6 +20,8 @@ export const errorCodes = [
   'INVALID_STATE',
   'INCOMPLETE',
   'CRITICAL_FAILED',
+  'VALIDATION_FAILED',
+  'NOT_FOUND',
 ] as const;
 
 export const userRoleSchema = z.enum(userRoles);
@@ -162,6 +164,10 @@ export const signedEvidenceResponseSchema = z.object({
 
 export const submitInspectionResponseSchema = inspectionSchema;
 
+export const updateInspectionItemResponseSchema = inspectionItemSchema.extend({
+  evidence: z.array(evidenceSchema),
+});
+
 export const reviewQueueResponseSchema = z.array(inspectionDetailSchema);
 
 export const reviewRequestSchema = z
@@ -190,6 +196,8 @@ export const reviewRequestSchema = z
     }
   });
 
+export const reviewResponseSchema = inspectionDetailSchema;
+
 export const dashboardSiteScoreSchema = z.object({
   site: siteSchema,
   latestScore: z.number().int().min(0).max(100).nullable(),
@@ -203,6 +211,39 @@ export const errorResponseSchema = z.object({
   message: z.string().min(1),
 });
 
+export const evidenceUploadFieldName = 'file' as const;
+export const evidenceMimeTypes = ['image/jpeg', 'image/png'] as const;
+export const maxEvidenceSizeBytes = 10 * 1024 * 1024;
+export const evidenceUploadRequestSchema = z.object({
+  file: z.object({
+    fieldName: z.literal(evidenceUploadFieldName),
+    mimetype: z.enum(evidenceMimeTypes),
+    size: z.number().int().nonnegative().max(maxEvidenceSizeBytes),
+  }),
+});
+
+export const dashboardLatestStatuses = ['passed', 'failed'] as const;
+export const databaseConstraints = {
+  unique: ['templates.name'],
+  indexes: [
+    'inspections(site_id, status)',
+    'inspections(created_at)',
+    'evidence(inspection_item_id)',
+  ],
+  checks: [
+    "users.role IN ('inspector', 'supervisor', 'hq')",
+    'users.role = inspector requires site_id; other roles require NULL site_id',
+    'template_items.position > 0',
+    "inspections.status IN ('draft', 'submitted', 'in_review', 'passed', 'rework', 'failed')",
+    'inspections.score IS NULL OR inspections.score BETWEEN 0 AND 100',
+    'inspection_items.position > 0',
+    "inspection_items.result IN ('pending', 'pass', 'fail')",
+    'evidence.size >= 0',
+    "reviews.action IN ('start', 'approve', 'rework', 'fail')",
+    'reviews.rework_item_ids is required only for rework reviews',
+  ],
+} as const;
+
 export const inspectionStatusTransitions = {
   draft: ['submitted'],
   submitted: ['in_review'],
@@ -214,6 +255,121 @@ export const inspectionStatusTransitions = {
   (typeof inspectionStatuses)[number],
   readonly (typeof inspectionStatuses)[number][]
 >;
+
+export type ApiRouteRole = UserRole;
+export type ApiRouteDefinition = {
+  method: 'GET' | 'POST' | 'PATCH';
+  path: `/api/${string}`;
+  roles: readonly ApiRouteRole[];
+  requestSchema: ZodTypeAny | null;
+  responseSchema: ZodTypeAny;
+  successStatus: 200 | 201;
+};
+
+export const apiRoutes = {
+  login: {
+    method: 'POST',
+    path: '/api/auth/login',
+    roles: [],
+    requestSchema: loginRequestSchema,
+    responseSchema: loginResponseSchema,
+    successStatus: 201,
+  },
+  me: {
+    method: 'GET',
+    path: '/api/me',
+    roles: userRoles,
+    requestSchema: null,
+    responseSchema: userSchema,
+    successStatus: 200,
+  },
+  today: {
+    method: 'GET',
+    path: '/api/inspector/today',
+    roles: ['inspector'],
+    requestSchema: null,
+    responseSchema: todayResponseSchema,
+    successStatus: 200,
+  },
+  createInspection: {
+    method: 'POST',
+    path: '/api/inspections',
+    roles: ['inspector'],
+    requestSchema: createInspectionRequestSchema,
+    responseSchema: inspectionSchema,
+    successStatus: 201,
+  },
+  getInspection: {
+    method: 'GET',
+    path: '/api/inspections/:id',
+    roles: userRoles,
+    requestSchema: null,
+    responseSchema: inspectionDetailSchema,
+    successStatus: 200,
+  },
+  updateInspectionItem: {
+    method: 'PATCH',
+    path: '/api/inspections/:id/items/:itemId',
+    roles: ['inspector'],
+    requestSchema: updateInspectionItemRequestSchema,
+    responseSchema: updateInspectionItemResponseSchema,
+    successStatus: 200,
+  },
+  addEvidence: {
+    method: 'POST',
+    path: '/api/inspections/:id/items/:itemId/evidence',
+    roles: ['inspector'],
+    requestSchema: evidenceUploadRequestSchema,
+    responseSchema: evidenceSchema,
+    successStatus: 201,
+  },
+  getEvidence: {
+    method: 'GET',
+    path: '/api/evidence/:id',
+    roles: userRoles,
+    requestSchema: null,
+    responseSchema: signedEvidenceResponseSchema,
+    successStatus: 200,
+  },
+  submitInspection: {
+    method: 'POST',
+    path: '/api/inspections/:id/submit',
+    roles: ['inspector'],
+    requestSchema: null,
+    responseSchema: submitInspectionResponseSchema,
+    successStatus: 201,
+  },
+  reviewQueue: {
+    method: 'GET',
+    path: '/api/review/queue',
+    roles: ['supervisor', 'hq'],
+    requestSchema: null,
+    responseSchema: reviewQueueResponseSchema,
+    successStatus: 200,
+  },
+  reviewInspection: {
+    method: 'POST',
+    path: '/api/inspections/:id/review',
+    roles: ['supervisor'],
+    requestSchema: reviewRequestSchema,
+    responseSchema: reviewResponseSchema,
+    successStatus: 201,
+  },
+  dashboardSites: {
+    method: 'GET',
+    path: '/api/dashboard/sites',
+    roles: ['supervisor', 'hq'],
+    requestSchema: null,
+    responseSchema: dashboardSitesResponseSchema,
+    successStatus: 200,
+  },
+} as const satisfies Record<string, ApiRouteDefinition>;
+
+export type ApiRouteKey = keyof typeof apiRoutes;
+
+export function apiRoutePath(route: ApiRouteDefinition) {
+  return route.path.slice('/api'.length);
+}
 
 export type UserRole = z.infer<typeof userRoleSchema>;
 export type InspectionStatus = z.infer<typeof inspectionStatusSchema>;
@@ -241,11 +397,16 @@ export type UpdateInspectionItemRequest = z.infer<
 export type SignedEvidenceResponse = z.infer<
   typeof signedEvidenceResponseSchema
 >;
+export type UpdateInspectionItemResponse = z.infer<
+  typeof updateInspectionItemResponseSchema
+>;
 export type ReviewRequest = z.infer<typeof reviewRequestSchema>;
+export type ReviewResponse = z.infer<typeof reviewResponseSchema>;
 export type DashboardSitesResponse = z.infer<
   typeof dashboardSitesResponseSchema
 >;
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
+export type EvidenceUploadRequest = z.infer<typeof evidenceUploadRequestSchema>;
 
 export type CalculateInspectionScore = (
   results: readonly InspectionItemResult[],
@@ -260,3 +421,49 @@ export type CanSupervisorApprove = (
 export type GetLatestSiteScore = (
   inspections: readonly Inspection[],
 ) => Inspection | null;
+
+export function calculateInspectionScore(
+  results: readonly InspectionItemResult[],
+) {
+  if (results.length === 0) return 0;
+  return Math.round(
+    (results.filter((result) => result === 'pass').length / results.length) *
+      100,
+  );
+}
+
+export function validateInspectionSubmission(input: {
+  items: readonly InspectionItem[];
+  evidenceCountByItemId: Readonly<Record<string, number>>;
+}) {
+  if (input.items.some((item) => item.result === 'pending'))
+    throw new Error('INCOMPLETE');
+  if (
+    input.items.some(
+      (item) =>
+        item.photoRequired && (input.evidenceCountByItemId[item.id] ?? 0) < 1,
+    )
+  )
+    throw new Error('INCOMPLETE');
+}
+
+export function canSupervisorApprove(items: readonly InspectionItem[]) {
+  return !items.some((item) => item.critical && item.result === 'fail');
+}
+
+export function getLatestSiteScore(inspections: readonly Inspection[]) {
+  return (
+    inspections
+      .filter(
+        (inspection) =>
+          dashboardLatestStatuses.includes(
+            inspection.status as (typeof dashboardLatestStatuses)[number],
+          ) && inspection.decidedAt,
+      )
+      .sort((left, right) => {
+        const leftTime = left.decidedAt ? Date.parse(left.decidedAt) : 0;
+        const rightTime = right.decidedAt ? Date.parse(right.decidedAt) : 0;
+        return rightTime - leftTime;
+      })[0] ?? null
+  );
+}
