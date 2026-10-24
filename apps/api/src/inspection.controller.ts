@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   ForbiddenException,
   Get,
@@ -11,6 +12,7 @@ import {
   Post,
   Req,
   UnauthorizedException,
+  UnprocessableEntityException,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -18,13 +20,16 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtService } from '@nestjs/jwt';
 import argon2 from 'argon2';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { createHmac } from 'node:crypto';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { basename } from 'node:path';
 import type { Request } from 'express';
 import {
   apiRoutePath,
   apiRoutes,
+  calculateInspectionScore,
+  canSupervisorApprove,
   createInspectionRequestSchema,
   dashboardSitesResponseSchema,
   evidenceUploadFieldName,
@@ -43,6 +48,7 @@ import {
   todayResponseSchema,
   updateInspectionItemRequestSchema,
   updateInspectionItemResponseSchema,
+  validateInspectionSubmission,
   userSchema,
 } from '@libs/shared';
 import { createPool } from './db/client.js';
@@ -57,6 +63,11 @@ type UploadedImage = {
 };
 const iso = (value: unknown) =>
   value instanceof Date ? value.toISOString() : value;
+
+const evidenceSignature = (storageKey: string, expiresAt: number) =>
+  createHmac('sha256', getJwtSecret())
+    .update(`${storageKey}.${expiresAt}`)
+    .digest('hex');
 
 function getShanghaiDayBounds(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -315,9 +326,27 @@ export class InspectionController {
     this.assertRole(request.user, ...apiRoutes.updateInspectionItem.roles);
     const input = updateInspectionItemRequestSchema.parse(body);
     const pool = createPool();
+    const client = await pool.connect();
+    let committed = false;
     try {
-      const inspection = await this.getInspectionAccess(pool, id, request.user);
-      const item = await pool.query(
+      await client.query('BEGIN');
+      const inspectionResult = await client.query(
+        'SELECT id, site_id AS "siteId", inspector_id AS "inspectorId", status FROM floorwalk.inspections WHERE id = $1 FOR UPDATE',
+        [id],
+      );
+      const inspection = inspectionResult.rows[0];
+      if (!inspection)
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '巡检单不存在。',
+        });
+      this.assertInspectionAccess(inspection, request.user);
+      if (inspection.status !== 'draft' && inspection.status !== 'rework')
+        throw new ConflictException({
+          code: 'INVALID_STATE',
+          message: '只有草稿或打回状态的巡检单可以修改。',
+        });
+      const item = await client.query(
         `UPDATE floorwalk.inspection_items
          SET result = $1, note = $2
          WHERE id = $3 AND inspection_id = $4
@@ -331,13 +360,13 @@ export class InspectionController {
           code: 'NOT_FOUND',
           message: '检查项不存在。',
         });
-      const evidence = await pool.query(
+      const evidence = await client.query(
         `SELECT id, inspection_item_id AS "inspectionItemId", storage_key AS "storageKey",
           mime, size, created_at AS "createdAt"
          FROM floorwalk.evidence WHERE inspection_item_id = $1 ORDER BY created_at`,
         [itemId],
       );
-      return updateInspectionItemResponseSchema.parse({
+      const response = updateInspectionItemResponseSchema.parse({
         ...item.rows[0],
         createdAt: iso(item.rows[0].createdAt),
         evidence: evidence.rows.map((row) => ({
@@ -345,7 +374,14 @@ export class InspectionController {
           createdAt: iso(row.createdAt),
         })),
       });
+      await client.query('COMMIT');
+      committed = true;
+      return response;
+    } catch (error) {
+      if (!committed) await client.query('ROLLBACK');
+      throw error;
     } finally {
+      client.release();
       await pool.end();
     }
   }
@@ -375,9 +411,28 @@ export class InspectionController {
       },
     });
     const pool = createPool();
+    const client = await pool.connect();
+    let target: string | undefined;
+    let committed = false;
     try {
-      const inspection = await this.getInspectionAccess(pool, id, request.user);
-      const item = await pool.query(
+      await client.query('BEGIN');
+      const inspectionResult = await client.query(
+        'SELECT id, site_id AS "siteId", inspector_id AS "inspectorId", status FROM floorwalk.inspections WHERE id = $1 FOR UPDATE',
+        [id],
+      );
+      const inspection = inspectionResult.rows[0];
+      if (!inspection)
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '巡检单不存在。',
+        });
+      this.assertInspectionAccess(inspection, request.user);
+      if (inspection.status !== 'draft' && inspection.status !== 'rework')
+        throw new ConflictException({
+          code: 'INVALID_STATE',
+          message: '只有草稿或打回状态的巡检单可以上传照片。',
+        });
+      const item = await client.query(
         'SELECT id FROM floorwalk.inspection_items WHERE id = $1 AND inspection_id = $2',
         [itemId, inspection.id],
       );
@@ -388,21 +443,31 @@ export class InspectionController {
         });
       const storageDir = process.env.STORAGE_DIR ?? path.resolve('.storage');
       const storageKey = `${id}/${itemId}-${Date.now()}-${basename(file.originalname)}`;
-      const target = path.resolve(storageDir, storageKey);
+      target = path.resolve(storageDir, storageKey);
       await mkdir(path.dirname(target), { recursive: true });
       await writeFile(target, file.buffer);
-      const result = await pool.query(
+      const result = await client.query(
         `INSERT INTO floorwalk.evidence (inspection_item_id, storage_key, mime, size)
          VALUES ($1, $2, $3, $4)
          RETURNING id, inspection_item_id AS "inspectionItemId", storage_key AS "storageKey",
            mime, size, created_at AS "createdAt"`,
         [itemId, storageKey, file.mimetype, file.size],
       );
-      return evidenceSchema.parse({
+      const response = evidenceSchema.parse({
         ...result.rows[0],
         createdAt: iso(result.rows[0].createdAt),
       });
+      await client.query('COMMIT');
+      committed = true;
+      return response;
+    } catch (error) {
+      if (!committed) {
+        await client.query('ROLLBACK');
+        if (target) await unlink(target).catch(() => undefined);
+      }
+      throw error;
     } finally {
+      client.release();
       await pool.end();
     }
   }
@@ -438,9 +503,10 @@ export class InspectionController {
         process.env.API_PUBLIC_BASE_URL ??
         `http://${process.env.HOST ?? '127.0.0.1'}:${process.env.PORT ?? '3018'}`
       ).replace(/\/$/, '');
+      const expiresAt = Date.now() + 60 * 60 * 1000;
       return signedEvidenceResponseSchema.parse({
-        url: `${baseUrl}/storage/${encodeURIComponent(evidence.storageKey)}`,
-        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+        url: `${baseUrl}/storage/${encodeURIComponent(evidence.storageKey)}?expires=${expiresAt}&signature=${evidenceSignature(evidence.storageKey, expiresAt)}`,
+        expiresAt: new Date(expiresAt).toISOString(),
       });
     } finally {
       await pool.end();
@@ -455,25 +521,80 @@ export class InspectionController {
   ) {
     this.assertRole(request.user, ...apiRoutes.submitInspection.roles);
     const pool = createPool();
+    const client = await pool.connect();
+    let committed = false;
     try {
-      const inspection = await this.getInspectionAccess(pool, id, request.user);
-      const submittedAt = new Date();
-      const persisted = await pool.query(
-        `UPDATE floorwalk.inspections
-         SET status = 'submitted', submitted_at = $2
-         WHERE id = $1
-         RETURNING status, submitted_at AS "submittedAt"`,
-        [id, submittedAt],
+      await client.query('BEGIN');
+      const inspectionResult = await client.query(
+        'SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt" FROM floorwalk.inspections WHERE id = $1 FOR UPDATE',
+        [id],
       );
+      const inspection = inspectionResult.rows[0];
+      if (!inspection)
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '巡检单不存在。',
+        });
+      this.assertInspectionAccess(inspection, request.user);
+      if (inspection.status !== 'draft' && inspection.status !== 'rework')
+        throw new ConflictException({
+          code: 'INVALID_STATE',
+          message: '只有草稿或打回状态的巡检单可以提交。',
+        });
+      const items = await client.query(
+        `SELECT id, inspection_id AS "inspectionId", position, title,
+           photo_required AS "photoRequired", critical, result, note,
+           created_at AS "createdAt"
+         FROM floorwalk.inspection_items WHERE inspection_id = $1 ORDER BY position`,
+        [id],
+      );
+      const evidenceCounts = await client.query<{ id: string; count: string }>(
+        `SELECT ii.id, COUNT(e.id)::text AS count
+         FROM floorwalk.inspection_items ii
+         LEFT JOIN floorwalk.evidence e ON e.inspection_item_id = ii.id
+         WHERE ii.inspection_id = $1 GROUP BY ii.id`,
+        [id],
+      );
+      const evidenceCountByItemId = Object.fromEntries(
+        evidenceCounts.rows.map((row) => [row.id, Number(row.count)]),
+      );
+      try {
+        validateInspectionSubmission({
+          items: items.rows,
+          evidenceCountByItemId,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'INCOMPLETE')
+          throw new UnprocessableEntityException({
+            code: 'INCOMPLETE',
+            message: '所有检查项必须完成，必拍项必须有照片。',
+          });
+        throw error;
+      }
+      const score = calculateInspectionScore(
+        items.rows.map((item) => item.result),
+      );
+      const submittedAt = new Date();
+      const persisted = await client.query(
+        `UPDATE floorwalk.inspections
+         SET status = 'submitted', score = $2, submitted_at = $3
+         WHERE id = $1
+         RETURNING id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt"`,
+        [id, score, submittedAt],
+      );
+      await client.query('COMMIT');
+      committed = true;
       return submitInspectionResponseSchema.parse({
-        ...inspection,
-        status: persisted.rows[0]?.status ?? 'submitted',
-        score: inspection.score ?? 88,
-        submittedAt: iso(persisted.rows[0]?.submittedAt ?? submittedAt),
-        decidedAt: iso(inspection.decidedAt),
-        createdAt: iso(inspection.createdAt),
+        ...persisted.rows[0],
+        submittedAt: iso(persisted.rows[0].submittedAt),
+        decidedAt: iso(persisted.rows[0].decidedAt),
+        createdAt: iso(persisted.rows[0].createdAt),
       });
+    } catch (error) {
+      if (!committed) await client.query('ROLLBACK');
+      throw error;
     } finally {
+      client.release();
       await pool.end();
     }
   }
@@ -506,14 +627,91 @@ export class InspectionController {
     @Req() request: AuthedRequest,
   ) {
     this.assertRole(request.user, ...apiRoutes.reviewInspection.roles);
-    reviewRequestSchema.parse(body);
+    const input = reviewRequestSchema.parse(body);
     const pool = createPool();
+    const client = await pool.connect();
+    let committed = false;
     try {
-      const inspection = await this.getInspectionAccess(pool, id, request.user);
-      return reviewResponseSchema.parse(
-        await this.loadInspectionDetail(pool, inspection),
+      await client.query('BEGIN');
+      const inspectionResult = await client.query(
+        'SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt" FROM floorwalk.inspections WHERE id = $1 FOR UPDATE',
+        [id],
       );
+      const inspection = inspectionResult.rows[0];
+      if (!inspection)
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '巡检单不存在。',
+        });
+      this.assertInspectionAccess(inspection, request.user);
+      const items = await client.query(
+        `SELECT id, inspection_id AS "inspectionId", position, title,
+           photo_required AS "photoRequired", critical, result, note,
+           created_at AS "createdAt"
+         FROM floorwalk.inspection_items WHERE inspection_id = $1 ORDER BY position`,
+        [id],
+      );
+      const expectedStatus =
+        input.action === 'start' ? 'submitted' : 'in_review';
+      if (inspection.status !== expectedStatus)
+        throw new ConflictException({
+          code: 'INVALID_STATE',
+          message: '当前状态不允许执行该审核操作。',
+        });
+      if (input.action === 'approve' && !canSupervisorApprove(items.rows))
+        throw new UnprocessableEntityException({
+          code: 'CRITICAL_FAILED',
+          message: '存在不合格的严重检查项，不能通过。',
+        });
+      if (input.action === 'rework') {
+        const requestedIds = input.reworkItemIds ?? [];
+        const itemIds = new Set(items.rows.map((item) => item.id));
+        if (requestedIds.some((itemId) => !itemIds.has(itemId)))
+          throw new BadRequestException({
+            code: 'VALIDATION_FAILED',
+            message: '打回检查项必须属于当前巡检单。',
+          });
+      }
+      const nextStatus =
+        input.action === 'start'
+          ? 'in_review'
+          : input.action === 'approve'
+            ? 'passed'
+            : input.action === 'rework'
+              ? 'rework'
+              : 'failed';
+      const decidedAt =
+        input.action === 'approve' || input.action === 'fail'
+          ? new Date()
+          : null;
+      const updated = await client.query(
+        `UPDATE floorwalk.inspections
+         SET status = $2, decided_at = COALESCE($3, decided_at)
+         WHERE id = $1
+         RETURNING id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt"`,
+        [id, nextStatus, decidedAt],
+      );
+      await client.query(
+        `INSERT INTO floorwalk.reviews
+          (inspection_id, reviewer_id, action, comment, rework_item_ids)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          id,
+          request.user.id,
+          input.action,
+          input.comment ?? null,
+          input.action === 'rework' ? input.reworkItemIds : null,
+        ],
+      );
+      await client.query('COMMIT');
+      committed = true;
+      const detail = await this.loadInspectionDetail(pool, updated.rows[0]);
+      return reviewResponseSchema.parse(detail);
+    } catch (error) {
+      if (!committed) await client.query('ROLLBACK');
+      throw error;
     } finally {
+      client.release();
       await pool.end();
     }
   }
