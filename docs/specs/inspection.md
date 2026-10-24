@@ -20,22 +20,24 @@
 
 除 `POST /api/auth/login` 外，接口需携带 `Authorization: Bearer <token>`。
 
-| 方法与路径                                         | 说明                                   |
-| -------------------------------------------------- | -------------------------------------- |
-| `POST /api/auth/login`                             | 邮箱密码登录，返回 token 与用户        |
-| `GET /api/me`                                      | 当前用户                               |
-| `GET /api/inspector/today`                         | 本店模板、今日提交标记及本店所有打回单 |
-| `POST /api/inspections`                            | 新建草稿                               |
-| `GET /api/inspections/:id`                         | 巡检单详情、检查项与照片列表           |
-| `PATCH /api/inspections/:id/items/:itemId`         | 更新检查项                             |
-| `POST /api/inspections/:id/items/:itemId/evidence` | 上传照片                               |
-| `GET /api/evidence/:id`                            | 获取一小时有效的照片链接               |
-| `POST /api/inspections/:id/submit`                 | 提交巡检单                             |
-| `GET /api/review/queue`                            | 审核队列                               |
-| `POST /api/inspections/:id/review`                 | 开始审核、通过、打回或判不合格         |
-| `GET /api/dashboard/sites`                         | 各店按 `decided_at` 最近的巡检分数     |
+| 方法与路径                                         | 说明                                                                         |
+| -------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `POST /api/auth/login`                             | 邮箱密码登录，返回 token 与用户                                              |
+| `GET /api/me`                                      | 当前用户                                                                     |
+| `GET /api/inspector/today`                         | 本店门店、模板、今日提交标记及本店所有打回单                                 |
+| `POST /api/inspections`                            | 新建草稿                                                                     |
+| `GET /api/inspections/:id`                         | 巡检单详情、门店、检查项、照片列表与审核记录（审核记录按 `createdAt` 升序）  |
+| `PATCH /api/inspections/:id/items/:itemId`         | 更新检查项                                                                   |
+| `POST /api/inspections/:id/items/:itemId/evidence` | 上传照片                                                                     |
+| `GET /api/evidence/:id`                            | 获取照片链接；`url` 对调用方不透明，原样作为图片地址使用，可能带查询参数     |
+| `POST /api/inspections/:id/submit`                 | 提交巡检单                                                                   |
+| `GET /api/review/queue`                            | 审核队列；每张单含门店、检查项、照片与按 `createdAt` 升序的审核记录          |
+| `POST /api/inspections/:id/review`                 | 开始审核、通过、打回或判不合格                                               |
+| `GET /api/dashboard/sites`                         | 各店按 `decided_at` 最近的巡检分数                                           |
+| `GET /storage/*key`                                | 按 `storageKey` 从 `STORAGE_DIR` 读取照片；拒绝任何越出 `STORAGE_DIR` 的路径 |
 
 骨架中的非登录接口按契约 schema 返回固定或种子数据，不代表业务写入与照片签名已经实现。
+`GET /api/inspector/today` 的“今天”按 `Asia/Shanghai` 时区的日历日计算。照片文件路由当前只负责按存储键读取并返回文件，照片链接的签名和过期校验由 FW-004 实现。
 
 ## 数据结构
 
@@ -60,9 +62,10 @@ Northbean Coffee 有 12 家门店 `NB-001`～`NB-012`，每家店一个店员账
 
 ## 修订记录
 
-| 日期       | 用户或调用方可观察的变化                                                                              |
-| ---------- | ----------------------------------------------------------------------------------------------------- |
-| 2026-10-24 | 建立巡检主链契约、Northbean 种子、登录与角色校验，以及供各端开发使用的 API 骨架。                     |
-| 2026-10-24 | 用户确认演示账号 JWT 有效期为一小时；过期 token 需要重新登录。                                        |
-| 2026-10-24 | FW-003 修订 `/api` 路由、角色访问、错误格式、照片约束、CORS、种子不变量和按 `decided_at` 的看板规则。 |
-| 2026-10-24 | 调整 Northbean 种子总量与看板分布，要求分数从检查项实算，并将有效 JPEG 写入实际种子存储目录（含 e2e 槽位）。 |
+| 日期       | 用户或调用方可观察的变化                                                                                                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-24 | 建立巡检主链契约、Northbean 种子、登录与角色校验，以及供各端开发使用的 API 骨架。                                                                             |
+| 2026-10-24 | 用户确认演示账号 JWT 有效期为一小时；过期 token 需要重新登录。                                                                                                |
+| 2026-10-24 | FW-003 修订 `/api` 路由、角色访问、错误格式、照片约束、CORS、种子不变量和按 `decided_at` 的看板规则。                                                         |
+| 2026-10-24 | 调整 Northbean 种子总量与看板分布，要求分数从检查项实算，并将有效 JPEG 写入实际种子存储目录（含 e2e 槽位）。                                                  |
+| 2026-10-24 | 巡检详情、审核队列和店员今日响应补充门店与审核记录；照片 URL 改为调用方不透明并新增受 `STORAGE_DIR` 边界保护的照片文件路由；今日按 Asia/Shanghai 日历日计算。 |

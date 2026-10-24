@@ -457,11 +457,19 @@ export class InspectionController {
     const pool = createPool();
     try {
       const inspection = await this.getInspectionAccess(pool, id, request.user);
+      const submittedAt = new Date();
+      const persisted = await pool.query(
+        `UPDATE floorwalk.inspections
+         SET status = 'submitted', submitted_at = $2
+         WHERE id = $1
+         RETURNING status, submitted_at AS "submittedAt"`,
+        [id, submittedAt],
+      );
       return submitInspectionResponseSchema.parse({
         ...inspection,
-        status: 'submitted',
+        status: persisted.rows[0]?.status ?? 'submitted',
         score: inspection.score ?? 88,
-        submittedAt: new Date().toISOString(),
+        submittedAt: iso(persisted.rows[0]?.submittedAt ?? submittedAt),
         decidedAt: iso(inspection.decidedAt),
         createdAt: iso(inspection.createdAt),
       });

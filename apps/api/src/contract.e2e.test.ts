@@ -472,12 +472,22 @@ describe('inspection contract API', () => {
       .set('Authorization', `Bearer ${inspectorToken}`)
       .expect(201);
     submitInspectionResponseSchema.parse(submitted.body);
+    const afterSubmitToday = await request(app.getHttpServer())
+      .get('/api/inspector/today')
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(200);
+    expect(
+      todayResponseSchema.parse(afterSubmitToday.body).submittedToday,
+    ).toBe(true);
     const queue = await request(app.getHttpServer())
       .get('/api/review/queue')
       .set('Authorization', `Bearer ${supervisorToken}`)
       .expect(200);
     const queueBody = reviewQueueResponseSchema.parse(queue.body);
     expect(queueBody.every((entry) => entry.site.code)).toBe(true);
+    expect(queueBody.some((entry) => entry.id === createdInspectionId)).toBe(
+      true,
+    );
     const reviewed = await request(app.getHttpServer())
       .post(`/api/inspections/${createdInspectionId}/review`)
       .set('Authorization', `Bearer ${supervisorToken}`)
