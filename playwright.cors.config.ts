@@ -1,4 +1,35 @@
 import { defineConfig } from '@playwright/test';
+import path from 'node:path';
+
+const configuredSlot = process.env.FW_SLOT;
+if (!configuredSlot) {
+  throw new Error('FW_SLOT 未设置；请设置为 1、2 或 3。');
+}
+const slot = Number(configuredSlot);
+if (!Number.isInteger(slot) || slot < 1 || slot > 3) {
+  throw new Error('FW_SLOT 必须是 1、2 或 3。');
+}
+const apiPort = 3100 + slot * 10;
+const webPort = apiPort + 1;
+const metroPort = apiPort + 2;
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error('DATABASE_URL 未配置。');
+const slotDatabaseUrl = new URL(databaseUrl);
+slotDatabaseUrl.pathname = `/floorwalk_e2e_${slot}`;
+const slotEnvironment = {
+  ...process.env,
+  FW_SLOT: String(slot),
+  PORT: String(apiPort),
+  HOST: '127.0.0.1',
+  DATABASE_URL: slotDatabaseUrl.toString(),
+  STORAGE_DIR: path.resolve(
+    'apps',
+    'api',
+    '.e2e',
+    `slot-${slot}`,
+    'storage',
+  ),
+};
 
 const noProxy = [process.env.NO_PROXY, process.env.no_proxy, '127.0.0.1', 'localhost']
   .filter(Boolean)
@@ -12,20 +43,23 @@ export default defineConfig({
   webServer: [
     {
       command: 'pnpm --filter @apps/api dev',
-      url: 'http://127.0.0.1:3018/health',
-      reuseExistingServer: true,
+      url: `http://127.0.0.1:${apiPort}/health`,
+      env: slotEnvironment,
+      reuseExistingServer: false,
       timeout: 120000,
     },
     {
       command: 'pnpm --filter @apps/web dev',
-      url: 'http://127.0.0.1:3019/',
-      reuseExistingServer: true,
+      url: `http://127.0.0.1:${webPort}/`,
+      env: { ...process.env, PORT: String(webPort) },
+      reuseExistingServer: false,
       timeout: 120000,
     },
     {
-      command: 'pnpm --filter @apps/mobile exec expo start --web --port 3020',
-      url: 'http://127.0.0.1:3020/status',
-      reuseExistingServer: true,
+      command: `pnpm --filter @apps/mobile exec expo start --web --port ${metroPort}`,
+      url: `http://127.0.0.1:${metroPort}/status`,
+      env: { ...process.env, RCT_METRO_PORT: String(metroPort) },
+      reuseExistingServer: false,
       timeout: 120000,
     },
   ],
