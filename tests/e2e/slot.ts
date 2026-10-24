@@ -5,7 +5,12 @@ import { createPool } from '../../apps/api/src/db/client.js';
 import { runMigrations } from '../../apps/api/src/db/migrate.js';
 import { seedDatabase } from '../../apps/api/src/db/seed.js';
 
-const slotValue = Number(process.env.FW_SLOT ?? '1');
+const configuredSlot = process.env.FW_SLOT;
+if (!configuredSlot) {
+  throw new Error('FW_SLOT 未设置；请设置为 1、2 或 3。');
+}
+
+const slotValue = Number(configuredSlot);
 if (!Number.isInteger(slotValue) || slotValue < 1 || slotValue > 3) {
   throw new Error('FW_SLOT 必须是 1、2 或 3。');
 }
@@ -15,7 +20,13 @@ export const apiPort = 3100 + slot * 10;
 export const webPort = apiPort + 1;
 export const metroPort = apiPort + 2;
 export const databaseName = `floorwalk_e2e_${slot}`;
-export const storageDir = path.resolve(
+export const projectRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+);
+export const storageDir = path.join(
+  projectRoot,
   'apps',
   'api',
   '.e2e',
@@ -67,8 +78,3 @@ export function getSlotMarkerPath() {
   return path.join(storageDir, `slot-${slot}.marker`);
 }
 
-export const projectRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-  '..',
-);

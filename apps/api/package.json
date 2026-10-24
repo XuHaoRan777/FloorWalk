@@ -9,7 +9,7 @@
     "start": "node --env-file=.env.production dist/main.js",
     "db:migrate": "node --env-file=.env.development --import=tsx src/db/migrate.ts",
     "db:seed": "node --env-file=.env.development --import=tsx src/db/seed.ts",
-    "test": "node --env-file=.env.development --import=tsx node_modules/vitest/vitest.mjs run --no-file-parallelism",
+    "test": "node --env-file=.env.development --import=tsx --import=../../tests/e2e/api-test-env.ts node_modules/vitest/vitest.mjs run --no-file-parallelism",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
