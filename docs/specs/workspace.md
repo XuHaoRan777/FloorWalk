@@ -8,11 +8,11 @@ pnpm workspace 包含 `@apps/api`、`@apps/web`、`@apps/mobile` 和 `@libs/shar
 
 ## shared 消费
 
-shared 仅导出运行时常量 `APP_NAME = 'FloorWalk'`，提供 ESM、CommonJS 和声明文件。API 启动日志、Web 页面、Mobile 首页通过包名实际引用它，不跨包相对引用源码。shared 不含 React、React Native、NestJS 或 UI 依赖；watch 重新生成产物，消费者可重新载入。
+shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契约，提供 ESM、CommonJS 和声明文件。API 启动日志、Web 页面、Mobile 首页通过包名实际引用它，不跨包相对引用源码。shared 不含 React、React Native、NestJS 或 UI 依赖；watch 重新生成产物，消费者可重新载入。
 
 ## API 进程探针
 
-`GET /health` 返回 HTTP 200 和 `{"status":"ok"}`。它只说明进程可响应，不探测数据库或认证。API 绑定本机回环地址，启动日志输出 shared 项目名及监听地址；PORT 必须为 1—65535 的整数。
+`GET /health` 返回 HTTP 200 和 `{"status":"ok"}`。登录、当前用户、巡检、审核队列、证据链接和看板端点由 `packages/shared/src/contract/` 定义；登录校验当前用户，受保护请求读取数据库中的当前角色与门店绑定。骨架端点返回固定或种子数据，业务规则留给 FW-003，细节见[巡检主链](inspection.md)。API 监听 `HOST`（缺省 `127.0.0.1`），启动日志输出 shared 项目名及监听地址；PORT 必须为 1—65535 的整数。
 
 ## Web 页面壳
 
@@ -28,20 +28,21 @@ Expo Router 首页显示 shared 项目名、工程演示说明和 gluestack“�
 
 ## 没有的
 
-没有登录、角色权限、业务 API、门店或检查模板、巡检提交与审核、聊天、得分看板、种子数据。没有数据库、上传存储、缓存、CI/CD、云部署、APK 签名或商店发布。工程骨架可启动不等于业务功能可用。
+没有三端业务页面、巡检业务规则、聊天、缓存、CI/CD、云部署、APK 签名或商店发布。契约 API、PostgreSQL `floorwalk` schema、Northbean 种子和登录/基础角色校验已具备；工程骨架可启动不等于业务规则已完成。
 
 ## 数据契约（归档时再生成）
 
 | 入口 | 当前契约 | 代码（归档时再生成） |
 | --- | --- | --- |
 | workspace 与命令 | 四包编排和根检查入口 | [package.json](../../package.json)、[pnpm-workspace.yaml](../../pnpm-workspace.yaml) |
-| shared | APP_NAME 常量及 import/require 声明入口 | [源码](../../packages/shared/src/index.ts)、[包入口](../../packages/shared/package.json) |
-| API | GET /health，固定 status=ok；无请求体 | [控制器](../../apps/api/src/health.controller.ts)、[启动](../../apps/api/src/main.ts) |
+| shared | APP_NAME 与巡检主链 zod 契约 | [源码](../../packages/shared/src/index.ts)、[契约](../../packages/shared/src/contract/index.ts) |
+| API | /health、登录、/me、巡检/审核/证据/看板骨架接口 | [控制器](../../apps/api/src/health.controller.ts)、[巡检控制器](../../apps/api/src/inspection.controller.ts)、[认证](../../apps/api/src/auth.ts)、[启动](../../apps/api/src/main.ts) |
 | Web | /、/console；无登录或业务数据契约 | [路由](../../apps/web/src/router.tsx) |
-| Mobile | 首页按钮设置本地反馈状态；无网络或持久化契约 | [首页](../../apps/mobile/app/index.tsx)、[布局](../../apps/mobile/app/_layout.tsx)、[Provider](../../apps/mobile/components/ui/gluestack-ui-provider/index.tsx) |
+| Mobile | 首页按钮设置本地反馈状态；API 地址由 `EXPO_PUBLIC_API_BASE_URL` 提供 | [首页](../../apps/mobile/app/index.tsx)、[布局](../../apps/mobile/app/_layout.tsx)、[Provider](../../apps/mobile/components/ui/gluestack-ui-provider/index.tsx) |
 
 ## 修订记录
 
 | 日期 | 用户或调用方可观察的变化 |
 | --- | --- |
 | 2026-10-06 | 建立三应用与 shared 可运行骨架：健康探针、公开首页与控制台演示壳、真机首页与按钮反馈；修复 Expo Web 主题初始化调用并支持 LAN 扫码。 |
+| 2026-10-24 | 建立巡检主链契约、PostgreSQL 迁移与 Northbean 种子；API 提供登录、角色校验及固定数据骨架接口，Mobile Expo Web 具备 Playwright 取证入口。 |

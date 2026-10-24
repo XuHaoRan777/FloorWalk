@@ -1,6 +1,6 @@
 # 本地启动与骨架验收
 
-本轮不需要数据库、真实凭据或付费服务。版本与验证结果见 [开发环境](../context/dev-environment.md)。
+本轮需要本机 PostgreSQL 和公开演示凭据，不需要付费服务。版本与验证结果见 [开发环境](../context/dev-environment.md)。
 
 ## 安装和检查
 
@@ -27,6 +27,8 @@ pnpm typecheck
 pnpm lint
 pnpm format:check
 pnpm build
+pnpm e2e:slots
+pnpm e2e:mobile
 ```
 
 根构建先生成 shared，再构建 API、Android JS bundle 和 Web；Android JS bundle 不是 APK，不代表原生交互已验收。首次安装仅允许 esbuild 的安装脚本。
@@ -48,7 +50,7 @@ pnpm build
 
 API 只显式加载命令指定的那份文件，不自动合并 `.env.local`。Web 遵循 Vite 原生 `.env` / `.env.local` / 模式文件加载规则；Mobile 在 Node 预加载后仍遵循 Expo 的后续加载行为，已预加载的变量保留优先级。本项目提供的统一入口只要求上述两份模式文件，不依赖额外覆盖文件。
 
-Web 的 `VITE_*`、Mobile 的 `EXPO_PUBLIC_*` 属于客户端公开变量，通常在构建时写入产物，不能放密钥。当前未接业务 API，不预建 API 地址等配置项。API 的配置在启动时生效；Web/Mobile 客户端配置修改后通常需要重新构建。环境文件修改后应重启对应开发命令，保证重新加载。
+Web 的 `VITE_*`、Mobile 的 `EXPO_PUBLIC_*` 属于客户端公开变量，通常在构建时写入产物，不能放密钥。API 的 `DATABASE_URL`、`JWT_SECRET`、`STORAGE_DIR`、`HOST`，Web 的 `VITE_API_BASE_URL`，Mobile 的 `EXPO_PUBLIC_API_BASE_URL` 已列在各 `.env*.example`。API 的配置在启动时生效；Web/Mobile 客户端配置修改后通常需要重新构建。环境文件修改后应重启对应开发命令，保证重新加载。
 
 Web preview 只作本地构建预览，生产托管服务尚未建立；未来 Web 生产服务使用 3019 的部署要求已记录，不能把 preview 当成生产服务器。Mobile 正式 App 不启动 Metro，不配置生产服务端口。
 
@@ -72,6 +74,10 @@ pnpm dev
 | `pnpm dev:api` | `apps/api` | `http://127.0.0.1:3018/health` |
 | `pnpm dev:web` | `apps/web` | `http://127.0.0.1:3019/` 与 `/console` |
 | `pnpm dev:mobile` | `apps/mobile` | Metro，LAN 模式，端口 `3020`；同一局域网真机 Expo Go 扫码 |
+| `pnpm --filter @apps/api db:migrate` | `apps/api` | 按 Drizzle 迁移建立 `floorwalk` schema 和 8 张表 |
+| `pnpm --filter @apps/api db:seed` | `apps/api` | 重建 Northbean 演示店、账号、模板和历史单 |
+| `pnpm e2e:slots` | 根目录 | 并发运行 `FW_SLOT=1|2|3` 的隔离设施测试 |
+| `pnpm e2e:mobile` | 根目录 | 自动启动 Expo Web，点击按钮并写入 FW-002 截图证据 |
 
 三个独立应用入口也会先构建 shared。直接执行包内命令时，先运行 `pnpm --filter @libs/shared build`。
 

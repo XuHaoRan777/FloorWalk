@@ -16,6 +16,9 @@
 #*.changeset
 *~
 .playwright-mcp
+apps/api/.e2e/
+tests/e2e-results/
+test-results/
 
 # Operating system files
 .DS_Store

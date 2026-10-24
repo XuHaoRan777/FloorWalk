@@ -16,15 +16,21 @@
     "typecheck": "pnpm --filter @libs/shared build && pnpm -r typecheck",
     "lint": "eslint apps packages",
     "format:check": "prettier --check package.json pnpm-workspace.yaml eslint.config.mjs .prettierrc.json apps packages",
-    "build": "pnpm --filter @libs/shared build && pnpm --filter @apps/* --workspace-concurrency=1 -r build"
+    "build": "pnpm --filter @libs/shared build && pnpm --filter @apps/* --workspace-concurrency=1 -r build",
+    "e2e": "node --env-file=apps/api/.env.development --import=tsx node_modules/@playwright/test/cli.js test",
+    "e2e:slots": "node scripts/e2e-slots.mjs",
+    "e2e:demo": "node --env-file=apps/api/.env.development scripts/demo-chain.mjs",
+    "e2e:mobile": "pnpm exec playwright test --config=playwright.mobile.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.55.0",
     "concurrently": "10.0.5",
     "eslint": "10.12.0",
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "17.13.0",
     "prettier": "3.9.9",
+    "tsx": "4.20.6",
     "typescript-eslint": "8.58.2"
   }
 }
