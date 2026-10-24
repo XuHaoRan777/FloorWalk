@@ -43,3 +43,5 @@
 <!-- 只记会影响后续的：用户决策、放弃的方案、发现的范围外问题。每条一行。 -->
 
 - 2026-10-24 用户采纳：增加跨端界面演示链 e2e（AC-04）。
+- 2026-10-24（集成前，用户授权"清理主目录"）：主目录从 `g01/FW-006` 切回 master，丢掉 FW-004、FW-005 留在主目录的 13 个过期改动（逐个核对过，内容都在分支里，或比分支旧）。`.gitattributes` 加 `* text=auto eol=lf`，新检出的文件一律 LF；`apps/api/src/db/seed.ts`、`seed.test.ts` 只做了格式化，master 的 `format:check` 转绿。FW-004、FW-005 自建的工作树 `F:/project/FloorWalk-fw004`、`-fw005` 不归 Codex 管，收组时手动删。
+- 2026-10-24 用户授权 FW-004 在 `g01/FW-004` 上给 `scripts/demo-chain.mjs` 的第二次审核补一次 `start`，契约不改。这是 FW-004 分支里唯一一处写入范围外的改动，属于已批准的改动。

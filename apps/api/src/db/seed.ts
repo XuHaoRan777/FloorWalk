@@ -134,7 +134,8 @@ export async function seedDatabase(
     for (const extra of extras) {
       const siteId = sites.get(extra.code);
       const inspectorId = inspectors.get(extra.code);
-      if (!siteId || !inspectorId) throw new Error(`门店 ${extra.code} 创建失败。`);
+      if (!siteId || !inspectorId)
+        throw new Error(`门店 ${extra.code} 创建失败。`);
       await insertInspection(
         client,
         storageDir,
@@ -246,20 +247,15 @@ async function insertInspection(
         `INSERT INTO floorwalk.evidence
           (inspection_item_id, storage_key, mime, size, created_at)
          VALUES ($1, $2, 'image/jpeg', $3, $4)`,
-        [
-          inserted.rows[0].id,
-          storageKey,
-          photo.byteLength,
-          input.createdAt,
-        ],
+        [inserted.rows[0].id, storageKey, photo.byteLength, input.createdAt],
       );
     }
   }
   const score = Math.floor((passedItems / items.length) * 100 + 0.5);
-  await client.query('UPDATE floorwalk.inspections SET score = $1 WHERE id = $2', [
-    score,
-    inspectionId,
-  ]);
+  await client.query(
+    'UPDATE floorwalk.inspections SET score = $1 WHERE id = $2',
+    [score, inspectionId],
+  );
   if (input.reviewAction && input.reviewerId) {
     await client.query(
       `INSERT INTO floorwalk.reviews

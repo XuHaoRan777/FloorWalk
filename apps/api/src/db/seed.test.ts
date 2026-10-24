@@ -113,7 +113,10 @@ describe('Northbean seed', () => {
   });
 
   it('calculates each non-draft score from its passed inspection items', async () => {
-    const scores = await pool.query<{ score: number; calculated_score: number }>(
+    const scores = await pool.query<{
+      score: number;
+      calculated_score: number;
+    }>(
       `SELECT i.score,
         ROUND(COUNT(*) FILTER (WHERE ii.result = 'pass') * 100.0 / COUNT(*))::int AS calculated_score
        FROM floorwalk.inspections i

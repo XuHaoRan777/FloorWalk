@@ -1,1 +1,4 @@
+# 仓库内文本统一 LF（.prettierrc.json 的 endOfLine 为 lf）；Windows 上 core.autocrlf=true 时，
+# 没有这一行，新检出的工作树会变成 CRLF，pnpm format:check 报错（docs/parallel-trial.md）。
+* text=auto eol=lf
 scripts/hooks/* text eol=lf
