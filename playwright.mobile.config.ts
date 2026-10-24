@@ -6,9 +6,14 @@ const noProxy = [process.env.NO_PROXY, process.env.no_proxy, '127.0.0.1', 'local
 process.env.NO_PROXY = noProxy;
 process.env.no_proxy = noProxy;
 
-const slot = Number(process.env.FW_SLOT ?? '1');
-if (!Number.isInteger(slot) || slot < 1 || slot > 3)
+const configuredSlot = process.env.FW_SLOT;
+if (!configuredSlot) {
+  throw new Error('FW_SLOT 未设置；请设置为 1、2 或 3。');
+}
+const slot = Number(configuredSlot);
+if (!Number.isInteger(slot) || slot < 1 || slot > 3) {
   throw new Error('FW_SLOT 必须是 1、2 或 3。');
+}
 const metroPort = 3100 + slot * 10 + 2;
 const metroUrl = `http://127.0.0.1:${metroPort}`;
 

@@ -2,27 +2,30 @@ import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 const command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-const slot = Number(process.env.FW_SLOT ?? '1');
+const configuredSlot = process.env.FW_SLOT;
+if (!configuredSlot) {
+  throw new Error('FW_SLOT 未设置；请设置为 1、2 或 3。');
+}
+const slot = Number(configuredSlot);
 if (!Number.isInteger(slot) || slot < 1 || slot > 3)
   throw new Error('FW_SLOT 必须是 1、2 或 3。');
 const apiPort = 3100 + slot * 10;
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL 未配置。');
 const databaseUrl = new URL(process.env.DATABASE_URL);
 databaseUrl.pathname = `/floorwalk_e2e_${slot}`;
-const storageDir = path.resolve(
-  'apps',
-  'api',
-  '.e2e',
-  `slot-${slot}`,
-  'storage',
-);
 const env = {
   ...process.env,
   FW_SLOT: String(slot),
   PORT: String(apiPort),
   HOST: '127.0.0.1',
   DATABASE_URL: databaseUrl.toString(),
-  STORAGE_DIR: storageDir,
+  STORAGE_DIR: path.resolve(
+    'apps',
+    'api',
+    '.e2e',
+    `slot-${slot}`,
+    'storage',
+  ),
 };
 const baseUrl = `http://127.0.0.1:${apiPort}`;
 

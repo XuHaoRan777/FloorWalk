@@ -14,7 +14,7 @@ test('mobile home responds to the experience button', async ({ page }) => {
   await page.getByRole('button', { name: '体验按钮' }).click();
   await expect(page.getByText('按钮响应成功')).toBeVisible();
   await page.screenshot({
-    path: `docs/work/FW-003-contract-revision/evidence/t05-mobile-home-slot-${process.env.FW_SLOT ?? '1'}.png`,
+    path: `docs/work/FW-003-contract-revision/evidence/t05-mobile-home-slot-${process.env.FW_SLOT}.png`,
     fullPage: true,
   });
 });

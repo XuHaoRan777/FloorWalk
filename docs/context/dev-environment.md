@@ -48,7 +48,7 @@ Web 固定源码 commit `e16c87f213a5ba5e45964e9b67c792105ec74d26`，gluestack �
 | 独立开发 | `pnpm dev:api`、`pnpm dev:web`、`pnpm dev:mobile`、`pnpm dev:shared` |
 | API 数据 | `pnpm --filter @apps/api db:migrate`、`pnpm --filter @apps/api db:seed` |
 | API 测试 | `FW_SLOT=1 pnpm --filter @apps/api test`（API 测试使用对应槽位库 `floorwalk_e2e_N` 与槽位存储目录） |
-| e2e | `pnpm e2e:slots`（脚本自动分别设置槽位 1、2、3）；`FW_SLOT=1 pnpm e2e:mobile`；`FW_SLOT=1 pnpm e2e:cors`；`FW_SLOT=1 pnpm e2e:demo`（演示链在 FW-004 前预期于业务分数断言失败）。上述逐槽命令必须设置 `FW_SLOT` 为 1、2 或 3；非并行开发使用 1。 |
+| e2e | `pnpm e2e:slots`（脚本自动分别设置槽位 1、2、3）；单槽运行 `FW_SLOT=1 pnpm e2e`、`FW_SLOT=1 pnpm e2e:mobile`、`FW_SLOT=1 pnpm e2e:cors`、`FW_SLOT=1 pnpm e2e:demo`（演示链在 FW-004 前预期于业务分数断言失败）。API 测试和所有单槽命令必须设置 `FW_SLOT` 为 1、2 或 3；非并行开发使用 1。 |
 | 文档 | `python scripts/validate_docs.py`；归档前 `--archive-gate`；改校验器、钩子或 `scripts/workflow.conf` 后 `python -m unittest discover -s scripts/tests -t .` |
 
 本轮未新建测试框架，使用框架命令、HTTP、浏览器和原生判据。构建成功与 Metro 可响应不等于 Android 原生验收完成。
