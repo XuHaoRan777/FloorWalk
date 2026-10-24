@@ -6,6 +6,3 @@
 
 | 日期 | 场景 | 改动 | 验证 | specs | 审查 |
 | --- | --- | --- | --- | --- | --- |
-| 2026-10-24 | API 测试 | API 测试按 `FW_SLOT` 使用对应 `floorwalk_e2e_N` 库和槽位存储目录。 | `pnpm typecheck`；`FW_SLOT=1 pnpm --filter @apps/api test`（8 tests passed） | 无 | 无 |
-| 2026-10-24 | CORS e2e | CORS 服务改用槽位端口和槽位 API 库，禁止复用已有服务。 | `pnpm typecheck`；`FW_SLOT=1 pnpm e2e:cors`（2 tests passed） | 无 | 无 |
-| 2026-10-24 | 测试命令 | 所有单槽测试命令缺少 `FW_SLOT` 时明确失败；文档说明每条命令的槽位要求。 | `pnpm typecheck`；无 `FW_SLOT` 分别运行 API 测试、`e2e`、`e2e:demo`、`e2e:cors`、`e2e:mobile`（均以 FW_SLOT 错误退出） | 无 | 无 |
