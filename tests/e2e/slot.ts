@@ -60,7 +60,7 @@ export async function resetSlotResources() {
   await rm(storageDir, { recursive: true, force: true });
   await mkdir(storageDir, { recursive: true });
   await runMigrations(databaseUrl);
-  await seedDatabase(databaseUrl);
+  await seedDatabase(databaseUrl, storageDir);
 }
 
 export function getSlotMarkerPath() {

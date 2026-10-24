@@ -17,12 +17,13 @@ const templateItems = [
   ['闭店记录', false, false],
 ] as const;
 
-export async function seedDatabase(databaseUrl = getDatabaseUrl()) {
+export async function seedDatabase(
+  databaseUrl = getDatabaseUrl(),
+  storagePath = process.env.STORAGE_DIR ?? path.join('apps', 'api', '.storage'),
+) {
   const pool = createPool(databaseUrl);
   const client = await pool.connect();
-  const storageDir = path.resolve(
-    process.env.STORAGE_DIR ?? path.join('apps', 'api', '.storage'),
-  );
+  const storageDir = path.resolve(storagePath);
   await rm(path.join(storageDir, 'seed'), { recursive: true, force: true });
   await mkdir(storageDir, { recursive: true });
   try {
