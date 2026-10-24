@@ -111,7 +111,7 @@ export async function seedDatabase(databaseUrl = getDatabaseUrl()) {
           templateId,
           inspectorId,
           status: index === 1 ? 'passed' : 'failed',
-          score: index === 1 ? 88 : 60 + index,
+          score: null,
           createdAt: nextTime(),
           failPosition: index === 1 ? 8 : 3,
           reviewerId: supervisorResult.rows[0].id,
@@ -129,7 +129,7 @@ export async function seedDatabase(databaseUrl = getDatabaseUrl()) {
             templateId,
             inspectorId,
             status: 'failed',
-            score: 50 + index + extra,
+            score: null,
             createdAt: nextTime(),
             failPosition: 3,
             reviewerId: supervisorResult.rows[0].id,
@@ -145,7 +145,7 @@ export async function seedDatabase(databaseUrl = getDatabaseUrl()) {
             templateId,
             inspectorId,
             status: 'rework',
-            score: 75 + index + extra,
+            score: null,
             createdAt: nextTime(),
             failPosition: 3,
             reviewerId: supervisorResult.rows[0].id,
@@ -226,8 +226,10 @@ async function insertInspection(
   );
   const inspectionId = inspectionResult.rows[0].id;
   const reworkItemIds: string[] = [];
+  let passedItems = 0;
   for (const item of items) {
     const result = input.failPosition === item.position ? 'fail' : 'pass';
+    if (result === 'pass') passedItems += 1;
     const inserted = await client.query<{ id: string }>(
       `INSERT INTO floorwalk.inspection_items
         (inspection_id, position, title, photo_required, critical, result, created_at)
@@ -262,6 +264,11 @@ async function insertInspection(
       );
     }
   }
+  const score = Math.floor((passedItems / items.length) * 100 + 0.5);
+  await client.query('UPDATE floorwalk.inspections SET score = $1 WHERE id = $2', [
+    score,
+    inspectionId,
+  ]);
   if (input.reviewAction && input.reviewerId) {
     await client.query(
       `INSERT INTO floorwalk.reviews

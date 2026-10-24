@@ -99,6 +99,20 @@ describe('Northbean seed', () => {
     );
   });
 
+  it('calculates each non-draft score from its passed inspection items', async () => {
+    const scores = await pool.query<{ score: number; calculated_score: number }>(
+      `SELECT i.score,
+        ROUND(COUNT(*) FILTER (WHERE ii.result = 'pass') * 100.0 / COUNT(*))::int AS calculated_score
+       FROM floorwalk.inspections i
+       JOIN floorwalk.inspection_items ii ON ii.inspection_id = i.id
+       WHERE i.status <> 'draft'
+       GROUP BY i.id
+       HAVING i.score IS DISTINCT FROM
+         ROUND(COUNT(*) FILTER (WHERE ii.result = 'pass') * 100.0 / COUNT(*))::int`,
+    );
+    expect(scores.rows).toHaveLength(0);
+  });
+
   it('satisfies photo and review invariants and writes seed files', async () => {
     const missingEvidence = await pool.query(
       `SELECT ii.id FROM floorwalk.inspection_items ii

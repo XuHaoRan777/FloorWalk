@@ -6,3 +6,4 @@
 
 | 日期 | 场景 | 改动 | 验证 | specs | 审查 |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-24 | Northbean 种子 | 所有非草稿单的分数按该单合格检查项实算并四舍五入 | `pnpm --filter @apps/api typecheck`；`pnpm --filter @apps/api test -- src/db/seed.test.ts` passed | 待同步 specs/inspection.md「种子数据」 | 无 |
