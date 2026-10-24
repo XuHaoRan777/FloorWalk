@@ -35,6 +35,7 @@ describe('inspection contract API', () => {
   let hqToken: string;
   let inspectionId: string;
   let otherSiteInspectionId: string;
+  let seedEvidenceId: string;
   let templateId: string;
   let createdInspectionId: string | undefined;
   let createdEvidenceId: string | undefined;
@@ -76,6 +77,14 @@ describe('inspection contract API', () => {
       otherSiteInspectionId = result.rows.find(
         (row) => row.code !== 'NB-001',
       )!.id;
+      const evidence = await pool.query<{ id: string }>(
+        `SELECT e.id FROM floorwalk.evidence e
+         JOIN floorwalk.inspection_items ii ON ii.id = e.inspection_item_id
+         JOIN floorwalk.inspections i ON i.id = ii.inspection_id
+         JOIN floorwalk.sites s ON s.id = i.site_id
+         WHERE s.code = 'NB-001' ORDER BY e.created_at LIMIT 1`,
+      );
+      seedEvidenceId = evidence.rows[0].id;
     } finally {
       await pool.end();
     }
@@ -334,6 +343,21 @@ describe('inspection contract API', () => {
     const todayBody = todayResponseSchema.parse(today.body);
     expect(todayBody.site.code).toBe('NB-001');
     expect(todayBody.submittedToday).toBe(false);
+    const seedSigned = await request(app.getHttpServer())
+      .get(`/api/evidence/${seedEvidenceId}`)
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(200);
+    const seedSignedBody = signedEvidenceResponseSchema.parse(seedSigned.body);
+    const seedPhoto = await request(app.getHttpServer())
+      .get(new URL(seedSignedBody.url).pathname)
+      .expect(200);
+    expect(seedPhoto.body.byteLength).toBeGreaterThan(0);
+    await request(app.getHttpServer())
+      .get('/storage/..%2Foutside.jpg')
+      .expect(400)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
+      );
     const created = await request(app.getHttpServer())
       .post('/api/inspections')
       .set('Authorization', `Bearer ${inspectorToken}`)
