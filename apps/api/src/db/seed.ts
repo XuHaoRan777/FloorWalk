@@ -1,5 +1,5 @@
 import argon2 from 'argon2';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { PoolClient } from 'pg';
@@ -23,6 +23,7 @@ export async function seedDatabase(databaseUrl = getDatabaseUrl()) {
   const storageDir = path.resolve(
     process.env.STORAGE_DIR ?? path.join('apps', 'api', '.storage'),
   );
+  await rm(path.join(storageDir, 'seed'), { recursive: true, force: true });
   await mkdir(storageDir, { recursive: true });
   try {
     await client.query('BEGIN');
@@ -235,7 +236,11 @@ async function insertInspection(
       const storageKey = `seed/${inspectionId}/${inserted.rows[0].id}.jpg`;
       const target = path.resolve(storageDir, storageKey);
       await mkdir(path.dirname(target), { recursive: true });
-      await writeFile(target, Buffer.from('floorwalk-seed-photo'));
+      const photo = Buffer.from(
+        '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9oADAMBAAIAAwAAABAf/9k=',
+        'base64',
+      );
+      await writeFile(target, photo);
       await client.query(
         `INSERT INTO floorwalk.evidence
           (inspection_item_id, storage_key, mime, size, created_at)
@@ -243,7 +248,7 @@ async function insertInspection(
         [
           inserted.rows[0].id,
           storageKey,
-          Buffer.byteLength('floorwalk-seed-photo'),
+          photo.byteLength,
           input.createdAt,
         ],
       );
