@@ -50,6 +50,8 @@ Mobile 能在 Expo Web 里打开并被 Playwright 驱动，FW-004 据此按方�
 
 ### 接口（前缀 `/api`；除登录外都要带 `Authorization: Bearer <token>`）
 
+登录签发的 JWT 有效期为 1 小时；过期 token 返回 401 `UNAUTHENTICATED`。
+
 | 接口 | 调用方 | 说明 |
 | --- | --- | --- |
 | `POST /auth/login` | 全部 | `{email, password}` → `{token, user}` |
@@ -111,3 +113,4 @@ AC-07 用 Playwright 截图取证，截图存在本单元的 `evidence/`。Mobil
 - 批准依据：用户 2026-10-24 审定契约草案 v1，原话"005改成B，其他默认"；验收方式 B，原话"关于mobile，我还是想B验收"。
 - 批准时间：`2026-10-24`
 - 特殊授权：可以写业务代码，范围是 API、shared、三端的配置与入口、测试、种子；可以在仓库根和各应用里装 AC-08 列出的依赖；可以在 master 上本地提交，不推送；连库只用 `floorwalk` 角色，只连本机 `floorwalk*` 库。
+- 认证期限确认：2026-10-24 用户确认“1 小时（保留当前实现）”。
