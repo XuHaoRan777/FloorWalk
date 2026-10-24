@@ -6,8 +6,3 @@
 
 | 日期 | 场景 | 改动 | 验证 | specs | 审查 |
 | --- | --- | --- | --- | --- | --- |
-| 2026-10-24 | Northbean 种子 | 所有非草稿单的分数按该单合格检查项实算并四舍五入 | `pnpm --filter @apps/api typecheck`；`pnpm --filter @apps/api test -- src/db/seed.test.ts` passed | 待同步 specs/inspection.md「种子数据」 | 无 |
-| 2026-10-24 | Northbean 看板种子 | 总量调整为 18 张，额外 failed/rework/submitted 各 2 张，11 家通过、1 家不合格 | `pnpm --filter @apps/api typecheck`；`pnpm --filter @apps/api test -- src/db/seed.test.ts` passed | 待同步 specs/inspection.md「种子数据」 | 无 |
-| 2026-10-24 | 槽位种子照片 | 重置时先清空并创建槽位存储目录，种子清理自身 seed 子目录并写入 JPEG 占位图 | `pnpm --filter @apps/api typecheck`；`pnpm --filter @apps/api test -- src/db/seed.test.ts`；`pnpm e2e -- tests/e2e/slot-facility.spec.ts` passed | 待同步 specs/inspection.md「种子数据」 | 无 |
-| 2026-10-24 | 工作流硬线路径 | 将 `apps/api/src/db/schema.ts` 登记为 hardline 路径 | `pnpm --filter @apps/api typecheck`；`python -m unittest discover -s scripts/tests -t .` passed | 待同步 specs/inspection.md「种子数据」 | 无 |
-| 2026-10-24 | 槽位种子照片 | 将槽位存储路径显式传给种子函数，并验证数据库登记的照片文件存在于该目录 | `pnpm --filter @apps/api typecheck`；`pnpm --filter @apps/api test -- src/db/seed.test.ts`；`pnpm e2e -- tests/e2e/slot-facility.spec.ts` passed | 待同步 specs/inspection.md「种子数据」 | 无 |
