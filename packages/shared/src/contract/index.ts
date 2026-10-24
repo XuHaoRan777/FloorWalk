@@ -133,6 +133,7 @@ export const loginResponseSchema = z.object({
 });
 
 export const todayResponseSchema = z.object({
+  site: siteSchema,
   template: templateSchema.extend({
     items: z.array(templateItemSchema),
   }),
@@ -145,11 +146,13 @@ export const createInspectionRequestSchema = z.object({
 });
 
 export const inspectionDetailSchema = inspectionSchema.extend({
+  site: siteSchema,
   items: z.array(
     inspectionItemSchema.extend({
       evidence: z.array(evidenceSchema),
     }),
   ),
+  reviews: z.array(reviewSchema),
 });
 
 export const updateInspectionItemRequestSchema = z.object({

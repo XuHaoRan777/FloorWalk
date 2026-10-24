@@ -58,6 +58,24 @@ type UploadedImage = {
 const iso = (value: unknown) =>
   value instanceof Date ? value.toISOString() : value;
 
+function getShanghaiDayBounds(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  const start = new Date(
+    Date.UTC(values.year, values.month - 1, values.day) - 8 * 60 * 60 * 1000,
+  );
+  return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
+}
+
 @Controller('api')
 export class InspectionController {
   private readonly jwt = new JwtService({
@@ -171,11 +189,32 @@ export class InspectionController {
         'SELECT id, template_id AS "templateId", position, title, photo_required AS "photoRequired", critical, created_at AS "createdAt" FROM floorwalk.template_items WHERE template_id = $1 ORDER BY position',
         [template.rows[0].id],
       );
+      const site = await pool.query(
+        'SELECT id, code, name, created_at AS "createdAt" FROM floorwalk.sites WHERE id = $1',
+        [request.user.siteId],
+      );
+      if (!site.rows[0])
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '门店不存在。',
+        });
       const rework = await pool.query(
         'SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt" FROM floorwalk.inspections WHERE site_id = $1 AND status = \'rework\' ORDER BY created_at',
         [request.user.siteId],
       );
+      const dayBounds = getShanghaiDayBounds();
+      const submittedToday = await pool.query<{ submittedToday: boolean }>(
+        `SELECT EXISTS (
+           SELECT 1 FROM floorwalk.inspections
+           WHERE site_id = $1 AND submitted_at >= $2 AND submitted_at < $3
+         ) AS "submittedToday"`,
+        [request.user.siteId, dayBounds.start, dayBounds.end],
+      );
       return todayResponseSchema.parse({
+        site: {
+          ...site.rows[0],
+          createdAt: iso(site.rows[0].createdAt),
+        },
         template: {
           ...template.rows[0],
           createdAt: iso(template.rows[0].createdAt),
@@ -184,7 +223,7 @@ export class InspectionController {
             createdAt: iso(item.createdAt),
           })),
         },
-        submittedToday: false,
+        submittedToday: submittedToday.rows[0]?.submittedToday ?? false,
         reworkInspections: rework.rows.map((item) => ({
           ...item,
           submittedAt: iso(item.submittedAt),
@@ -544,6 +583,15 @@ export class InspectionController {
     pool: ReturnType<typeof createPool>,
     inspection: Record<string, unknown>,
   ) {
+    const site = await pool.query(
+      'SELECT id, code, name, created_at AS "createdAt" FROM floorwalk.sites WHERE id = $1',
+      [inspection.siteId],
+    );
+    if (!site.rows[0])
+      throw new NotFoundException({
+        code: 'NOT_FOUND',
+        message: '门店不存在。',
+      });
     const items = await pool.query(
       `SELECT id, inspection_id AS "inspectionId", position, title, photo_required AS "photoRequired",
         critical, result, note, created_at AS "createdAt"
@@ -567,12 +615,26 @@ export class InspectionController {
         })),
       });
     }
+    const reviews = await pool.query(
+      `SELECT id, inspection_id AS "inspectionId", reviewer_id AS "reviewerId",
+        action, comment, rework_item_ids AS "reworkItemIds", created_at AS "createdAt"
+       FROM floorwalk.reviews WHERE inspection_id = $1 ORDER BY created_at ASC, id ASC`,
+      [inspection.id],
+    );
     return inspectionDetailSchema.parse({
       ...inspection,
       submittedAt: iso(inspection.submittedAt),
       decidedAt: iso(inspection.decidedAt),
       createdAt: iso(inspection.createdAt),
+      site: {
+        ...site.rows[0],
+        createdAt: iso(site.rows[0].createdAt),
+      },
       items: detailItems,
+      reviews: reviews.rows.map((row) => ({
+        ...row,
+        createdAt: iso(row.createdAt),
+      })),
     });
   }
 }

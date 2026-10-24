@@ -332,6 +332,8 @@ describe('inspection contract API', () => {
       .set('Authorization', `Bearer ${inspectorToken}`)
       .expect(200);
     const todayBody = todayResponseSchema.parse(today.body);
+    expect(todayBody.site.code).toBe('NB-001');
+    expect(todayBody.submittedToday).toBe(false);
     const created = await request(app.getHttpServer())
       .post('/api/inspections')
       .set('Authorization', `Bearer ${inspectorToken}`)
@@ -343,7 +345,13 @@ describe('inspection contract API', () => {
       .get(`/api/inspections/${createdInspectionId}`)
       .set('Authorization', `Bearer ${inspectorToken}`)
       .expect(200);
-    inspectionDetailSchema.parse(detail.body);
+    const detailBody = inspectionDetailSchema.parse(detail.body);
+    expect(detailBody.site.code).toBe('NB-001');
+    expect(detailBody.reviews).toEqual(
+      [...detailBody.reviews].sort(
+        (left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt),
+      ),
+    );
     const createdItemId = detail.body.items[0].id as string;
     const updated = await request(app.getHttpServer())
       .patch(`/api/inspections/${createdInspectionId}/items/${createdItemId}`)
@@ -380,7 +388,8 @@ describe('inspection contract API', () => {
       .get('/api/review/queue')
       .set('Authorization', `Bearer ${supervisorToken}`)
       .expect(200);
-    reviewQueueResponseSchema.parse(queue.body);
+    const queueBody = reviewQueueResponseSchema.parse(queue.body);
+    expect(queueBody.every((entry) => entry.site.code)).toBe(true);
     const reviewed = await request(app.getHttpServer())
       .post(`/api/inspections/${createdInspectionId}/review`)
       .set('Authorization', `Bearer ${supervisorToken}`)
