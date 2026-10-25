@@ -120,6 +120,6 @@ Subagent 只做当前任务内的调查、审查或局部实现：未说明写�
 | 本地安装、启动、构建产物运行、骨架验收 | [`docs/howto/local-development.md`](docs/howto/local-development.md) |
 | 单元带「并行组」，或开、并、收一组并行单元 | [`docs/howto/parallel.md`](docs/howto/parallel.md)（试行） |
 
-机器门按受影响模块：当前只有工程骨架，尚无业务功能；API、Web、Mobile、shared 的验证入口已登记到 [`docs/context/dev-environment.md`](docs/context/dev-environment.md)。认证、支付、权限和外部回调的失败与越权路径必须在 `spec.md` 的 AC 里逐条列出，由 Agent 用仓库内测试取证（方式 A 也一样），不以类型检查或构建代替；验证只覆盖列出的。
+机器门按受影响模块，入口在 [`docs/context/dev-environment.md`](docs/context/dev-environment.md)；Mobile 的上传、拍照等原生路径在模拟器取证，不以 Expo Web 代替。认证、支付、权限和外部回调的失败与越权路径必须在 `spec.md` 的 AC 里逐条列出，由 Agent 用仓库内测试取证（方式 A 也一样），不以类型检查或构建代替；验证只覆盖列出的。
 
 代码规范：2 空格缩进、单引号、必须分号、尾随逗号。各模块 lint / 格式化工具随骨架选型确定。跨包类型进 `@libs/shared`。数据库 schema 名 `floorwalk`。改文件遵循该文件既有模式。

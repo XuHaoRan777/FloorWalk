@@ -49,16 +49,17 @@ Web 固定源码 commit `e16c87f213a5ba5e45964e9b67c792105ec74d26`，gluestack �
 | API 数据    | `pnpm --filter @apps/api db:migrate`、`pnpm --filter @apps/api db:seed`                                                                                                                                                                                                                                                                              |
 | API 测试    | `FW_SLOT=1 pnpm --filter @apps/api test`（API 测试使用对应槽位库 `floorwalk_e2e_N` 与槽位存储目录）                                                                                                                                                                                                                                                  |
 | e2e         | `pnpm e2e:slots`（脚本自动分别设置槽位 1、2、3）；单槽运行 `FW_SLOT=1 pnpm e2e`、`FW_SLOT=1 pnpm e2e:mobile`、`FW_SLOT=1 pnpm e2e:cors`、`FW_SLOT=1 pnpm e2e:demo`、`FW_SLOT=1 pnpm e2e:demo-ui`、`FW_SLOT=3 pnpm exec playwright test --config=playwright.web.config.ts`。API 测试和所有单槽命令必须设置 `FW_SLOT` 为 1、2 或 3；非并行开发使用 1。 |
+| Mobile 原生 | 模拟器 `Medium_Phone_API_37.0`：起槽位 API，`adb reverse` 转发 API 和 Metro 两个端口，再用 `expo start --lan --android --port <Metro 端口>` 打开；图片用 `adb push` 推进 `/sdcard/Pictures`；界面用 `adb shell uiautomator dump` 读、用 `input tap` 点；报错看 `adb logcat`。步骤和坑见上文「Android SDK」一条。Mobile 改动在动手前先读 `~/.agents/skills/expo-overview`，按它的分流加载子 skill，查 SDK 57 的版本文档，在 plan 证据里记一行读了哪些 |
 | 文档        | `python scripts/validate_docs.py`；归档前 `--archive-gate`；改校验器、钩子或 `scripts/workflow.conf` 后 `python -m unittest discover -s scripts/tests -t .`                                                                                                                                                                                          |
 
-本轮未新建测试框架，使用框架命令、HTTP、浏览器和原生判据。构建成功与 Metro 可响应不等于 Android 原生验收完成。
+本轮未新建测试框架，使用框架命令、HTTP、浏览器和原生判据。构建成功、Metro 可响应、Expo Web e2e 通过，都不等于 Android 原生验收完成；上传、拍照这类原生路径要在模拟器上取证（AGENTS.md 第 14 节）。
 
 ## 已知偏差
 
 - `local-pg18` 启动后可能没有发布宿主 5433（`docker ps` 只显示 `5432/tcp`）。遇到时停下，请用户执行 `docker restart local-pg18`；不要重建容器，同一容器里还有 errand 的库。
 - Mobile 生产导出曾在资源输出阶段以 0xC0000005 退出；单 worker 重试成功，构建命令固定 `--max-workers 1`。根因尚未确认；真机交互结论来自单独的用户验收。
 
-- Android SDK / adb / emulator / AVD 在 PATH、环境变量和常见目录中未定位；没有已运行 adb server 可确认设备。Java `21.0.6` 可用。用户已通过 LAN Expo Go 完成真机验收，此工具缺口不再阻塞骨架归档；系统级环境安装仍须另获授权。
+- Android SDK（2026-10-25 用户安装 Android Studio）：`C:\Users\29019\AppData\Local\Android\Sdk`，已设用户级 `ANDROID_HOME`，PATH 加了 `platform-tools`、`emulator`（新开的终端才生效）。组件：platform-tools（adb 1.0.41）、emulator、platform android-37.0、build-tools 36.0.0、镜像 `android-37.0/google_apis_playstore/x86_64`。没装 cmdline-tools（sdkmanager、avdmanager）。AVD `Medium_Phone_API_37.0`，即 Android 17 / API 37 / x86_64，自带相机应用。WHPX 已开，`emulator -accel-check` 报 usable，`emulator -avd Medium_Phone_API_37.0 -no-window` 能正常开机。Java `21.0.6` 在 PATH，没设 `JAVA_HOME`。2026-10-25 原生端探针（槽位 1）通过：`expo start --lan --android --port 3112` 自动给模拟器装上 Expo Go 57.0.9 并加载应用。用 `adb reverse tcp:3110 tcp:3110`、`adb reverse tcp:3112 tcp:3112` 后，模拟器通过 127.0.0.1 访问 API 和 Metro，不用开放局域网。`adb push` 一张图到 `/sdcard/Pictures` 再触发媒体扫描，系统照片选择器就能选到它。实测：登录 → 开始巡检 → 冷柜不合格、其余合格 → 两个必拍项各从相册选图上传，API 落盘的是真 JPEG → 缺照片时提交，提示「请完成：食品效期」→ 补齐后提交，界面显示 88，库里状态 submitted、分数 88、照片 2 张，logcat 没有 JS 错误。踩到的坑：Metro 用 `--localhost` 时只监听 IPv6 的 `[::1]`，`adb reverse` 转不过去，要改用 `--lan`，并设 `REACT_NATIVE_PACKAGER_HOSTNAME=127.0.0.1`；Git Bash 里调 adb 要设 `MSYS_NO_PATHCONV=1`，否则 `/sdcard` 会被改写成 Windows 路径；Expo Go 首次打开有引导页，SDK 57 没有跳过参数，要点一次 Continue。界面用 `adb shell uiautomator dump` 读文字和坐标，再用 `input tap` 操作。
 - 原 B 验收的机器门已完成，原生执行由用户明确真机确认并授权收尾；未采集手机系统版本，不声称双平台通过。当前事实见 [工程骨架](../specs/workspace.md)。
 - pnpm 11 默认拦截 esbuild 安装脚本，workspace 仅显式允许 esbuild。
 - Windows package script 不使用单引号包裹 pnpm filter；当前使用 `@apps/*` 包名筛选，避免未匹配任何包仍退出 0。
