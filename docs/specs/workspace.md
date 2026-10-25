@@ -48,3 +48,4 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 | 2026-10-24 | 建立巡检主链契约、PostgreSQL 迁移与 Northbean 种子；API 提供登录、角色校验及固定数据骨架接口，Mobile Expo Web 具备 Playwright 取证入口。 |
 | 2026-10-24 | FW-003 完成 `/api` 契约接口、统一错误与 CORS；SDK 57 依赖对齐，Mobile Expo Web 与三端 CORS 有独立 e2e 验证。                             |
 | 2026-10-25 | FW-005、FW-006 将 Mobile 首页和 Web 控制台壳替换为巡检、审核与总部看板流程。                                                             |
+| 2026-10-25 | FW-007 集成并归档 g01：API、Mobile、Web 与跨端演示链在真实接口上闭环通过。                                                               |

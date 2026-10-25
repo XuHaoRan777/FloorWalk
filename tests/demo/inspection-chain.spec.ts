@@ -4,7 +4,10 @@ const mobileUrl = `http://127.0.0.1:${3100 + Number(process.env.FW_SLOT) * 10 + 
 const webUrl = `http://127.0.0.1:${3100 + Number(process.env.FW_SLOT) * 10 + 1}`;
 const password = 'northbean-demo';
 
-test('店员、主管与总部通过真实界面完成 NB-001 巡检闭环', async ({ page }) => {
+test('店员、主管与总部通过真实界面完成 NB-001 巡检闭环', async ({
+  page,
+  browser,
+}) => {
   await page.goto(mobileUrl);
   await page.getByLabel('邮箱').fill('inspector@northbean.example');
   await page.getByLabel('密码').fill(password);
@@ -53,7 +56,8 @@ test('店员、主管与总部通过真实界面完成 NB-001 巡检闭环', asy
   expect((await firstSubmit.json()).score).toBe(88);
   await expect(page.getByText('已提交：submitted，分数 88')).toBeVisible();
 
-  const supervisor = await page.context().newPage();
+  const supervisorContext = await browser.newContext();
+  const supervisor = await supervisorContext.newPage();
   await supervisor.goto(webUrl);
   await supervisor.getByLabel('邮箱').fill('supervisor@northbean.example');
   await supervisor.getByLabel('密码').fill(password);
@@ -105,7 +109,8 @@ test('店员、主管与总部通过真实界面完成 NB-001 巡检闭环', asy
   await supervisor.getByRole('button', { name: '通过', exact: true }).click();
   await expect(supervisor.getByText('已通过', { exact: true })).toBeVisible();
 
-  const hq = await page.context().newPage();
+  const hqContext = await browser.newContext();
+  const hq = await hqContext.newPage();
   await hq.goto(webUrl);
   await hq.getByLabel('邮箱').fill('hq@northbean.example');
   await hq.getByLabel('密码').fill(password);
@@ -116,4 +121,6 @@ test('店员、主管与总部通过真实界面完成 NB-001 巡检闭环', asy
     .filter({ has: hq.getByText('Northbean Coffee 1', { exact: true }) });
   await expect(nb001).toContainText('NB-001');
   await expect(nb001).toContainText('100');
+  await hqContext.close();
+  await supervisorContext.close();
 });

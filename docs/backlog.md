@@ -21,12 +21,8 @@
 
 只列 `归档状态：active` 的单元，个数上限与状态一致性由 `python scripts/validate_docs.py` 校验。
 
-| ID     | 工作单元                                                 | 状态        | 依赖                   | 下一步                                       |
-| ------ | -------------------------------------------------------- | ----------- | ---------------------- | -------------------------------------------- |
-| FW-004 | [巡检业务规则 API](work/FW-004-inspection-api/spec.md)   | verified    | FW-003                 | g01 槽位 1：T01 提交与锁分                   |
-| FW-005 | [Mobile 店员巡检](work/FW-005-mobile-inspection/spec.md) | in_progress | FW-003                 | 回修：快速点选后的检查项更新与提交竞态       |
-| FW-006 | [Web 主管审核与总部看板](work/FW-006-web-review/spec.md) | verified    | FW-003                 | g01 槽位 3：已完成，等待其他并行单元         |
-| FW-007 | [并行组 g01 集成](work/FW-007-g01-integration/spec.md)   | in_progress | FW-004、FW-005、FW-006 | T04 阻塞：演示链 UI e2e 未观察到首次提交请求 |
+| ID  | 工作单元 | 状态 | 依赖 | 下一步 |
+| --- | -------- | ---- | ---- | ------ |
 
 ## 待开单元（未批准，按建议顺序）
 
@@ -40,14 +36,14 @@
 | 4    | 第二组：Mobile「记录」页（我的历史单）                                        | FW-007 | 主路径 |
 | 5    | 第二组：将 Web localStorage Bearer Token 改为 HttpOnly 会话（需调整认证契约） | FW-007 | 认证   |
 | 6    | 第二组：Mobile 拍照入口（`launchCameraAsync`）                                | FW-007 | 主路径 |
+| 7    | 第二组：Mobile 区分网络错误与其他上传异常，开发态打印原始错误                 | FW-007 | 质量   |
 
 ## 待人工验收
 
 方式 A 交接里「需要你测的」那一行登记在这里；用户一句确认即归档对应单元，不设集中验收单元。并行组的单元在集成单元合并后才登记（[`howto/parallel.md`](howto/parallel.md)）。
 
-| 单元 / 任务 | 需要你测的                                     | 交接位置                                             |
-| ----------- | ---------------------------------------------- | ---------------------------------------------------- |
-| FW-005      | 真机从相册选照片并上传；Expo Go 真机外观与操作 | [FW-005 plan](work/FW-005-mobile-inspection/plan.md) |
+| 单元 / 任务 | 需要你测的 | 交接位置 |
+| ----------- | ---------- | -------- |
 
 ## 已归档
 
@@ -56,3 +52,7 @@
 | FW-003 | [巡检主链契约修订](work/FW-003-contract-revision/spec.md)           | 2026-10-24 | 归档提交（见 git log）                                    |
 | FW-002 | [巡检主链契约与骨架](work/FW-002-inspection-contract/spec.md)       | 2026-10-24 | 归档提交（见 git log）                                    |
 | FW-001 | [Monorepo 骨架与各模块启动](work/FW-001-monorepo-bootstrap/spec.md) | 2026-10-06 | `9107da6`（修正、验收与 Promote；归档状态见后续归档提交） |
+| FW-004 | [巡检业务规则 API](work/FW-004-inspection-api/spec.md)              | 2026-10-25 | 并行组 g01 归档提交（见 git log）                         |
+| FW-005 | [Mobile 店员巡检](work/FW-005-mobile-inspection/spec.md)            | 2026-10-25 | 并行组 g01 归档提交（见 git log）                         |
+| FW-006 | [Web 主管审核与总部看板](work/FW-006-web-review/spec.md)            | 2026-10-25 | 并行组 g01 归档提交（见 git log）                         |
+| FW-007 | [并行组 g01 集成](work/FW-007-g01-integration/spec.md)              | 2026-10-25 | 并行组 g01 归档提交（见 git log）                         |

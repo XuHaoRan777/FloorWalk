@@ -5,10 +5,10 @@
 ## 当前状态
 
 - 工作单元状态：`verified`
-- 归档状态：`active`
-- 当前任务：T06 最终代码审查
+- 归档状态：`archived`
+- 当前任务：已归档
 - 阻塞：无
-- 下一步：已完成并行单元验收，创建完成标记
+- 下一步：无
 - 并行组：g01，并行单元，槽位 1（并行 FW-004、FW-005、FW-006；集成 FW-007）
 
 - 预检：业务实现范围为 `apps/api/src/inspection.controller.ts`、`apps/api/src/http-exception.filter.ts`、`apps/api/src/contract.e2e.test.ts` 及本计划证据；契约、数据库、认证和依赖只读。
@@ -18,27 +18,27 @@
 
 ## 任务表
 
-| ID  | 任务                                                       | 状态      | 交付的 AC 与证据                   |
-| --- | ---------------------------------------------------------- | --------- | ---------------------------------- |
-| T01 | 提交：完整性检查、状态检查、锁分、重新提交重算             | `done`    | AC-01                              |
-| T02 | 审核：状态迁移、审核记录、`decided_at`、严重项、打回项归属 | `done`    | AC-02、AC-03                       |
-| T03 | 检查项修改与照片上传的状态限制                             | `done`    | AC-04                              |
-| T04 | 照片落盘、签名链接与文件路由的签名校验                     | `done`    | AC-05                              |
-| T05 | 看板取分；演示链 e2e 转绿                                  | `done`    | AC-06、AC-07                       |
-| T06 | 最终代码审查                                               | `done`    | 全量门禁与三条 finding 定向复核    |
+| ID  | 任务                                                       | 状态   | 交付的 AC 与证据                |
+| --- | ---------------------------------------------------------- | ------ | ------------------------------- |
+| T01 | 提交：完整性检查、状态检查、锁分、重新提交重算             | `done` | AC-01                           |
+| T02 | 审核：状态迁移、审核记录、`decided_at`、严重项、打回项归属 | `done` | AC-02、AC-03                    |
+| T03 | 检查项修改与照片上传的状态限制                             | `done` | AC-04                           |
+| T04 | 照片落盘、签名链接与文件路由的签名校验                     | `done` | AC-05                           |
+| T05 | 看板取分；演示链 e2e 转绿                                  | `done` | AC-06、AC-07                    |
+| T06 | 最终代码审查                                               | `done` | 全量门禁与三条 finding 定向复核 |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。 -->
 
 ## 证据
 
-| 任务 | status  | command                                                    | artifact                                                                                               | 备注                                                                                                                                                                                                                |
-| ---- | ------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T01  | passed  | `$env:FW_SLOT='1'; pnpm --filter @apps/api test`           | `apps/api/src/inspection.controller.ts`                                                                | API 套件 2 个文件、8 个测试通过；提交完整性、状态与实算分数通过。                                                                                                                                                   |
-| T02  | passed  | `$env:FW_SLOT='1'; pnpm --filter @apps/api test`           | `apps/api/src/inspection.controller.ts`, `apps/api/src/contract.e2e.test.ts`                           | 审核状态迁移、审核记录、非法打回项和严重项不合格时 422 均通过 API 测试。                                                                                                                                            |
-| T03  | passed  | `$env:FW_SLOT='1'; pnpm --filter @apps/api test`           | `apps/api/src/inspection.controller.ts`                                                                | 检查项及照片写入使用状态行锁；契约流程在可编辑状态通过。                                                                                                                                                            |
-| T04  | passed  | `$env:FW_SLOT='1'; pnpm --filter @apps/api test`           | `apps/api/src/inspection.controller.ts`, `apps/api/src/storage.controller.ts`                          | 照片落盘、带查询签名 URL、错误/过期签名 403 和路径越界 400 通过。                                                                                                                                                   |
-| T05  | passed  | `FW_SLOT=1 pnpm e2e:demo`（连接本地槽位转发端口）          | `scripts/demo-chain.mjs`                                                                               | 演示链退出码 0；迁移、seed、API 启动及提交→审核打回→重新提交→通过→看板链路全绿。此前未注入转发端口的直接 API 测试连接默认 5433 失败（ECONNREFUSED），随后按真实工作树配置注入端口重跑通过；未读取 `.env.development` 内容。 |
-| T06  | passed  | 独立 Subagent 初审并按 `docs/howto/final-review.md` 定向复核 | `apps/api/src/inspection.controller.ts`, `apps/api/src/http-exception.filter.ts`, `apps/api/src/contract.e2e.test.ts` | 初审发现 3 条 finding；修复后独立 Subagent 仅复核这三条，未重跑整轮审查：UUID 文件键/MIME 扩展名且不含原文件名、pending 与必拍照片缺失均 422 `INCOMPLETE`、非 jpeg/png 与超 10 MB 均 400 `VALIDATION_FAILED`，全部通过。 |
+| 任务 | status | command                                                      | artifact                                                                                                              | 备注                                                                                                                                                                                                                        |
+| ---- | ------ | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T01  | passed | `$env:FW_SLOT='1'; pnpm --filter @apps/api test`             | `apps/api/src/inspection.controller.ts`                                                                               | API 套件 2 个文件、8 个测试通过；提交完整性、状态与实算分数通过。                                                                                                                                                           |
+| T02  | passed | `$env:FW_SLOT='1'; pnpm --filter @apps/api test`             | `apps/api/src/inspection.controller.ts`, `apps/api/src/contract.e2e.test.ts`                                          | 审核状态迁移、审核记录、非法打回项和严重项不合格时 422 均通过 API 测试。                                                                                                                                                    |
+| T03  | passed | `$env:FW_SLOT='1'; pnpm --filter @apps/api test`             | `apps/api/src/inspection.controller.ts`                                                                               | 检查项及照片写入使用状态行锁；契约流程在可编辑状态通过。                                                                                                                                                                    |
+| T04  | passed | `$env:FW_SLOT='1'; pnpm --filter @apps/api test`             | `apps/api/src/inspection.controller.ts`, `apps/api/src/storage.controller.ts`                                         | 照片落盘、带查询签名 URL、错误/过期签名 403 和路径越界 400 通过。                                                                                                                                                           |
+| T05  | passed | `FW_SLOT=1 pnpm e2e:demo`（连接本地槽位转发端口）            | `scripts/demo-chain.mjs`                                                                                              | 演示链退出码 0；迁移、seed、API 启动及提交→审核打回→重新提交→通过→看板链路全绿。此前未注入转发端口的直接 API 测试连接默认 5433 失败（ECONNREFUSED），随后按真实工作树配置注入端口重跑通过；未读取 `.env.development` 内容。 |
+| T06  | passed | 独立 Subagent 初审并按 `docs/howto/final-review.md` 定向复核 | `apps/api/src/inspection.controller.ts`, `apps/api/src/http-exception.filter.ts`, `apps/api/src/contract.e2e.test.ts` | 初审发现 3 条 finding；修复后独立 Subagent 仅复核这三条，未重跑整轮审查：UUID 文件键/MIME 扩展名且不含原文件名、pending 与必拍照片缺失均 422 `INCOMPLETE`、非 jpeg/png 与超 10 MB 均 400 `VALIDATION_FAILED`，全部通过。    |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
