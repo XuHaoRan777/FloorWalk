@@ -6,6 +6,7 @@ import type {
   UpdateInspectionItemResponse,
   User,
 } from '@libs/shared';
+import { File } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 const baseUrl = (
@@ -57,7 +58,14 @@ async function request<T>(
         ...options.headers,
       },
     });
-  } catch {
+  } catch (error) {
+    if (path.endsWith('/evidence')) {
+      console.error('[FloorWalk API] 图片上传 fetch 异常', {
+        method: options.method ?? 'GET',
+        path,
+        error,
+      });
+    }
     throw new ApiError('网络连接失败，请检查网络后重试。', 0, 'NETWORK_ERROR');
   }
 
@@ -116,18 +124,14 @@ export const api = {
     itemId: string,
     uri: string,
     fileName: string,
-    mimeType: string,
   ) => {
     const form = new FormData();
     if (Platform.OS === 'web') {
       const blob = await fetch(uri).then((response) => response.blob());
       form.append('file', blob, fileName);
     } else {
-      form.append('file', {
-        uri,
-        name: fileName,
-        type: mimeType,
-      } as unknown as Blob);
+      const file = new File(uri);
+      form.append('file', file, fileName);
     }
     return request<Evidence>(
       `/inspections/${inspectionId}/items/${itemId}/evidence`,

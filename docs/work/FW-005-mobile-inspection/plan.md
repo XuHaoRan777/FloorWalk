@@ -6,9 +6,9 @@
 
 - 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：回修：原生图片上传错误使用 Blob 路径
-- 阻塞：槽位 2 Expo Web 服务未完成页面加载，无法通过 e2e 验证本次上传修复
-- 下一步：待 Expo Web 服务恢复后重跑照片上传测试；用户完成人工验收后再归档
+- 当前任务：回修：Expo 57 原生图片上传 FormData 文件部分不兼容
+- 阻塞：Android 真机尚未复测 Expo `File` multipart 上传修复
+- 下一步：请用户在 Expo Go 重新加载后复测相册选图上传；确认成功后继续人工验收与归档
 - 并行组：g01，并行单元，槽位 2（并行 FW-004、FW-005、FW-006；集成 FW-007）
 - 预检：改动限定在 `apps/mobile`、`tests/mobile/`、`playwright.mobile.config.ts`；API、契约、依赖和迁移只读。槽位 2 的数据库与存储可由现有迁移/种子命令初始化。
 
@@ -43,6 +43,8 @@
 | 回修复核 | passed  | `独立 Subagent 只读复核本次 FW-005 回修`                                                                                                                                                  | `apps/mobile/components/mobile-app.tsx`; `apps/mobile/lib/api.ts`; `docs/work/FW-005-mobile-inspection/plan.md`                                                          | 未发现 P1/P2 正确性缺陷；确认就地更新、提交前刷新、忙状态禁用和错误提示保留均符合修复要求。现有 e2e 未覆盖快速并发点选；T04 未全绿属于既有测试上下文问题。                                                         |
 | 回修验证 | passed  | `pnpm --filter @apps/mobile typecheck`; `pnpm --filter @apps/mobile lint`                                                                                                                 | `apps/mobile/lib/api.ts`                                                                                                                                                 | Platform 原生/Web 上传分支调整后类型检查与 lint 通过。                                                                                                                                                             |
 | 回修验证 | blocked | `$env:FW_SLOT='2'; pnpm e2e:mobile`；`$env:FW_SLOT='2'; pnpm exec playwright test --config=playwright.mobile.config.ts --grep "必拍项可以选择照片"`                                       | `tests/mobile/mobile-inspection.spec.ts`; `apps/mobile/lib/api.ts`                                                                                                       | 两次运行均卡在 `page.goto('/')`，3122 Expo Web 页面不返回；第二次检查时 Metro 进程占用异常增长，未进入照片上传步骤。无法据此判断业务回归结果，待服务问题解决后再验证。                                             |
+| 回修验证 | passed  | `pnpm --filter @apps/mobile typecheck`; `pnpm --filter @apps/mobile lint`                                                                                                                 | `apps/mobile/lib/api.ts`                                                                                                                                                 | 图片上传 fetch 异常现在会在 Metro 终端打印原始错误对象及请求方法、路径；类型检查与 lint 通过，待 Android 真机复测取回日志。                                                                                             |
+| 回修验证 | passed  | `pnpm --filter @apps/mobile typecheck`; `pnpm --filter @apps/mobile lint`; `pnpm --filter @apps/mobile check`                                                                               | `apps/mobile/lib/api.ts`; `apps/mobile/components/mobile-app.tsx`; `apps/mobile/package.json`                                                                            | Expo 57 的 `expo/fetch` multipart 转换不支持 RN `{ uri, name, type }` 文件部分；改用 `expo-file-system` `File` 对象。类型、lint、Expo 依赖版本检查通过，Android 真机上传仍待人工复测。                                    |
 
 <!-- 行格式见 AGENTS.md 第 7 节。截图存本单元 `evidence/`，artifact 只写代码格式的路径。 -->
 
@@ -52,6 +54,8 @@
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------ |
 | 2026-10-25 | FW-007 T04 发现快速连续点选后检查项更新响应乱序，提交使用旧 detail 并吞掉「请完成」提示；按 parallel.md 第 7 节归为 FW-005 回修 | 使用 PATCH/上传响应就地更新单项；提交前刷新 detail，更新在途时禁用提交；load 不再清除操作错误                      | 待提交 |
 | 2026-10-25 | 用户报告原生图片上传提示“提交内容有误”，Expo 输出 `Response.blob()` 性能警告                                                    | 用 `Platform.OS === 'web'` 识别 Web；原生直接以 `{ uri, name, type }` 上传，避免把 React Native 环境误走 Blob 分支 | 待提交 |
+| 2026-10-25 | 用户确认 Android 上只有图片上传提示“网络连接失败”，请求增加完整错误日志便于定位                                                       | 仅图片上传请求的 fetch 异常在 Metro 终端打印原始错误对象、请求方法与接口路径                                      | 待提交 |
+| 2026-10-25 | 终端报错 `Unsupported FormDataPart implementation`；Expo 57 的 `expo/fetch` 不接受 RN 专用 `{ uri, name, type }` 上传部分             | 原生分支改用 `expo-file-system` `File`（支持 `bytes()`）；添加直接依赖，Web 分支保持 Blob 上传                    | 待提交 |
 
 ## 决策与偏差
 

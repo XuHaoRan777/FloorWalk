@@ -369,7 +369,6 @@ function InspectionScreen({
         itemId,
         asset.uri,
         asset.fileName ?? `inspection-${itemId}.jpg`,
-        asset.mimeType ?? 'image/jpeg',
       );
       setDetail((current) =>
         current
