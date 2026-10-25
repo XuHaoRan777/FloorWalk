@@ -7,8 +7,8 @@
 - 工作单元状态：`in_progress`
 - 归档状态：`active`
 - 当前任务：T02
-- 阻塞：无
-- 下一步：全量类型检查、lint、格式检查、构建与 API/e2e 槽位门禁
+- 阻塞：e2e 槽位数据库不可从主机连接；`local-pg18` 未发布 5433 端口
+- 下一步：恢复 e2e 数据库主机连接后完成 T02，再依序执行 T03、T04
 - 并行组：g01，集成单元（并行 FW-004、FW-005、FW-006）
 
 <!-- Preflight：编码前在此写一到三行——要动哪些模块；涉及既有数据时的只读统计计数；后端/库/开发者工具是否能起。不需要章节名。 -->
@@ -18,7 +18,7 @@
 | ID | 任务 | 状态 | 交付的 AC 与证据 |
 | --- | --- | --- | --- |
 | T01 | 合并：按单元号顺序合并三个分支，合并前核对契约等路径 | `done` | AC-01 |
-| T02 | 全量门禁 | `in_progress` | AC-02 |
+| T02 | 全量门禁 | `blocked` | AC-02 |
 | T03 | 演示链 e2e 与三端界面 e2e，全部连真接口 | `pending` | AC-03 |
 | T04 | 跨端界面演示链 e2e | `pending` | AC-04 |
 | T05 | 交付与归档：登记人工项，用户确认后按顺序归档 FW-004～006，Promote | `pending` | AC-05 |
@@ -31,6 +31,7 @@
 | 任务 | status | command | artifact | 备注 |
 | --- | --- | --- | --- | --- |
 | T01 | passed | `git diff --stat g01/start g01/FW-004|005|006 -- <hardline 路径>`; `git merge --no-ff g01/FW-004|005|006` | `docs/backlog.md` | 三分支按序合入；FW-005、FW-006 的 backlog 相邻行冲突依规保留 master 再更新刚合并单元状态；契约/schema/迁移/package/lock 无未批准差异。FW-006 补审在合并后另行派发。 |
+| T02 | blocked | `pnpm typecheck`; `pnpm lint`; `pnpm format:check`; `pnpm build`; `FW_SLOT=1 pnpm --filter @apps/api test`; `pnpm e2e:slots`; `FW_SLOT=1 pnpm e2e:cors` | `docs/context/dev-environment.md` | 类型检查、lint、格式检查、构建通过；`pnpm e2e:slots` 和 API 测试均因连接 `localhost:5433` 被拒绝而失败，API 两套件的测试体未运行，CORS e2e 尚未运行，AC-02 未通过。只读检查确认 `local-pg18` 正在运行但 `5432/tcp` 无宿主端口绑定；未重建容器，避免影响其数据。恢复连接后继续。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。artifact 只写代码格式的路径。 -->
 
