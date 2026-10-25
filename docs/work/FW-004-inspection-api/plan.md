@@ -4,14 +4,14 @@
 
 ## 当前状态
 
-- 工作单元状态：`approved`
+- 工作单元状态：`verified`
 - 归档状态：`active`
-- 当前任务：T05 看板与演示链
+- 当前任务：T06 最终代码审查
 - 阻塞：无
-- 下一步：运行槽位 1 演示链并派独立最终代码审查
+- 下一步：已完成并行单元验收，创建完成标记
 - 并行组：g01，并行单元，槽位 1（并行 FW-004、FW-005、FW-006；集成 FW-007）
 
-- 预检：仅改 `apps/api/src/inspection.controller.ts`、`apps/api/src/storage.controller.ts` 及本计划证据；契约、数据库、认证和依赖只读。
+- 预检：业务实现范围为 `apps/api/src/inspection.controller.ts`、`apps/api/src/http-exception.filter.ts`、`apps/api/src/contract.e2e.test.ts` 及本计划证据；契约、数据库、认证和依赖只读。
 - 预检：FW_SLOT=1 的 API 测试使用 `floorwalk_e2e_1` 与槽位存储目录；本机 PostgreSQL 与工作区依赖已可用。
 
 <!-- Preflight：编码前在此写一到三行——要动哪些模块；涉及既有数据时的只读统计计数；后端/库/开发者工具是否能起。不需要章节名。 -->
@@ -24,8 +24,8 @@
 | T02 | 审核：状态迁移、审核记录、`decided_at`、严重项、打回项归属 | `done`    | AC-02、AC-03                       |
 | T03 | 检查项修改与照片上传的状态限制                             | `done`    | AC-04                              |
 | T04 | 照片落盘、签名链接与文件路由的签名校验                     | `done`    | AC-05                              |
-| T05 | 看板取分；演示链 e2e 转绿                                  | `blocked` | AC-06、AC-07                       |
-| T06 | 最终代码审查                                               | `done`    | `FW_SLOT=1` 全量门禁一次，再派审查 |
+| T05 | 看板取分；演示链 e2e 转绿                                  | `done`    | AC-06、AC-07                       |
+| T06 | 最终代码审查                                               | `done`    | 全量门禁与三条 finding 定向复核    |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。 -->
 
@@ -37,8 +37,8 @@
 | T02  | passed  | `$env:FW_SLOT='1'; pnpm --filter @apps/api test`           | `apps/api/src/inspection.controller.ts`, `apps/api/src/contract.e2e.test.ts`                           | 审核状态迁移、审核记录、非法打回项和严重项不合格时 422 均通过 API 测试。                                                                                                                                            |
 | T03  | passed  | `$env:FW_SLOT='1'; pnpm --filter @apps/api test`           | `apps/api/src/inspection.controller.ts`                                                                | 检查项及照片写入使用状态行锁；契约流程在可编辑状态通过。                                                                                                                                                            |
 | T04  | passed  | `$env:FW_SLOT='1'; pnpm --filter @apps/api test`           | `apps/api/src/inspection.controller.ts`, `apps/api/src/storage.controller.ts`                          | 照片落盘、带查询签名 URL、错误/过期签名 403 和路径越界 400 通过。                                                                                                                                                   |
-| T05  | blocked | `$env:FW_SLOT='1'; pnpm e2e:demo`                          | `scripts/demo-chain.mjs`                                                                               | 脚本已补第二次审核前的 `start`；当前目标工作树 `.env.development` 仍为占位数据库连接串，使用临时本地连接尝试时 PostgreSQL 宿主端口未发布/角色密码不可用，命令在迁移阶段退出，未到达演示链断言。                     |
-| T06  | blocked | 独立 Subagent 按 `docs/howto/final-review.md` 审查（只读） | `apps/api/src/inspection.controller.ts`, `apps/api/src/contract.e2e.test.ts`, `scripts/demo-chain.mjs` | 发现 P1：照片 `storageKey` 使用 `Date.now()` 存在同毫秒碰撞覆盖；P2：AC-01 的 `INCOMPLETE`、AC-05 的 MIME/大小失败路径缺少测试；AC-07 仍因数据库配置未执行。当前授权只允许演示脚本单处修改，未擅自修 API 或扩测试。 |
+| T05  | passed  | `FW_SLOT=1 pnpm e2e:demo`（连接本地槽位转发端口）          | `scripts/demo-chain.mjs`                                                                               | 演示链退出码 0；迁移、seed、API 启动及提交→审核打回→重新提交→通过→看板链路全绿。此前未注入转发端口的直接 API 测试连接默认 5433 失败（ECONNREFUSED），随后按真实工作树配置注入端口重跑通过；未读取 `.env.development` 内容。 |
+| T06  | passed  | 独立 Subagent 初审并按 `docs/howto/final-review.md` 定向复核 | `apps/api/src/inspection.controller.ts`, `apps/api/src/http-exception.filter.ts`, `apps/api/src/contract.e2e.test.ts` | 初审发现 3 条 finding；修复后独立 Subagent 仅复核这三条，未重跑整轮审查：UUID 文件键/MIME 扩展名且不含原文件名、pending 与必拍照片缺失均 422 `INCOMPLETE`、非 jpeg/png 与超 10 MB 均 400 `VALIDATION_FAILED`，全部通过。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
@@ -53,5 +53,5 @@
 
 - 2026-10-24 用户默认：打回后店员能改所有项，不强制重拍；签名错误或过期返回 403 `FORBIDDEN`。
 - 2026-10-25 用户授权：仅在 `scripts/demo-chain.mjs` 第二次审核的 `approve` 前补一次 `start`；契约与 API 不改。
-- 2026-10-25 阻塞：目标工作树没有真实数据库连接配置，`FW_SLOT=1 pnpm e2e:demo` 在迁移阶段无法连接；不读取或复制其他工作树 `.env`，不修改数据库认证。
-- 2026-10-25 独立最终审查：发现照片键碰撞运行时风险，以及 AC-01/AC-05 失败路径证据缺口；需后续授权补修，当前不打完成标记。
+- 2026-10-25 用户补充授权：上述三条最终审查 finding 均在本单元写入范围和 AC 内，按 AGENTS.md 第 9 节直接修复；照片存储键使用随机 UUID，按 MIME 决定扩展名，不将原始文件名放入路径；补齐 AC-01/AC-05 失败路径测试。不改契约与 API 语义。
+- 2026-10-25 用户要求：T01 合并后先派独立 Subagent 按 `docs/howto/final-review.md` 补审 FW-006 差异（`git diff g01/start g01/FW-006`，其原最终审查由同会话执行）；finding 按 `docs/howto/parallel.md` 第 7 节作为 FW-006 回修，并记入 FW-006 的 plan。

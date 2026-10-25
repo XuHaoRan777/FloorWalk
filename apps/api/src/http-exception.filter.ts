@@ -29,15 +29,17 @@ export class HttpErrorFilter implements ExceptionFilter {
       typeof exception === 'object' && exception !== null
         ? (exception as Record<string, unknown>)
         : undefined;
-    const fileTooLarge = exceptionRecord?.code === 'LIMIT_FILE_SIZE';
-    const status =
-      exception instanceof HttpException
+    const fileTooLarge =
+      exceptionRecord?.code === 'LIMIT_FILE_SIZE' ||
+      (exception instanceof HttpException &&
+        exception.getStatus() === HttpStatus.PAYLOAD_TOO_LARGE);
+    const status = fileTooLarge
+      ? HttpStatus.BAD_REQUEST
+      : exception instanceof HttpException
         ? exception.getStatus()
         : exception instanceof ZodError
           ? HttpStatus.BAD_REQUEST
-          : fileTooLarge
-            ? HttpStatus.BAD_REQUEST
-            : HttpStatus.INTERNAL_SERVER_ERROR;
+          : HttpStatus.INTERNAL_SERVER_ERROR;
     const payload =
       exception instanceof HttpException ? exception.getResponse() : undefined;
     const payloadRecord =

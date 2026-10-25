@@ -20,10 +20,9 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtService } from '@nestjs/jwt';
 import argon2 from 'argon2';
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { basename } from 'node:path';
 import type { Request } from 'express';
 import {
   apiRoutePath,
@@ -442,7 +441,8 @@ export class InspectionController {
           message: '检查项不存在。',
         });
       const storageDir = process.env.STORAGE_DIR ?? path.resolve('.storage');
-      const storageKey = `${id}/${itemId}-${Date.now()}-${basename(file.originalname)}`;
+      const extension = file.mimetype === 'image/jpeg' ? '.jpg' : '.png';
+      const storageKey = `${id}/${randomUUID()}${extension}`;
       target = path.resolve(storageDir, storageKey);
       await mkdir(path.dirname(target), { recursive: true });
       await writeFile(target, file.buffer);

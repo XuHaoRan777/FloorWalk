@@ -462,6 +462,13 @@ describe('inspection contract API', () => {
       ),
     );
     const createdItemId = detail.body.items[0].id as string;
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${createdInspectionId}/submit`)
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(422)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('INCOMPLETE'),
+      );
     const updated = await request(app.getHttpServer())
       .patch(`/api/inspections/${createdInspectionId}/items/${createdItemId}`)
       .set('Authorization', `Bearer ${inspectorToken}`)
@@ -488,13 +495,43 @@ describe('inspection contract API', () => {
       .expect(200);
     signedEvidenceResponseSchema.parse(signed.body);
 
+    await request(app.getHttpServer())
+      .post(
+        `/api/inspections/${createdInspectionId}/items/${createdItemId}/evidence`,
+      )
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .attach('file', Buffer.from('invalid-mime'), {
+        filename: 'contract.gif',
+        contentType: 'image/gif',
+      })
+      .expect(400)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
+      );
+    await request(app.getHttpServer())
+      .post(
+        `/api/inspections/${createdInspectionId}/items/${createdItemId}/evidence`,
+      )
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .attach('file', Buffer.alloc(10 * 1024 * 1024 + 1), {
+        filename: 'too-large.jpg',
+        contentType: 'image/jpeg',
+      })
+      .expect(400)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
+      );
+
+    const skippedPhotoItem = detailBody.items.find(
+      (item) => item.photoRequired && item.id !== createdItemId,
+    );
     for (const item of detailBody.items.slice(1)) {
       await request(app.getHttpServer())
         .patch(`/api/inspections/${createdInspectionId}/items/${item.id}`)
         .set('Authorization', `Bearer ${inspectorToken}`)
         .send({ result: 'pass' })
         .expect(200);
-      if (item.photoRequired)
+      if (item.photoRequired && item.id !== skippedPhotoItem?.id)
         await request(app.getHttpServer())
           .post(
             `/api/inspections/${createdInspectionId}/items/${item.id}/evidence`,
@@ -506,6 +543,25 @@ describe('inspection contract API', () => {
           })
           .expect(201);
     }
+
+    expect(skippedPhotoItem).toBeDefined();
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${createdInspectionId}/submit`)
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(422)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('INCOMPLETE'),
+      );
+    await request(app.getHttpServer())
+      .post(
+        `/api/inspections/${createdInspectionId}/items/${skippedPhotoItem!.id}/evidence`,
+      )
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .attach('file', Buffer.from('contract-test'), {
+        filename: `${skippedPhotoItem!.id}.jpg`,
+        contentType: 'image/jpeg',
+      })
+      .expect(201);
 
     const submitted = await request(app.getHttpServer())
       .post(`/api/inspections/${createdInspectionId}/submit`)
