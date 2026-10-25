@@ -103,6 +103,10 @@ describe('inspection contract API', () => {
           'DELETE FROM floorwalk.inspection_items WHERE inspection_id = $1',
           [createdInspectionId],
         );
+        await pool.query(
+          'DELETE FROM floorwalk.reviews WHERE inspection_id = $1',
+          [createdInspectionId],
+        );
         await pool.query('DELETE FROM floorwalk.inspections WHERE id = $1', [
           createdInspectionId,
         ]);
@@ -360,10 +364,27 @@ describe('inspection contract API', () => {
       .set('Authorization', `Bearer ${inspectorToken}`)
       .expect(200);
     const seedSignedBody = signedEvidenceResponseSchema.parse(seedSigned.body);
+    const seedPhotoUrl = new URL(seedSignedBody.url);
     const seedPhoto = await request(app.getHttpServer())
-      .get(new URL(seedSignedBody.url).pathname)
+      .get(`${seedPhotoUrl.pathname}${seedPhotoUrl.search}`)
       .expect(200);
     expect(seedPhoto.body.byteLength).toBeGreaterThan(0);
+    const invalidSignatureUrl = new URL(seedSignedBody.url);
+    invalidSignatureUrl.searchParams.set('signature', '0'.repeat(64));
+    await request(app.getHttpServer())
+      .get(`${invalidSignatureUrl.pathname}${invalidSignatureUrl.search}`)
+      .expect(403)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('FORBIDDEN'),
+      );
+    const expiredSignatureUrl = new URL(seedSignedBody.url);
+    expiredSignatureUrl.searchParams.set('expires', '0');
+    await request(app.getHttpServer())
+      .get(`${expiredSignatureUrl.pathname}${expiredSignatureUrl.search}`)
+      .expect(403)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('FORBIDDEN'),
+      );
     await request(app.getHttpServer())
       .get('/storage/..%2Foutside.jpg')
       .expect(400)
@@ -441,6 +462,13 @@ describe('inspection contract API', () => {
       ),
     );
     const createdItemId = detail.body.items[0].id as string;
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${createdInspectionId}/submit`)
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(422)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('INCOMPLETE'),
+      );
     const updated = await request(app.getHttpServer())
       .patch(`/api/inspections/${createdInspectionId}/items/${createdItemId}`)
       .set('Authorization', `Bearer ${inspectorToken}`)
@@ -466,6 +494,74 @@ describe('inspection contract API', () => {
       .set('Authorization', `Bearer ${inspectorToken}`)
       .expect(200);
     signedEvidenceResponseSchema.parse(signed.body);
+
+    await request(app.getHttpServer())
+      .post(
+        `/api/inspections/${createdInspectionId}/items/${createdItemId}/evidence`,
+      )
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .attach('file', Buffer.from('invalid-mime'), {
+        filename: 'contract.gif',
+        contentType: 'image/gif',
+      })
+      .expect(400)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
+      );
+    await request(app.getHttpServer())
+      .post(
+        `/api/inspections/${createdInspectionId}/items/${createdItemId}/evidence`,
+      )
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .attach('file', Buffer.alloc(10 * 1024 * 1024 + 1), {
+        filename: 'too-large.jpg',
+        contentType: 'image/jpeg',
+      })
+      .expect(400)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
+      );
+
+    const skippedPhotoItem = detailBody.items.find(
+      (item) => item.photoRequired && item.id !== createdItemId,
+    );
+    for (const item of detailBody.items.slice(1)) {
+      await request(app.getHttpServer())
+        .patch(`/api/inspections/${createdInspectionId}/items/${item.id}`)
+        .set('Authorization', `Bearer ${inspectorToken}`)
+        .send({ result: 'pass' })
+        .expect(200);
+      if (item.photoRequired && item.id !== skippedPhotoItem?.id)
+        await request(app.getHttpServer())
+          .post(
+            `/api/inspections/${createdInspectionId}/items/${item.id}/evidence`,
+          )
+          .set('Authorization', `Bearer ${inspectorToken}`)
+          .attach('file', Buffer.from('contract-test'), {
+            filename: `${item.id}.jpg`,
+            contentType: 'image/jpeg',
+          })
+          .expect(201);
+    }
+
+    expect(skippedPhotoItem).toBeDefined();
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${createdInspectionId}/submit`)
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(422)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('INCOMPLETE'),
+      );
+    await request(app.getHttpServer())
+      .post(
+        `/api/inspections/${createdInspectionId}/items/${skippedPhotoItem!.id}/evidence`,
+      )
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .attach('file', Buffer.from('contract-test'), {
+        filename: `${skippedPhotoItem!.id}.jpg`,
+        contentType: 'image/jpeg',
+      })
+      .expect(201);
 
     const submitted = await request(app.getHttpServer())
       .post(`/api/inspections/${createdInspectionId}/submit`)
@@ -494,6 +590,137 @@ describe('inspection contract API', () => {
       .send({ action: 'start' })
       .expect(201);
     reviewResponseSchema.parse(reviewed.body);
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${createdInspectionId}/review`)
+      .set('Authorization', `Bearer ${supervisorToken}`)
+      .send({
+        action: 'rework',
+        reworkItemIds: ['00000000-0000-4000-8000-000000000000'],
+      })
+      .expect(400)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
+      );
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${createdInspectionId}/review`)
+      .set('Authorization', `Bearer ${supervisorToken}`)
+      .send({ action: 'approve' })
+      .expect(201);
+    await request(app.getHttpServer())
+      .patch(`/api/inspections/${createdInspectionId}/items/${createdItemId}`)
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .send({ result: 'fail' })
+      .expect(409)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('INVALID_STATE'),
+      );
+    await request(app.getHttpServer())
+      .post(
+        `/api/inspections/${createdInspectionId}/items/${createdItemId}/evidence`,
+      )
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .attach('file', Buffer.from('contract-test'), {
+        filename: 'blocked.jpg',
+        contentType: 'image/jpeg',
+      })
+      .expect(409)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('INVALID_STATE'),
+      );
+    const criticalCreated = await request(app.getHttpServer())
+      .post('/api/inspections')
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .send({ templateId })
+      .expect(201);
+    const criticalInspectionId = inspectionSchema.parse(
+      criticalCreated.body,
+    ).id;
+    const criticalDetail = await request(app.getHttpServer())
+      .get(`/api/inspections/${criticalInspectionId}`)
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(200);
+    const criticalItems = inspectionDetailSchema.parse(
+      criticalDetail.body,
+    ).items;
+    const criticalItemId = criticalItems[0].id;
+    const criticalPool = createPool();
+    try {
+      await criticalPool.query(
+        'UPDATE floorwalk.inspection_items SET critical = true WHERE id = $1',
+        [criticalItemId],
+      );
+    } finally {
+      await criticalPool.end();
+    }
+    const criticalStorageKeys: string[] = [];
+    for (const item of criticalItems) {
+      await request(app.getHttpServer())
+        .patch(`/api/inspections/${criticalInspectionId}/items/${item.id}`)
+        .set('Authorization', `Bearer ${inspectorToken}`)
+        .send({ result: item.id === criticalItemId ? 'fail' : 'pass' })
+        .expect(200);
+      if (item.photoRequired) {
+        const criticalEvidence = await request(app.getHttpServer())
+          .post(
+            `/api/inspections/${criticalInspectionId}/items/${item.id}/evidence`,
+          )
+          .set('Authorization', `Bearer ${inspectorToken}`)
+          .attach('file', Buffer.from('critical-test'), {
+            filename: `${item.id}.jpg`,
+            contentType: 'image/jpeg',
+          })
+          .expect(201);
+        criticalStorageKeys.push(
+          evidenceSchema.parse(criticalEvidence.body).storageKey,
+        );
+      }
+    }
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${criticalInspectionId}/submit`)
+      .set('Authorization', `Bearer ${inspectorToken}`)
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${criticalInspectionId}/review`)
+      .set('Authorization', `Bearer ${supervisorToken}`)
+      .send({ action: 'start' })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${criticalInspectionId}/review`)
+      .set('Authorization', `Bearer ${supervisorToken}`)
+      .send({ action: 'approve' })
+      .expect(422)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('CRITICAL_FAILED'),
+      );
+    const criticalCleanupPool = createPool();
+    try {
+      await criticalCleanupPool.query(
+        'DELETE FROM floorwalk.evidence WHERE inspection_item_id IN (SELECT id FROM floorwalk.inspection_items WHERE inspection_id = $1)',
+        [criticalInspectionId],
+      );
+      await criticalCleanupPool.query(
+        'DELETE FROM floorwalk.reviews WHERE inspection_id = $1',
+        [criticalInspectionId],
+      );
+      await criticalCleanupPool.query(
+        'DELETE FROM floorwalk.inspection_items WHERE inspection_id = $1',
+        [criticalInspectionId],
+      );
+      await criticalCleanupPool.query(
+        'DELETE FROM floorwalk.inspections WHERE id = $1',
+        [criticalInspectionId],
+      );
+    } finally {
+      await criticalCleanupPool.end();
+    }
+    for (const storageKey of criticalStorageKeys)
+      await rm(
+        path.resolve(
+          process.env.STORAGE_DIR ?? path.join('apps', 'api', '.storage'),
+          storageKey,
+        ),
+        { force: true },
+      );
     const dashboard = await request(app.getHttpServer())
       .get('/api/dashboard/sites')
       .set('Authorization', `Bearer ${supervisorToken}`)

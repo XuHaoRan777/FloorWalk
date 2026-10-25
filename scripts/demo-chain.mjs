@@ -19,13 +19,7 @@ const env = {
   PORT: String(apiPort),
   HOST: '127.0.0.1',
   DATABASE_URL: databaseUrl.toString(),
-  STORAGE_DIR: path.resolve(
-    'apps',
-    'api',
-    '.e2e',
-    `slot-${slot}`,
-    'storage',
-  ),
+  STORAGE_DIR: path.resolve('apps', 'api', '.e2e', `slot-${slot}`, 'storage'),
 };
 const baseUrl = `http://127.0.0.1:${apiPort}`;
 
@@ -221,6 +215,11 @@ try {
     throw new Error(
       `演示链第二阶段应重新提交 100，当前 API 返回 ${secondSubmit.score}；第一处失败属于业务规则，等待 FW-004。`,
     );
+  await call(
+    `${detailPath}/review`,
+    jsonOptions(supervisorToken, { action: 'start' }),
+    201,
+  );
   await call(
     `${detailPath}/review`,
     jsonOptions(supervisorToken, { action: 'approve' }),

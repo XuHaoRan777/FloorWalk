@@ -22,7 +22,7 @@
 
 | ID | 工作单元 | 状态 | 依赖 | 下一步 |
 | --- | --- | --- | --- | --- |
-| FW-004 | [巡检业务规则 API](work/FW-004-inspection-api/spec.md) | approved | FW-003 | g01 槽位 1：T01 提交与锁分 |
+| FW-004 | [巡检业务规则 API](work/FW-004-inspection-api/spec.md) | verified | FW-003 | g01 槽位 1：T01 提交与锁分 |
 | FW-005 | [Mobile 店员巡检](work/FW-005-mobile-inspection/spec.md) | approved | FW-003 | g01 槽位 2：T01 登录与「我的」 |
 | FW-006 | [Web 主管审核与总部看板](work/FW-006-web-review/spec.md) | approved | FW-003 | g01 槽位 3：T01 登录与角色分流 |
 | FW-007 | [并行组 g01 集成](work/FW-007-g01-integration/spec.md) | approved | FW-004、FW-005、FW-006 | 等三个并行单元的完成标记 |
