@@ -1,4 +1,5 @@
 import type {
+  Evidence,
   InspectionDetail,
   LoginResponse,
   TodayResponse,
@@ -127,7 +128,7 @@ export const api = {
         type: mimeType,
       } as unknown as Blob);
     }
-    return request(
+    return request<Evidence>(
       `/inspections/${inspectionId}/items/${itemId}/evidence`,
       token,
       {

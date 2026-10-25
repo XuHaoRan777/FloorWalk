@@ -179,6 +179,7 @@ test('AC-06 网络、403、409、422 显示中文提示；任意接口 401 回�
   page,
 }) => {
   await login(page, 'supervisor@northbean.example');
+  await expect(page.getByRole('heading', { name: /审核队列/ })).toBeVisible();
   for (const [status, expected] of [
     [403, /无权|权限/],
     [409, /状态已变化/],

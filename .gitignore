@@ -18,6 +18,7 @@
 .playwright-mcp
 apps/api/.e2e/
 tests/e2e-results/
+tests/web-results/
 test-results/
 
 # Operating system files

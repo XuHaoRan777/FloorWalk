@@ -12,15 +12,15 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 
 ## API 进程探针
 
-`GET /health` 返回 HTTP 200 和 `{"status":"ok"}`。登录、当前用户、巡检、审核队列、证据链接和看板端点由 `packages/shared/src/contract/` 定义；登录校验当前用户，受保护请求读取数据库中的当前角色与门店绑定。契约修订已完成，提交锁分、审核状态变更和真实看板业务规则留给并行组 FW-004，细节见[巡检主链](inspection.md)。API 监听 `HOST`（缺省 `127.0.0.1`），启动日志输出 shared 项目名及监听地址；PORT 必须为 1—65535 的整数。
+`GET /health` 返回 HTTP 200 和 `{"status":"ok"}`。登录校验当前用户，受保护请求读取数据库中的当前角色与门店绑定；巡检、审核队列、证据链接和看板业务见[巡检主链](inspection.md)。API 监听 `HOST`（缺省 `127.0.0.1`），启动日志输出 shared 项目名及监听地址；PORT 必须为 1—65535 的整数。
 
 ## Web 页面壳
 
-独立 Web 的 `/` 是公开首页占位，不含后台侧边栏；`/console` 是基于上游布局的演示壳，明确显示“演示骨架，尚未接入登录”。两页可相互导航，支持直接访问和刷新，控制台侧边栏可开关。开发及构建后 preview 已验证，上游许可与来源见 [本地开发说明](../howto/local-development.md#上游来源)。
+独立 Web 的 `/` 是公开首页占位；`/console` 按角色显示主管审核队列与详情，或总部只读看板，登录与审核行为见 [Web 控制台](web-console.md)。两页可相互导航，支持直接访问和刷新，控制台侧边栏可开关。开发及构建后 preview 已验证，上游许可与来源见 [本地开发说明](../howto/local-development.md#上游来源)。
 
 ## Mobile 运行
 
-Expo Router 首页显示 shared 项目名、工程演示说明和 gluestack“体验按钮”。点击后显示“按钮响应成功”，状态仅在当前组件内存中，不提交业务数据。
+店员可在 Expo Web 和 Mobile 应用中登录、查看今日待巡、创建巡检、填写检查结果与备注、上传必拍照片、提交，以及补交主管打回的巡检；行为见 [Mobile 店员巡检](mobile-inspector.md)。
 
 根布局使用浅色主题。Provider 在原生端调用 Appearance，将 system 模式映射为 unspecified；在 Expo Web 端切换已有的根元素 light/dark 样式类，卸载时恢复，不调用缺失的原生主题设置方法。Expo Web 是移动应用预览，与独立 Web 应用不同。
 
@@ -28,22 +28,23 @@ Expo Router 首页显示 shared 项目名、工程演示说明和 gluestack“�
 
 ## 没有的
 
-没有三端业务页面、巡检业务规则、聊天、缓存、CI/CD、云部署、APK 签名或商店发布。契约 API、PostgreSQL `floorwalk` schema、Northbean 种子和登录/基础角色校验已具备；工程骨架可启动不等于业务规则已完成。
+没有聊天、用户/门店/模板管理页、缓存、CI/CD、云部署、APK 签名或商店发布。Web 将 Bearer Token 保存在 `localStorage`；同源脚本若发生 XSS，可读取并窃取有效 Token。改为 HttpOnly 会话需要调整认证契约，列入第二组待开单元。
 
 ## 数据契约（归档时再生成）
 
-| 入口 | 当前契约 | 代码（归档时再生成） |
-| --- | --- | --- |
-| workspace 与命令 | 四包编排和根检查入口 | [package.json](../../package.json)、[pnpm-workspace.yaml](../../pnpm-workspace.yaml) |
-| shared | APP_NAME 与巡检主链 zod 契约 | [源码](../../packages/shared/src/index.ts)、[契约](../../packages/shared/src/contract/index.ts) |
-| API | /health、登录、/me、巡检/审核/证据/看板骨架接口 | [控制器](../../apps/api/src/health.controller.ts)、[巡检控制器](../../apps/api/src/inspection.controller.ts)、[认证](../../apps/api/src/auth.ts)、[启动](../../apps/api/src/main.ts) |
-| Web | /、/console；无登录或业务数据契约 | [路由](../../apps/web/src/router.tsx) |
-| Mobile | 首页按钮设置本地反馈状态；API 地址由 `EXPO_PUBLIC_API_BASE_URL` 提供 | [首页](../../apps/mobile/app/index.tsx)、[布局](../../apps/mobile/app/_layout.tsx)、[Provider](../../apps/mobile/components/ui/gluestack-ui-provider/index.tsx) |
+| 入口             | 当前契约                                        | 代码（归档时再生成）                                                                                                                                                                 |
+| ---------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| workspace 与命令 | 四包编排和根检查入口                            | [package.json](../../package.json)、[pnpm-workspace.yaml](../../pnpm-workspace.yaml)                                                                                                 |
+| shared           | APP_NAME 与巡检主链 zod 契约                    | [源码](../../packages/shared/src/index.ts)、[契约](../../packages/shared/src/contract/index.ts)                                                                                      |
+| API              | /health、登录、/me、巡检/审核/证据/看板骨架接口 | [控制器](../../apps/api/src/health.controller.ts)、[巡检控制器](../../apps/api/src/inspection.controller.ts)、[认证](../../apps/api/src/auth.ts)、[启动](../../apps/api/src/main.ts) |
+| Web              | /、/console、登录会话与审核/看板 API            | [路由](../../apps/web/src/router.tsx)、[客户端](../../apps/web/src/lib/api.ts)                                                                                                       |
+| Mobile           | 登录、今日巡检、巡检详情、检查项与证据上传      | [应用](../../apps/mobile/components/mobile-app.tsx)、[API](../../apps/mobile/lib/api.ts)                                                                                             |
 
 ## 修订记录
 
-| 日期 | 用户或调用方可观察的变化 |
-| --- | --- |
-| 2026-10-06 | 建立三应用与 shared 可运行骨架：健康探针、公开首页与控制台演示壳、真机首页与按钮反馈；修复 Expo Web 主题初始化调用并支持 LAN 扫码。 |
+| 日期       | 用户或调用方可观察的变化                                                                                                                 |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-06 | 建立三应用与 shared 可运行骨架：健康探针、公开首页与控制台演示壳、真机首页与按钮反馈；修复 Expo Web 主题初始化调用并支持 LAN 扫码。      |
 | 2026-10-24 | 建立巡检主链契约、PostgreSQL 迁移与 Northbean 种子；API 提供登录、角色校验及固定数据骨架接口，Mobile Expo Web 具备 Playwright 取证入口。 |
-| 2026-10-24 | FW-003 完成 `/api` 契约接口、统一错误与 CORS；SDK 57 依赖对齐，Mobile Expo Web 与三端 CORS 有独立 e2e 验证。 |
+| 2026-10-24 | FW-003 完成 `/api` 契约接口、统一错误与 CORS；SDK 57 依赖对齐，Mobile Expo Web 与三端 CORS 有独立 e2e 验证。                             |
+| 2026-10-25 | FW-005、FW-006 将 Mobile 首页和 Web 控制台壳替换为巡检、审核与总部看板流程。                                                             |

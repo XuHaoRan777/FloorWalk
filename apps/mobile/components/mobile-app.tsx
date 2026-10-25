@@ -283,7 +283,8 @@ function InspectionScreen({
 }) {
   const [detail, setDetail] = useState<InspectionDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busyItems, setBusyItems] = useState<Record<string, boolean>>({});
+  const [submitting, setSubmitting] = useState(false);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState<{
     score: number | null;
@@ -292,11 +293,13 @@ function InspectionScreen({
 
   const load = useCallback(async () => {
     try {
-      setError(null);
-      setDetail(await api.inspection(session.token, id));
+      const nextDetail = await api.inspection(session.token, id);
+      setDetail(nextDetail);
+      return nextDetail;
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) onUnauthorized();
       setError(userFacingError(cause));
+      return null;
     }
   }, [id, onUnauthorized, session.token]);
 
@@ -315,9 +318,10 @@ function InspectionScreen({
 
   async function updateItem(itemId: string, result: 'pass' | 'fail') {
     if (!detail) return;
-    setBusy(itemId);
+    setError(null);
+    setBusyItems((current) => ({ ...current, [itemId]: true }));
     try {
-      await api.updateItem(
+      const updatedItem = await api.updateItem(
         session.token,
         detail.id,
         itemId,
@@ -326,18 +330,32 @@ function InspectionScreen({
           detail.items.find((item) => item.id === itemId)?.note ??
           null,
       );
-      await load();
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) =>
+                item.id === updatedItem.id ? updatedItem : item,
+              ),
+            }
+          : current,
+      );
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) onUnauthorized();
       else setError(userFacingError(cause));
     } finally {
-      setBusy(null);
+      setBusyItems((current) => {
+        const next = { ...current };
+        delete next[itemId];
+        return next;
+      });
     }
   }
 
   async function addPhoto(itemId: string) {
     if (!detail) return;
-    setBusy(itemId);
+    setError(null);
+    setBusyItems((current) => ({ ...current, [itemId]: true }));
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
@@ -345,7 +363,7 @@ function InspectionScreen({
       });
       if (result.canceled || !result.assets[0]) return;
       const asset = result.assets[0];
-      await api.uploadEvidence(
+      const evidence = await api.uploadEvidence(
         session.token,
         detail.id,
         itemId,
@@ -353,47 +371,65 @@ function InspectionScreen({
         asset.fileName ?? `inspection-${itemId}.jpg`,
         asset.mimeType ?? 'image/jpeg',
       );
-      await load();
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) =>
+                item.id === itemId
+                  ? { ...item, evidence: [...item.evidence, evidence] }
+                  : item,
+              ),
+            }
+          : current,
+      );
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) onUnauthorized();
       else setError(userFacingError(cause));
     } finally {
-      setBusy(null);
+      setBusyItems((current) => {
+        const next = { ...current };
+        delete next[itemId];
+        return next;
+      });
     }
   }
 
   async function submit() {
-    if (!detail) return;
-    const missing = detail.items.filter(
-      (item) =>
-        item.result === 'pending' ||
-        (item.photoRequired && item.evidence.length === 0),
-    );
-    if (missing.length > 0) {
-      setError(`请完成：${missing.map((item) => item.title).join('、')}`);
-      return;
-    }
-    setBusy('submit');
+    if (!detail || submitting || Object.keys(busyItems).length > 0) return;
+    setSubmitting(true);
+    setError(null);
     try {
-      for (const item of detail.items) {
+      const latestDetail = await load();
+      if (!latestDetail) return;
+      const missing = latestDetail.items.filter(
+        (item) =>
+          item.result === 'pending' ||
+          (item.photoRequired && item.evidence.length === 0),
+      );
+      if (missing.length > 0) {
+        setError(`请完成：${missing.map((item) => item.title).join('、')}`);
+        return;
+      }
+      for (const item of latestDetail.items) {
         if (item.result !== 'pending' && notes[item.id] !== undefined) {
           await api.updateItem(
             session.token,
-            detail.id,
+            latestDetail.id,
             item.id,
             item.result,
             notes[item.id] ?? item.note ?? null,
           );
         }
       }
-      const response = await api.submit(session.token, detail.id);
+      const response = await api.submit(session.token, latestDetail.id);
       setSubmitted(response);
       await load();
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) onUnauthorized();
       else setError(userFacingError(cause));
     } finally {
-      setBusy(null);
+      setSubmitting(false);
     }
   }
 
@@ -441,13 +477,13 @@ function InspectionScreen({
             )}
             <View style={styles.actionRow}>
               <PrimaryButton
-                disabled={busy === item.id}
+                disabled={busyItems[item.id] === true}
                 onPress={() => void updateItem(item.id, 'pass')}
               >
                 合格
               </PrimaryButton>
               <PrimaryButton
-                disabled={busy === item.id}
+                disabled={busyItems[item.id] === true}
                 onPress={() => void updateItem(item.id, 'fail')}
                 variant="danger"
               >
@@ -473,7 +509,7 @@ function InspectionScreen({
             />
             {item.photoRequired && (
               <PrimaryButton
-                disabled={busy === item.id}
+                disabled={busyItems[item.id] === true}
                 onPress={() => void addPhoto(item.id)}
                 variant="secondary"
               >
@@ -494,11 +530,19 @@ function InspectionScreen({
         </View>
       )}
       <PrimaryButton
-        disabled={busy === 'submit' || detail.status === 'submitted'}
+        disabled={
+          submitting ||
+          Object.keys(busyItems).length > 0 ||
+          detail.status === 'submitted'
+        }
         onPress={() => void submit()}
         testID="submit-inspection"
       >
-        {busy === 'submit' ? '提交中…' : '提交巡检'}
+        {submitting
+          ? '提交中…'
+          : Object.keys(busyItems).length > 0
+            ? '处理中…'
+            : '提交巡检'}
       </PrimaryButton>
     </ScrollView>
   );

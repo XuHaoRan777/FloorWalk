@@ -21,7 +21,8 @@
     "e2e:slots": "node scripts/e2e-slots.mjs",
     "e2e:demo": "node --env-file=apps/api/.env.development scripts/demo-chain.mjs",
     "e2e:cors": "node --env-file=apps/api/.env.development --import=tsx node_modules/@playwright/test/cli.js test --config=playwright.cors.config.ts",
-    "e2e:mobile": "pnpm exec playwright test --config=playwright.mobile.config.ts"
+    "e2e:mobile": "pnpm exec playwright test --config=playwright.mobile.config.ts",
+    "e2e:demo-ui": "pnpm exec playwright test --config=playwright.demo.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
