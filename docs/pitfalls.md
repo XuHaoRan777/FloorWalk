@@ -45,3 +45,13 @@
 - 验证方式：修正后 shared、API、Web 与 Android bundle 均生成，命令不能仅看退出码。
 - 失效条件：切换 shell 或 pnpm 参数解析行为变化。
 - 首次记录：`FW-001`
+
+### Expo 57 原生上传图片
+
+- 触发条件：Expo SDK 57（`expo` 57.0.x、React Native 0.86.3）在 Android 原生端用 `FormData` 上传图片，文件部分按 React Native 的旧写法传 `{ uri, name, type }`；或者用 `typeof window` 区分 Web 和原生。
+- 现象：上传抛出 `Unsupported FormDataPart implementation`，应用把它统一显示成"网络连接失败"；走错分支时，Expo 会警告 `Response.blob() is using React Native's Blob`，服务端拒绝这个请求。
+- 根因：Expo 57 的 `expo/fetch` 不接受 React Native 专用的文件对象；原生环境里也有 `window`，`typeof window` 区分不了平台。
+- 规避方式：原生端用 `expo-file-system` 的 `File` 对象作为上传部分，Web 端用 Blob，平台用 `Platform.OS === 'web'` 区分。上传异常在开发态打印原始错误，不要只显示通用提示。不要照搬 Expo 54 之前的 `{ uri, name, type }` 写法。
+- 验证方式：Android 真机或模拟器上传照片，服务端收到文件；Expo Web 的 e2e 覆盖不到原生分支。
+- 失效条件：Expo 恢复对 `{ uri, name, type }` 的支持，或者项目改用别的上传库。
+- 首次记录：`FW-005`

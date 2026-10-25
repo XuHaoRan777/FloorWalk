@@ -68,6 +68,6 @@ Web 固定源码 commit `e16c87f213a5ba5e45964e9b67c792105ec74d26`，gluestack �
 ## 工作流配套
 
 - 上游模板：`F:\project\workflow\template`；同步日期：2026-10-23（workflow `ba5d74a`）。项目协议中的授权与产品边界保留为本地配置。
-- 本地适配（并行组试行，只在本项目）：[并行组](../howto/parallel.md)；`scripts/workflow.conf` 的 `active-units-max 4`，校验器读取它（模板写死 3）；内核第 7 节 Subagent 写入限制按会话计、停止条件加「已批准 spec 有矛盾或要改」；第 12 节加完全访问下的边界。
+- 本地适配（并行组试行，只在本项目）：[并行组](../howto/parallel.md)；`scripts/workflow.conf` 的 `active-units-max`，校验器读取它（模板写死 3）；并行组期间为 4，g01 收组后改回 3；内核第 7 节 Subagent 写入限制按会话计、停止条件加「已批准 spec 有矛盾或要改」；第 12 节加完全访问下的边界。
 - Git 工作树已存在，执行起点 HEAD `1778848`，起始工作区干净，已配置 origin；用户于 2026-10-06 确认真机验收并授权当前单元归档、提交与推送。
 - `scripts/hooks/commit-msg` 已提供，未启用（`core.hooksPath` 未设）：`Mode: fix` 的代码提交须暂存 testlog；改到 `scripts/workflow.conf` 登记的 `hardline` 路径须有「硬线：」行。启用须按用户授权办理：`git config core.hooksPath scripts/hooks`，工作树共用这项设置。
