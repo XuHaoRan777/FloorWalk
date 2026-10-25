@@ -6,6 +6,7 @@ import type {
   UpdateInspectionItemResponse,
   User,
 } from '@libs/shared';
+import { Platform } from 'react-native';
 
 const baseUrl = (
   process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:3018/api'
@@ -118,7 +119,7 @@ export const api = {
     mimeType: string,
   ) => {
     const form = new FormData();
-    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+    if (Platform.OS === 'web') {
       const blob = await fetch(uri).then((response) => response.blob());
       form.append('file', blob, fileName);
     } else {
