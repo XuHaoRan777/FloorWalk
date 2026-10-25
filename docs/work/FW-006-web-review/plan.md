@@ -38,6 +38,7 @@
 | T05 | passed | `FW_SLOT=3 pnpm exec playwright test --config=playwright.web.config.ts` | `tests/web/console.spec.ts` | AC-05 通过；12 店看板和总部只读审核详情通过。 |
 | T06 | passed | `FW_SLOT=3 pnpm exec playwright test --config=playwright.web.config.ts` | `tests/web/console.spec.ts` | AC-06 通过；403/网络错误中文提示，401 回登录。 |
 | T07 | passed | `pnpm --filter @apps/web typecheck; pnpm --filter @apps/web build; pnpm exec eslint apps/web/src playwright.web.config.ts tests/web/console.spec.ts` | `apps/web/src`, `playwright.web.config.ts`, `tests/web/console.spec.ts` | 机器门通过；主 Agent 在共享工作树中按 spec、plan 和完整差异完成只读审查，无法切换独立工作树因为其他并行单元有未提交现场修改。 |
+| FW-007 补审 | findings | `git diff g01/start g01/FW-006` | `apps/web/src/lib/api.ts`; `apps/web/src/pages/console.tsx`; `tests/web/console.spec.ts` | 独立 Subagent 按 `docs/howto/final-review.md` 完成七失败域补审。4 项 finding：Token localStorage 风险（待范围决策）；非 `/me` 401 不回登录；AC-04 缺真实审核动作；AC-06 未覆盖网络失败/409/422/非 `/me` 401。后 3 项按 `parallel.md` 第 7 节作为本单元回修。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。截图存本单元 `evidence/`，artifact 只写代码格式的路径。 -->
 
@@ -45,9 +46,11 @@
 
 | 日期 | 反馈 | 改动 | 提交 |
 | --- | --- | --- | --- |
+| 2026-10-25 | FW-007 合并后独立补审 finding：非 `/me` 401 未回登录；AC-04 未提交审核动作；AC-06 错误路径证据不足 | 修复请求层统一 401 会话清理/回登录，补实际审核操作及错误场景 UI e2e；类型检查通过，Playwright 因 API/Web 服务无法连接而未验证 | 待提交 |
 
 ## 决策与偏差
 
 <!-- 只记会影响后续的：用户决策、放弃的方案、发现的范围外问题。每条一行。 -->
 
 - 2026-10-24 用户默认：主管打开待审核的单时，界面自动开始审核；界面 e2e 对照 API 返回，不写死数值。
+- 2026-10-25 FW-007 独立补审 finding：Bearer Token 存入 localStorage 有 XSS 窃取风险。改为 HttpOnly 会话需变更 API 认证契约，超出 FW-006 批准范围；按用户回复暂记录风险，留待后续范围决策。

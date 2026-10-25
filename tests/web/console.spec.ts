@@ -116,10 +116,14 @@ test('AC-04 主管操作和严重项失败时的通过禁用', async ({ page, re
     headers: { Authorization: `Bearer ${token}` },
   });
   const queue = (await response.json()) as Array<{
+    id: string;
+    status: string;
     site: { name: string };
-    items: Array<{ critical: boolean; result: string }>;
+    items: Array<{ id: string; critical: boolean; result: string }>;
   }>;
-  const target = queue[0];
+  const target =
+    queue.find((entry) => entry.status === 'submitted') ?? queue[0];
+  expect(target.items.length).toBeGreaterThan(0);
   await login(page, 'supervisor@northbean.example');
   await page.getByText(target.site.name, { exact: true }).click();
   await expect(page.getByRole('button', { name: /通过/ })).toBeVisible();
@@ -127,6 +131,18 @@ test('AC-04 主管操作和严重项失败时的通过禁用', async ({ page, re
     await expect(page.getByRole('button', { name: /通过/ })).toBeDisabled();
   await page.getByRole('button', { name: /打回/ }).click();
   await expect(page.getByText(/至少选择一个检查项/)).toBeVisible();
+  await page.getByRole('checkbox', { name: '选择为打回项' }).first().check();
+  const reviewResponse = page.waitForResponse(
+    (candidate) =>
+      candidate.url().includes(`/api/inspections/${target.id}/review`) &&
+      candidate.request().method() === 'POST' &&
+      candidate.request().postData()?.includes('rework'),
+  );
+  await page.getByRole('button', { name: '确认打回' }).click();
+  const result = await reviewResponse;
+  expect(result.ok()).toBeTruthy();
+  expect((await result.json()).status).toBe('rework');
+  await expect(page.getByText('已打回', { exact: true })).toBeVisible();
 });
 
 test('AC-05 总部看板与 API 返回一致，且没有审核按钮', async ({
@@ -159,22 +175,32 @@ test('AC-05 总部看板与 API 返回一致，且没有审核按钮', async ({
   ).toHaveCount(0);
 });
 
-test('AC-06 401 会回登录，其他接口错误显示中文提示', async ({ page }) => {
+test('AC-06 网络、403、409、422 显示中文提示；任意接口 401 回登录', async ({
+  page,
+}) => {
   await login(page, 'supervisor@northbean.example');
-  await page.route('**/api/review/queue', async (route) => {
-    await route.fulfill({
-      status: 403,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        code: 'FORBIDDEN',
-        message: '当前角色无权执行此操作。',
-      }),
+  for (const [status, expected] of [
+    [403, /无权|权限/],
+    [409, /状态已变化/],
+    [422, /内容不完整/],
+  ] as const) {
+    await page.route('**/api/review/queue', async (route) => {
+      await route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: '{}',
+      });
     });
-  });
+    await page.reload();
+    await expect(page.getByText(expected)).toBeVisible();
+    await page.unroute('**/api/review/queue');
+  }
+  await page.route('**/api/review/queue', (route) => route.abort());
   await page.reload();
-  await expect(page.getByText(/无权|权限|加载失败/)).toBeVisible();
+  await expect(page.getByText(/网络连接失败/)).toBeVisible();
+  await page.unroute('**/api/review/queue');
 
-  await page.route('**/api/me', async (route) => {
+  await page.route('**/api/review/queue', async (route) => {
     await route.fulfill({
       status: 401,
       contentType: 'application/json',

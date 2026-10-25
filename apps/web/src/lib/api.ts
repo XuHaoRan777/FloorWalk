@@ -70,6 +70,7 @@ const apiBase = (
 ).replace(/\/$/, '');
 
 export const sessionStorageKey = 'floorwalk.session';
+export const unauthorizedEvent = 'floorwalk:unauthorized';
 
 export class ApiError extends Error {
   constructor(
@@ -139,8 +140,10 @@ async function request<T>(
     ? ((await response.json()) as { message?: string })
     : undefined;
   if (!response.ok) {
-    if (response.status === 401)
+    if (response.status === 401) {
+      window.dispatchEvent(new Event(unauthorizedEvent));
       throw new UnauthorizedError(messageFor(401, body?.message));
+    }
     throw new ApiError(
       response.status,
       messageFor(response.status, body?.message),

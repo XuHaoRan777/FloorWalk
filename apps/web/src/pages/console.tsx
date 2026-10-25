@@ -35,6 +35,7 @@ import {
   getReviewQueue,
   readSession,
   reviewInspection,
+  unauthorizedEvent,
   type DashboardSite,
   type InspectionDetail,
   type Review,
@@ -100,6 +101,16 @@ function useConsoleSession() {
   const [session, setSession] = useState<Session | null>(() => readSession());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      clearSession();
+      setSession(null);
+      void navigate({ to: '/' });
+    };
+    window.addEventListener(unauthorizedEvent, handleUnauthorized);
+    return () =>
+      window.removeEventListener(unauthorizedEvent, handleUnauthorized);
+  }, [navigate]);
   useEffect(() => {
     const current = readSession();
     if (!current) {
