@@ -6,9 +6,9 @@
 
 - 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：T06
+- 当前任务：T07
 - 阻塞：无；原生链已通过。
-- 下一步：T06 加 400 行 lint 门禁，然后 T07 全量门禁与独立审查。
+- 下一步：T07 全量门禁、AC-08 零改动核对与独立 Subagent 审查。
 
 Preflight：动 `apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`components/`、`lib/`）、`eslint.config.mjs`，新增 `scripts/api-snapshot.mjs`；不动契约、`auth.ts`、`schema.ts`、迁移、`package.json`、锁文件。全程用槽位 1（`floorwalk_e2e_1`，端口 3110/3111/3112），不占开发端口 3018～3020。开工前记下 `git rev-parse HEAD` 作为 AC-08 的对比起点。
 
@@ -21,8 +21,8 @@ Preflight：动 `apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`comp
 | T03 | 拆 Web 控制台页和 Web API 客户端                                     | `done`        | AC-02 Web 部分；Web e2e、`e2e:demo-ui`                                                |
 | T04 | 拆 Mobile 屏幕、共用组件和 Mobile API 客户端，导航先不动             | `done`        | AC-02 Mobile 部分；`e2e:mobile`                                                       |
 | T05 | Mobile 底部切换改为 Expo Router Tabs                                 | `done`        | AC-03；AC-07（模拟器原生链）；`e2e:mobile`                                            |
-| T06 | ESLint 加 400 行上限                                                 | `in_progress` | AC-04                                                                                 |
-| T07 | 最终代码审查（独立 Subagent）                                        | `pending`     | 派审查前跑 AC-06 全套、AC-08 全量门禁与零改动核对；审查记录                           |
+| T06 | ESLint 加 400 行上限                                                 | `done`        | AC-04                                                                                 |
+| T07 | 最终代码审查（独立 Subagent）                                        | `in_progress` | 派审查前跑 AC-06 全套、AC-08 全量门禁与零改动核对；审查记录                           |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
 方式 B 按用户可观察的切片切，不按数据、后端、前端分层切：每行写交付哪几条 AC，并在本任务内取得它们的证据；一条 AC 跨几个切片时记在完成它的那个任务。可以有一个先行任务只做数据结构与共享契约（表、迁移、共享类型，不含接口和页面），这一列写「无，机器门」。不设"Agent 验收""机器门汇总"这类只收集其他任务证据的任务；单元结束的全量套件和构建在「最终代码审查」任务里、派审查之前跑。
@@ -49,6 +49,8 @@ Preflight：动 `apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`comp
 | T05  | failed | 首轮 `FW_SLOT=1 pnpm e2e:mobile`                                                                                                                                                                                          | `docs/work/FW-008-module-split/evidence/t05-mobile.log`                                                                                                                                                                                                                                                                                                                                           | 第一项失败为 Tabs 保留今日页导致门店名重复定位，随后 Agent 在测试未结束时清理监听者，导致后续连接拒绝。调整定位后单独重跑 7/7，再新增导航证据 9/9 通过；未改原断言。                                                                                                                                                                                                                                                                                                                           |
 | T05  | passed | `FW_SLOT=1 expo start --lan --android --port 3112`；`adb reverse`；`adb shell uiautomator dump`、`input tap/keyevent 4`；`adb logcat -d -s ReactNativeJS:E`                                                               | `docs/work/FW-008-module-split/evidence/t05-native-score.png`、`docs/work/FW-008-module-split/evidence/t05-native-submitted.xml`、`docs/work/FW-008-module-split/evidence/t05-native-back.xml`、`docs/work/FW-008-module-split/evidence/t05-native-profile.xml`、`docs/work/FW-008-module-split/evidence/t05-native-today.xml`、`docs/work/FW-008-module-split/evidence/t05-native-js-errors.log` | AC-07：按 dev-environment 的 Mobile 原生与 Android SDK 操作，Medium_Phone_API_37.0 / emulator-5554；新进程明确 API 3110、Metro 3112、槽位库 floorwalk_e2e_1。登录→开始巡检→冷柜不合格其余合格→两个必拍项各从系统相册选择 JPEG 上传→界面「已提交：submitted，分数 88」；硬件返回键回今日待巡，看到两 Tab；切我的看到账号/所属门店再切回。当前会话 logcat 的 ReactNativeJS error 0 行。SDK 57 Router 版本文档、expo-overview→expo-router 和 launch-without-dev-menu 参考已读（T04 行列出路径）。 |
 | T05  | passed | 按端口查 PID 后 Stop-Process；移除本任务 adb reverse；`adb emu kill`；现有 `seedDatabase`；监听检查                                                                                                                       | `docs/work/FW-008-module-split/plan.md`                                                                                                                                                                                                                                                                                                                                                           | 3110/3111/3112 本任务监听者清理；本任务启动的模拟器已关闭、两项 reverse 已移除；槽位 1 恢复种子并清空上传；3018～3020 和 3110～3112 均无监听。本轮再次按端口清理 API PID 104112、Metro PID 84252；移除 reverse、模拟器与推入的照片，现有 seedDatabase 恢复槽位 1。T05 代码与测试准备本地提交。                                                                                                                                                                                                 |
+
+| T06 | passed | `pnpm lint`；`pnpm exec eslint --print-config apps/api/src/inspection.controller.ts`；`pnpm exec eslint --print-config packages/shared/src/contract/index.ts`；`pnpm exec prettier --check eslint.config.mjs` | `eslint.config.mjs` | AC-04：业务源码启用 max-lines=400、skipBlankLines/skipComments；测试、components/ui、shared/contract 豁免。实际配置核对规则为 error，契约无该规则；lint 与配置格式通过。最初额外 lint scripts 发现既有配置未覆盖 Node globals；根 lint 只包含 apps/packages，未扩大到脚本。未造超过上限的文件做反向验证。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 

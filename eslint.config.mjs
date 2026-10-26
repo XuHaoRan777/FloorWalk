@@ -12,6 +12,21 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.node } },
   },
   {
+    files: ['apps/**/*.{ts,tsx,js,cjs}', 'packages/**/*.ts'],
+    ignores: [
+      '**/*.{test,spec}.{ts,tsx,js,cjs}',
+      '**/tests/**',
+      '**/components/ui/**',
+      'packages/shared/src/contract/**',
+    ],
+    rules: {
+      'max-lines': [
+        'error',
+        { max: 400, skipBlankLines: true, skipComments: true },
+      ],
+    },
+  },
+  {
     files: ['apps/web/src/**/*.{ts,tsx}', 'apps/mobile/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
     rules: {
