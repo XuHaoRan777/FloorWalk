@@ -21,9 +21,8 @@
 
 只列 `归档状态：active` 的单元，个数上限与状态一致性由 `python scripts/validate_docs.py` 校验。
 
-| ID     | 工作单元                                         | 状态     | 依赖   | 下一步         |
-| ------ | ------------------------------------------------ | -------- | ------ | -------------- |
-| FW-008 | [按功能拆模块](work/FW-008-module-split/spec.md) | verified | FW-007 | Promote 与归档 |
+| ID  | 工作单元 | 状态 | 依赖 | 下一步 |
+| --- | -------- | ---- | ---- | ------ |
 
 ## 待开单元（未批准，按建议顺序）
 
@@ -39,6 +38,8 @@
 | 6    | g02 集成单元                                                                                             | 3、4、5 | 集成   |
 | 7    | Mobile 拍照入口（`launchCameraAsync`，模拟器取证）                                                       | 6       | 主路径 |
 | 8    | Web Demo 正式内容（展示前面全部功能，放最后）                                                            | 7       | 展示   |
+
+范围外待修正：Mobile API 基址末尾斜杠的既有问题，见[已知陷阱](pitfalls.md#mobile-api-基址末尾斜杠)；FW-008 按规格保留，后续修正模式处理。
 
 ## 待人工验收
 
@@ -58,3 +59,4 @@
 | FW-005 | [Mobile 店员巡检](work/FW-005-mobile-inspection/spec.md)            | 2026-10-25 | 并行组 g01 归档提交（见 git log）                         |
 | FW-006 | [Web 主管审核与总部看板](work/FW-006-web-review/spec.md)            | 2026-10-25 | 并行组 g01 归档提交（见 git log）                         |
 | FW-007 | [并行组 g01 集成](work/FW-007-g01-integration/spec.md)              | 2026-10-25 | 并行组 g01 归档提交（见 git log）                         |
+| FW-008 | [按功能拆模块](work/FW-008-module-split/spec.md)                    | 2026-10-26 | 按任务本地提交及归档提交（见 git log），未推送            |

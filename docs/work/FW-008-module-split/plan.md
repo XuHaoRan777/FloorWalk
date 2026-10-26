@@ -5,10 +5,10 @@
 ## 当前状态
 
 - 工作单元状态：`verified`
-- 归档状态：`active`
-- 当前任务：T07 已完成，待归档
+- 归档状态：`archived`
+- 当前任务：全部完成
 - 阻塞：无；原生链已通过。
-- 下一步：Promote 当前事实、登记串行基线并归档。
+- 下一步：无；按用户要求仅本地提交，未推送。
 
 Preflight：动 `apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`components/`、`lib/`）、`eslint.config.mjs`，新增 `scripts/api-snapshot.mjs`；不动契约、`auth.ts`、`schema.ts`、迁移、`package.json`、锁文件。全程用槽位 1（`floorwalk_e2e_1`，端口 3110/3111/3112），不占开发端口 3018～3020。开工前记下 `git rev-parse HEAD` 作为 AC-08 的对比起点。
 
@@ -53,8 +53,7 @@ Preflight：动 `apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`comp
 | T07  | failed | 首轮 `FW_SLOT=1 pnpm --filter @apps/api test`                                                                                                                                                                                                                                         | `docs/work/FW-008-module-split/evidence/t07-api.log`                                                                                                                                                                                                                                                                                                                                                            | Agent 错误让同槽位 API 测试与后续 e2e 的 reset 重叠，出现表缺失、401/500 与种子空结果（3/8 通过）。已核对各测试会重置同一槽位；不改代码，下一次实验等全部退出并清监听后串行重跑 API，后续套件严格串行。                                                                                                                                                                                                                                                                                        |
 | T07  | passed | `pnpm typecheck`；`pnpm lint`；`pnpm format:check`；`FW_SLOT=1 pnpm build`；`git diff --exit-code 2c933a3a4f24c90127a2b744f488935abbb34db8 -- <受保护路径>`                                                                                                                           | `docs/work/FW-008-module-split/evidence/t07-typecheck.log`、`docs/work/FW-008-module-split/evidence/t07-format.log`、`docs/work/FW-008-module-split/evidence/t07-lint.log`、`docs/work/FW-008-module-split/evidence/t07-build.log`                                                                                                                                                                              | AC-08：全量类型、lint、格式、构建通过（含 Android Hermes bundle）；对比开工 HEAD，契约目录、auth.ts、schema.ts、迁移、全部 package.json、锁文件 diff 为空、退出 0。全套之后通过现有 seedDatabase 恢复槽位1种子、删除测试标记和上传，3018～3020 与3110～3112 均无监听。                                                                                                                                                                                                                         |
 | T07  | passed | `FW_SLOT=1 pnpm --filter @apps/api test`（串行）；`FW_SLOT=1 pnpm e2e`；`FW_SLOT=1 pnpm exec playwright test --config=playwright.web.config.ts`；`FW_SLOT=1 pnpm e2e:mobile`；`FW_SLOT=1 pnpm e2e:cors`；`FW_SLOT=1 pnpm e2e:demo`；`FW_SLOT=1 pnpm e2e:demo-ui`（NO_PROXY/no_proxy） | `docs/work/FW-008-module-split/evidence/t07-api-serial.log`、`docs/work/FW-008-module-split/evidence/t07-e2e-serial.log`、`docs/work/FW-008-module-split/evidence/t07-web.log`、`docs/work/FW-008-module-split/evidence/t07-mobile.log`、`docs/work/FW-008-module-split/evidence/t07-cors.log`、`docs/work/FW-008-module-split/evidence/t07-demo.log`、`docs/work/FW-008-module-split/evidence/t07-demo-ui.log` | AC-06 最终套件通过：API 8/8（契约 4/4），槽位设施 1/1、Web 6/6；Web 退出后按监听端口清理服务。Mobile 9/9（t07-mobile.log）；按监听端口清理 API/Metro。CORS 2/2、API 演示链退出 0、跨端 UI 演示链 1/1；全部使用槽位 1 与命令级 NO_PROXY/no_proxy，逐套退出后按端口清理。槽位设施串行再跑 1/1 排除早先重叠影响。                                                                                                                                                                                 |
-
-| T07 | passed | 独立 Subagent `/root/fw008_final_review` 按 `docs/howto/final-review.md` 审查 `2c933a3..0a59a7b` 完整差异与工作区 plan | `docs/work/FW-008-module-split/plan.md` | 独立 Subagent（未参与实现），只读审查一次，0 finding。七失败域均通过：认证授权投影与门店归属保留；无新增代理或越权路径；事务、锁与清理保持原样；SQL/时间/数值/响应解码一致；迁移与受保护路径零改动；无新增敏感日志、快照脱敏；新增结构均对应 AC。36 份引用证据存在，63 请求快照逐字节一致，最终测试日志与原生 XML 覆盖 AC；认证和权限失败路径有实测命令。旧基址 replace bug 确认为原有问题，按非目标保留；无阻塞。 |
+| T07  | passed | 独立 Subagent `/root/fw008_final_review` 按 `docs/howto/final-review.md` 审查 `2c933a3..0a59a7b` 完整差异与工作区 plan                                                                                                                                                                | `docs/work/FW-008-module-split/plan.md`                                                                                                                                                                                                                                                                                                                                                                         | 独立 Subagent（未参与实现），只读审查一次，0 finding。七失败域均通过：认证授权投影与门店归属保留；无新增代理或越权路径；事务、锁与清理保持原样；SQL/时间/数值/响应解码一致；迁移与受保护路径零改动；无新增敏感日志、快照脱敏；新增结构均对应 AC。36 份引用证据存在，63 请求快照逐字节一致，最终测试日志与原生 XML 覆盖 AC；认证和权限失败路径有实测命令。旧基址 replace bug 确认为原有问题，按非目标保留；无阻塞。                                                                             |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
@@ -83,3 +82,7 @@ Preflight：动 `apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`comp
 - 2026-10-26 用户回复“A”：继续专项排查原生连接，规格不变。人工触点新增答停下 1 次；累计开对话 1、批审批 0、答停下 1、传话 0、人工验收 0、排障 0。
 
 - 2026-10-26 原生阻塞恢复：独立只读日志 Subagent 指出旧证据混入多次启动与桌面 UI，Cannot connect to Expo CLI 是 HMR 通道警告，不能据此断言初始 bundle 失败。用新模拟器进程、显式槽位配置重新取证，业务整链通过；未宣称网络唯一根因已确定，未改业务处理。
+
+- 2026-10-26 串行基线归档汇总：本对话人工触点合计 2 次，开对话 1、批审批 0、答停下 1（用户选 A）、传话 0、人工验收 0、排障 0；单元平均 2 次。上下文压缩不算新开对话，Agent 自行跑 adb/读 logcat 不算用户排障。已在 docs/parallel-trial.md 试行记录表追加「串行基线」。
+- 2026-10-26 归档对账：起点 2c933a3~1 至 T07 提交 3ead1ec 的代码提交均带 FW-008，无游离代码提交、交付后回修或硬线变更。Promote 四份 specs 的导航、源码链接与 lint 事实；旧基址 bug 与同槽位套件冲突升入 pitfalls，Backlog 留旧 bug 待修入口。
+- 2026-10-26 归档清理：按协议删除本单元 evidence（不入库），证据结论与命令保留在本计划；本任务进程、reverse、模拟器与写入数据均已清理或恢复种子。文档校验后本地提交，再运行 --archive-gate 核对干净工作区。

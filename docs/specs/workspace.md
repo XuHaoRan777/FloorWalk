@@ -6,6 +6,8 @@ pnpm workspace 包含 `@apps/api`、`@apps/web`、`@apps/mobile` 和 `@libs/shar
 
 根入口先构建 shared，再启动应用；统一开发入口同时启动 shared watch 与三个应用，任一进程退出会结束同组。独立入口、端口、依赖版本及验证命令见 [开发环境](../context/dev-environment.md)，安装、环境文件与进程操作见 [本地开发说明](../howto/local-development.md)。三应用各用开发与生产环境文件，实际文件不提交；Mobile 生产构建只导出 JS bundle，不启动服务。
 
+业务源文件由 ESLint `max-lines` 检查 400 行上限，不计空行和注释；测试、`components/ui/` 和 `packages/shared/src/contract/` 豁免。
+
 ## shared 消费
 
 shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契约，提供 ESM、CommonJS 和声明文件。API 启动日志、Web 页面、Mobile 首页通过包名实际引用它，不跨包相对引用源码。shared 不含 React、React Native、NestJS 或 UI 依赖；watch 重新生成产物，消费者可重新载入。
@@ -32,13 +34,13 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 
 ## 数据契约（归档时再生成）
 
-| 入口             | 当前契约                                        | 代码（归档时再生成）                                                                                                                                                                 |
-| ---------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| workspace 与命令 | 四包编排和根检查入口                            | [package.json](../../package.json)、[pnpm-workspace.yaml](../../pnpm-workspace.yaml)                                                                                                 |
-| shared           | APP_NAME 与巡检主链 zod 契约                    | [源码](../../packages/shared/src/index.ts)、[契约](../../packages/shared/src/contract/index.ts)                                                                                      |
-| API              | /health、登录、/me、巡检/审核/证据/看板骨架接口 | [控制器](../../apps/api/src/health.controller.ts)、[巡检控制器](../../apps/api/src/inspection.controller.ts)、[认证](../../apps/api/src/auth.ts)、[启动](../../apps/api/src/main.ts) |
-| Web              | /、/console、登录会话与审核/看板 API            | [路由](../../apps/web/src/router.tsx)、[客户端](../../apps/web/src/lib/api.ts)                                                                                                       |
-| Mobile           | 登录、今日巡检、巡检详情、检查项与证据上传      | [应用](../../apps/mobile/components/mobile-app.tsx)、[API](../../apps/mobile/lib/api.ts)                                                                                             |
+| 入口             | 当前契约                                        | 代码（归档时再生成）                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| workspace 与命令 | 四包编排和根检查入口                            | [package.json](../../package.json)、[pnpm-workspace.yaml](../../pnpm-workspace.yaml)                                                                                                                                                                                                                                                                                                                                                            |
+| shared           | APP_NAME 与巡检主链 zod 契约                    | [源码](../../packages/shared/src/index.ts)、[契约](../../packages/shared/src/contract/index.ts)                                                                                                                                                                                                                                                                                                                                                 |
+| API              | /health、登录、/me、巡检/审核/证据/看板骨架接口 | [控制器](../../apps/api/src/health.controller.ts)、[认证接口](../../apps/api/src/auth.controller.ts)、[巡检](../../apps/api/src/inspection.controller.ts)、[证据](../../apps/api/src/evidence.controller.ts)、[审核](../../apps/api/src/review.controller.ts)、[看板](../../apps/api/src/dashboard.controller.ts)、[共用查询](../../apps/api/src/inspection-queries.ts)、[认证](../../apps/api/src/auth.ts)、[启动](../../apps/api/src/main.ts) |
+| Web              | /、/console、登录会话与审核/看板 API            | [路由](../../apps/web/src/router.tsx)、[客户端](../../apps/web/src/lib/api.ts)                                                                                                                                                                                                                                                                                                                                                                  |
+| Mobile           | 登录、今日巡检、巡检详情、检查项与证据上传      | [导航](../../apps/mobile/app/_layout.tsx)、[屏幕](../../apps/mobile/components/mobile/)、[API](../../apps/mobile/lib/api.ts)、[功能客户端](../../apps/mobile/lib/api/)                                                                                                                                                                                                                                                                          |
 
 ## 修订记录
 
@@ -49,3 +51,4 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 | 2026-10-24 | FW-003 完成 `/api` 契约接口、统一错误与 CORS；SDK 57 依赖对齐，Mobile Expo Web 与三端 CORS 有独立 e2e 验证。                             |
 | 2026-10-25 | FW-005、FW-006 将 Mobile 首页和 Web 控制台壳替换为巡检、审核与总部看板流程。                                                             |
 | 2026-10-25 | FW-007 集成并归档 g01：API、Mobile、Web 与跨端演示链在真实接口上闭环通过。                                                               |
+| 2026-10-26 | FW-008 拆分 API/Web/Mobile 功能模块，Mobile 改用 Tabs 导航；业务源码 400 行上限纳入 lint。                                               |

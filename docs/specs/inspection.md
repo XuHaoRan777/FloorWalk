@@ -1,6 +1,6 @@
 # 巡检主链
 
-代码（归档时再生成）：`packages/shared/src/contract/`；API 认证、接口与数据访问在 `apps/api/src/auth.ts`、`apps/api/src/inspection.controller.ts`、`apps/api/src/db/`；数据库迁移在 `apps/api/drizzle/`。
+代码（归档时再生成）：`packages/shared/src/contract/`；API 认证、接口与数据访问在 `apps/api/src/auth.ts`、`apps/api/src/auth.controller.ts`、`apps/api/src/inspection.controller.ts`、`apps/api/src/evidence.controller.ts`、`apps/api/src/review.controller.ts`、`apps/api/src/dashboard.controller.ts`、`apps/api/src/inspection-queries.ts`、`apps/api/src/db/`；数据库迁移在 `apps/api/drizzle/`。
 
 ## 契约与权限
 
@@ -70,3 +70,4 @@ Northbean Coffee 有 12 家门店 `NB-001`～`NB-012`，每家店一个店员账
 | 2026-10-24 | 巡检详情、审核队列和店员今日响应补充门店与审核记录；照片 URL 改为调用方不透明并新增受 `STORAGE_DIR` 边界保护的照片文件路由；今日按 Asia/Shanghai 日历日计算。 |
 | 2026-10-25 | 提交锁定分数，审核状态迁移与门店看板使用真实业务数据；照片上传和签名链接可用。                                                                                |
 | 2026-10-25 | FW-004 完成提交、审核、照片证据与看板业务规则，演示链 API 闭环通过。                                                                                          |
+| 2026-10-26 | FW-008 按认证、巡检、证据、审核、看板拆控制器；接口、权限与业务规则保持不变。                                                                                 |
