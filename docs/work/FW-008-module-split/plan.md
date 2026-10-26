@@ -6,9 +6,9 @@
 
 - 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：T02
+- 当前任务：T03
 - 阻塞：无
-- 下一步：按功能拆 API 控制器与共享查询工具，保持响应不变。
+- 下一步：拆 Web 控制台与按功能 API 客户端。
 
 Preflight：动 `apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`components/`、`lib/`）、`eslint.config.mjs`，新增 `scripts/api-snapshot.mjs`；不动契约、`auth.ts`、`schema.ts`、迁移、`package.json`、锁文件。全程用槽位 1（`floorwalk_e2e_1`，端口 3110/3111/3112），不占开发端口 3018～3020。开工前记下 `git rev-parse HEAD` 作为 AC-08 的对比起点。
 
@@ -17,8 +17,8 @@ Preflight：动 `apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`comp
 | ID  | 任务                                                                 | 状态      | 交付的 AC 与证据                                                                      |
 | --- | -------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------- |
 | T01 | 写 `scripts/api-snapshot.mjs`；拆前跑一次快照和 AC-06 全套，记下基线 | `done` | 无，基线：快照文件路径、各套件通过数                                                  |
-| T02 | 拆 API 控制器和共用文件                                              | `in_progress` | AC-01；AC-05（拆后快照与 T01 逐字节相同）；API 测试、契约 e2e、`e2e:cors`、`e2e:demo` |
-| T03 | 拆 Web 控制台页和 Web API 客户端                                     | `pending` | AC-02 Web 部分；Web e2e、`e2e:demo-ui`                                                |
+| T02 | 拆 API 控制器和共用文件                                              | `done` | AC-01；AC-05（拆后快照与 T01 逐字节相同）；API 测试、契约 e2e、`e2e:cors`、`e2e:demo` |
+| T03 | 拆 Web 控制台页和 Web API 客户端                                     | `in_progress` | AC-02 Web 部分；Web e2e、`e2e:demo-ui`                                                |
 | T04 | 拆 Mobile 屏幕、共用组件和 Mobile API 客户端，导航先不动             | `pending` | AC-02 Mobile 部分；`e2e:mobile`                                                       |
 | T05 | Mobile 底部切换改为 Expo Router Tabs                                 | `pending` | AC-03；AC-07（模拟器原生链）；`e2e:mobile`                                            |
 | T06 | ESLint 加 400 行上限                                                 | `pending` | AC-04                                                                                 |
@@ -38,6 +38,9 @@ Preflight：动 `apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`comp
 | T01 | failed | `FW_SLOT=1 pnpm exec playwright test --config=playwright.web.config.ts` | `docs/work/FW-008-module-split/evidence/t01-suite-4.log` | 6/6 连接拒绝；配置设 reuseExistingServer，日志没有启动服务。假设 localhost 被代理误判可复用；下一次实验只在命令注入 NO_PROXY/no_proxy 并打开 pw:webserver 调试，不改测试断言或业务代码。 |
 | T01 | passed | `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost DEBUG=pw:webserver pnpm exec playwright test --config=playwright.web.config.ts` | `docs/work/FW-008-module-split/evidence/t01-web-recheck.log` | Web 6/6；证实注入代理绕过后服务正确启动；后续验证命令沿用本机代理绕过，不修改仓库配置与断言。 |
 | T01 | passed | `FW_SLOT=1 pnpm e2e:cors`；`FW_SLOT=1 pnpm e2e:demo`；`FW_SLOT=1 pnpm e2e:demo-ui`（命令级 NO_PROXY/no_proxy） | `docs/work/FW-008-module-split/evidence/t01-e2e-cors.log`、`docs/work/FW-008-module-split/evidence/t01-e2e-demo.log`、`docs/work/FW-008-module-split/evidence/t01-e2e-demo-ui.log` | CORS 2/2；API 演示链 1/1；跨端 UI 演示链 1/1。槽位 1 全套基线完成；逐套按端口杀监听 PID；最后通过现有 seedDatabase 恢复槽位种子并清空上传。 |
+| T02 | passed | `pnpm --filter @apps/api typecheck`；`pnpm exec eslint apps/api/src`；`git diff` | `apps/api/src/app.module.ts`、`apps/api/src/inspection-queries.ts` | AC-01：五个功能控制器各一行注册，巡检控制器仅店员巡检；SQL、权限检查、事务与返回校验原样搬移；共享上海日界、ISO 时间、照片签名、权限与详情查询。最长控制器 336 行。 |
+| T02 | passed | `FW_SLOT=1 node --env-file=apps/api/.env.development scripts/api-snapshot.mjs docs/work/FW-008-module-split/evidence/api-after.json`；`Get-FileHash` | `docs/work/FW-008-module-split/evidence/api-before.json`、`docs/work/FW-008-module-split/evidence/api-after.json` | AC-05：拆前后逐字节一致；SHA256 `18BF886A5F589A20B1577D83BEC6B20EE6C148ACCE99E814CCE0AD76B9B8907A`。 |
+| T02 | passed | `FW_SLOT=1 pnpm --filter @apps/api test`；`FW_SLOT=1 pnpm e2e:cors`；`FW_SLOT=1 pnpm e2e:demo`（NO_PROXY/no_proxy） | `docs/work/FW-008-module-split/evidence/t02-suite-1.log`、`docs/work/FW-008-module-split/evidence/t02-suite-2.log`、`docs/work/FW-008-module-split/evidence/t02-suite-3.log` | API 8/8（含契约 4/4）、CORS 2/2、演示链 1/1；按监听 PID 清理 3110～3112，恢复槽位种子并清空上传。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
