@@ -57,6 +57,24 @@ test('错误密码显示中文错误提示', async ({ page }) => {
   await expect(page.getByText('邮箱或密码错误。')).toBeVisible();
 });
 
+test('连不上 API 时显示网络错误，并在控制台打印原始错误', async ({ page }) => {
+  const logs: string[] = [];
+  page.on('console', (message) => {
+    logs.push(message.text());
+  });
+  await page.route('**/api/auth/login', (route) => route.abort());
+  await page.goto('/');
+  await page.getByLabel('邮箱').fill(email);
+  await page.getByLabel('密码').fill(password);
+  await page.getByTestId('login-button').click();
+  await expect(
+    page.getByText('网络连接失败，请检查网络后重试。'),
+  ).toBeVisible();
+  expect(logs.some((line) => line.includes('[FloorWalk API] fetch 异常'))).toBe(
+    true,
+  );
+});
+
 test('今日任务来自接口，未完成必拍项时阻止提交', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('邮箱').fill(email);

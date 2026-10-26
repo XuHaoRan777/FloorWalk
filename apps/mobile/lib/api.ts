@@ -25,7 +25,38 @@ export class ApiError extends Error {
   }
 }
 
+// 开发态把原始错误打到控制台（Metro 终端、logcat）；生产包不打印。用
+// console.log：console.error 在原生端弹 LogBox 红条，挡住底部按钮。Error 转成
+// 字符串，让 logcat 里一条错误只占一行。
+function logRaw(label: string, detail: Record<string, unknown>) {
+  if (!__DEV__) return;
+  const plain = Object.fromEntries(
+    Object.entries(detail).map(([key, value]) => [
+      key,
+      value instanceof Error
+        ? `${value.name}: ${value.message}${value.cause ? ` (cause: ${String(value.cause)})` : ''}`
+        : value,
+    ]),
+  );
+  console.log(`[FloorWalk API] ${label}`, JSON.stringify(plain));
+}
+
+// fetch 抛出的异常里，只有连不上服务器的才算网络错误：浏览器与 RN 的 fetch
+// 抛 TypeError，expo/fetch 原生端把连接失败包成 "fetch failed: ..."。请求体
+// 转换失败（如 Unsupported FormDataPart implementation）也是 "fetch failed:"
+// 开头，所以先排除它。
+function isNetworkFailure(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  if (/FormData|BodyInit/i.test(error.message)) return false;
+  return (
+    error instanceof TypeError || error.message.startsWith('fetch failed:')
+  );
+}
+
 function getMessage(status: number, code?: string) {
+  if (code === 'NETWORK_ERROR') return '网络连接失败，请检查网络后重试。';
+  if (code === 'FILE_READ_FAILED') return '读取照片失败，请重新选择照片。';
+  if (code === 'CLIENT_ERROR') return '请求没有发出，请稍后重试。';
   if (status === 401 || code === 'UNAUTHENTICATED')
     return '登录已失效，请重新登录。';
   if (status === 403 || code === 'FORBIDDEN')
@@ -59,18 +90,24 @@ async function request<T>(
       },
     });
   } catch (error) {
-    if (path.endsWith('/evidence')) {
-      console.error('[FloorWalk API] 图片上传 fetch 异常', {
-        method: options.method ?? 'GET',
-        path,
-        error,
-      });
-    }
-    throw new ApiError('网络连接失败，请检查网络后重试。', 0, 'NETWORK_ERROR');
+    const code = isNetworkFailure(error) ? 'NETWORK_ERROR' : 'CLIENT_ERROR';
+    logRaw('fetch 异常', {
+      method: options.method ?? 'GET',
+      path,
+      code,
+      error,
+    });
+    throw new ApiError(getMessage(0, code), 0, code);
   }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
+    logRaw('接口返回错误', {
+      method: options.method ?? 'GET',
+      path,
+      status: response.status,
+      payload,
+    });
     const code =
       payload && typeof payload === 'object' && 'code' in payload
         ? String(payload.code)
@@ -126,12 +163,21 @@ export const api = {
     fileName: string,
   ) => {
     const form = new FormData();
-    if (Platform.OS === 'web') {
-      const blob = await fetch(uri).then((response) => response.blob());
-      form.append('file', blob, fileName);
-    } else {
-      const file = new File(uri);
-      form.append('file', file, fileName);
+    try {
+      if (Platform.OS === 'web') {
+        const blob = await fetch(uri).then((response) => response.blob());
+        form.append('file', blob, fileName);
+      } else {
+        const file = new File(uri);
+        form.append('file', file, fileName);
+      }
+    } catch (error) {
+      logRaw('读取照片失败', { uri, fileName, error });
+      throw new ApiError(
+        getMessage(0, 'FILE_READ_FAILED'),
+        0,
+        'FILE_READ_FAILED',
+      );
     }
     return request<Evidence>(
       `/inspections/${inspectionId}/items/${itemId}/evidence`,
@@ -154,11 +200,12 @@ export const api = {
 
 export function userFacingError(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 0) return '网络连接失败，请检查网络后重试。';
+    if (error.status === 0) return error.message;
     return getMessage(error.status, error.code) ===
       '接口暂时不可用，请稍后重试。'
       ? error.message
       : getMessage(error.status, error.code);
   }
+  logRaw('未分类异常', { error });
   return '操作失败，请稍后重试。';
 }

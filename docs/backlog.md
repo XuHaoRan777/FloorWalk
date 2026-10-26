@@ -26,20 +26,19 @@
 
 ## 待开单元（未批准，按建议顺序）
 
-编号在开单时分配。每项对应的当前事实见 [`specs/`](specs/README.md)。下列后续单元尚未批准，编号是计划值；前置中的数字引用本表顺序。2026-10-26 按 g01 回顾重排（[试行记录](parallel-trial.md)）：第二组只放竖切的 5～7，其余串行。并行组的做法见 [`howto/parallel.md`](howto/parallel.md)。`FW-001` 已归档，交付事实见 [工程骨架](specs/workspace.md)。
+编号在开单时分配。每项对应的当前事实见 [`specs/`](specs/README.md)。下列后续单元尚未批准，编号是计划值；前置中的数字引用本表顺序。2026-10-26 按 g01 回顾重排（[试行记录](parallel-trial.md)）：第二组只放竖切的 4～6，其余串行；原第 1 项（上传错误区分）已于 2026-10-26 走修正模式完成。并行组的做法见 [`howto/parallel.md`](howto/parallel.md)。`FW-001` 已归档，交付事实见 [工程骨架](specs/workspace.md)。
 
 | 顺序 | 目标                                                                                                                                                      | 前置    | 类型   |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------ |
-| 1    | Mobile 区分网络错误与其他上传异常，开发态打印原始错误（不加结构，走修正模式）                                                                             | FW-007  | 质量   |
-| 2    | 按功能拆模块：API `inspection.controller.ts`、Mobile `mobile-app.tsx`、Web `console.tsx`、契约 `index.ts` 拆成按功能的文件，行为不变（并行组准入第 3 条） | 1       | 结构   |
-| 3    | 将 Web localStorage Bearer Token 改为 HttpOnly 会话（改认证契约，串行；Mobile 是否保留 Bearer 讨论时定）                                                  | 2       | 认证   |
-| 4    | g02 契约单元：聊天表与接口、模板版本语义、记录页接口（如需要），含跨端最薄链路                                                                            | 3       | 契约   |
-| 5    | g02 并行：聊天挂到巡检单（API、Web、Mobile）                                                                                                              | 4       | 主路径 |
-| 6    | g02 并行：用户角色、门店、模板的 Web 控制台 CRUD（API、Web）                                                                                              | 4       | 配置   |
-| 7    | g02 并行：Mobile「记录」页（我的历史单）                                                                                                                  | 4       | 主路径 |
-| 8    | g02 集成单元                                                                                                                                              | 5、6、7 | 集成   |
-| 9    | Mobile 拍照入口（`launchCameraAsync`，模拟器取证）                                                                                                        | 8       | 主路径 |
-| 10   | Web Demo 正式内容（展示前面全部功能，放最后）                                                                                                             | 9       | 展示   |
+| 1    | 按功能拆模块：API `inspection.controller.ts`、Mobile `mobile-app.tsx`、Web `console.tsx`、契约 `index.ts` 拆成按功能的文件，行为不变（并行组准入第 3 条） | FW-007  | 结构   |
+| 2    | 将 Web localStorage Bearer Token 改为 HttpOnly 会话（改认证契约，串行；Mobile 是否保留 Bearer 讨论时定）                                                  | 1       | 认证   |
+| 3    | g02 契约单元：聊天表与接口、模板版本语义、记录页接口（如需要），含跨端最薄链路                                                                            | 2       | 契约   |
+| 4    | g02 并行：聊天挂到巡检单（API、Web、Mobile）                                                                                                              | 3       | 主路径 |
+| 5    | g02 并行：用户角色、门店、模板的 Web 控制台 CRUD（API、Web）                                                                                              | 3       | 配置   |
+| 6    | g02 并行：Mobile「记录」页（我的历史单）                                                                                                                  | 3       | 主路径 |
+| 7    | g02 集成单元                                                                                                                                              | 4、5、6 | 集成   |
+| 8    | Mobile 拍照入口（`launchCameraAsync`，模拟器取证）                                                                                                        | 7       | 主路径 |
+| 9    | Web Demo 正式内容（展示前面全部功能，放最后）                                                                                                             | 8       | 展示   |
 
 ## 待人工验收
 
