@@ -44,7 +44,9 @@ test('店员登录、重启保持登录、查看我的并退出', async ({ page 
   ).toBeVisible();
   await page.getByLabel('我的').click();
   await expect(page.getByText(email)).toBeVisible();
-  await expect(page.getByText(today.site.name)).toBeVisible();
+  await expect(
+    page.getByLabel('当前门店').filter({ hasText: today.site.name }),
+  ).toBeVisible();
   await page.getByRole('button', { name: '退出登录' }).click();
   await expect(page.getByRole('heading', { name: '开始巡检' })).toBeVisible();
 });
@@ -156,4 +158,39 @@ test('无效登录凭证会回到登录页', async ({ page }) => {
   );
   await page.goto('/');
   await expect(page.getByRole('heading', { name: '开始巡检' })).toBeVisible();
+});
+
+test('FW-008 AC-03 未登录直接访问受保护和未知地址回登录，且没有底部栏', async ({
+  page,
+}) => {
+  for (const url of [
+    '/today',
+    '/profile',
+    '/inspection/00000000-0000-0000-0000-000000000000',
+    '/unknown/path',
+  ]) {
+    await page.goto(url);
+    await expect(page.getByRole('heading', { name: '开始巡检' })).toBeVisible();
+    await expect(page).toHaveURL('/');
+    await expect(page.getByRole('tab')).toHaveCount(0);
+  }
+});
+
+test('FW-008 AC-03 Tabs 与详情切换会更新 URL，详情返回今日待巡', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByTestId('login-button').click();
+  await expect(page).toHaveURL('/today');
+  await expect(page.getByRole('tab')).toHaveCount(2);
+  await page.getByLabel('我的').click();
+  await expect(page).toHaveURL('/profile');
+  await page.getByLabel('今日待巡', { exact: true }).click();
+  await expect(page).toHaveURL('/today');
+  await page.getByTestId('start-inspection').click();
+  await expect(page).toHaveURL(/\/inspection\/[0-9a-f-]+$/);
+  await expect(page.getByRole('tab')).toHaveCount(0);
+  await page.getByLabel('返回今日待巡').click();
+  await expect(page).toHaveURL('/today');
+  await expect(page.getByRole('tab')).toHaveCount(2);
 });
