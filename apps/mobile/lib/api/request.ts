@@ -1,7 +1,8 @@
 import { ApiError } from './errors';
 
 const baseUrl = (
-  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:3018/api'
+  (process.env.EXPO_PUBLIC_API_BASE_URL as string | undefined) ??
+  'http://127.0.0.1:3018/api'
 ).replace(/\/$/, '');
 
 export function logRaw(label: string, detail: Record<string, unknown>) {
