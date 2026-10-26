@@ -56,16 +56,6 @@
 - 失效条件：Expo 恢复对 `{ uri, name, type }` 的支持，或者项目改用别的上传库。
 - 首次记录：`FW-005`
 
-### Mobile API 基址末尾斜杠
-
-- 触发条件：Mobile 的 `EXPO_PUBLIC_API_BASE_URL` 以 `/` 结尾。
-- 现象：请求基址尾部出现字面 `undefined`，请求失败。
-- 根因：`apps/mobile/lib/api/request.ts` 继承原实现 `replace(/\/$/)`，缺少替换参数；FW-008 拆分前源码已有该问题。
-- 规避方式：当前配置基址不带末尾斜杠；已登记 Backlog，后续修正模式处理，FW-008 不修旧 bug。
-- 验证方式：静态对照拆前 `lib/api.ts` 与拆后 request 文件，确认表达式原样搬移。
-- 失效条件：修正基址规范化实现并验收后。
-- 首次记录：`FW-008`
-
 ### 同一 e2e 槽位的套件重置互相干扰
 
 - 触发条件：API 测试、e2e 或界面套件使用相同 `FW_SLOT` 并发运行。

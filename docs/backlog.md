@@ -39,8 +39,6 @@
 | 7    | Mobile 拍照入口（`launchCameraAsync`，模拟器取证）                                                       | 6       | 主路径 |
 | 8    | Web Demo 正式内容（展示前面全部功能，放最后）                                                            | 7       | 展示   |
 
-范围外待修正：Mobile API 基址末尾斜杠的既有问题，见[已知陷阱](pitfalls.md#mobile-api-基址末尾斜杠)；FW-008 按规格保留，后续修正模式处理。
-
 ## 待人工验收
 
 方式 A 交接里「需要你测的」那一行登记在这里；用户一句确认即归档对应单元，不设集中验收单元。并行组的单元在集成单元合并后才登记（[`howto/parallel.md`](howto/parallel.md)）。
