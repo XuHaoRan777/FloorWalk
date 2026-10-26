@@ -6,9 +6,9 @@
 
 - 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：T04
+- 当前任务：T05
 - 阻塞：无
-- 下一步：拆 Mobile 屏幕与按功能 API 客户端，导航先不动。
+- 下一步：按 Expo Router Tabs 建立受保护路由并完成 Android 模拟器取证。
 
 Preflight：动 `apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`components/`、`lib/`）、`eslint.config.mjs`，新增 `scripts/api-snapshot.mjs`；不动契约、`auth.ts`、`schema.ts`、迁移、`package.json`、锁文件。全程用槽位 1（`floorwalk_e2e_1`，端口 3110/3111/3112），不占开发端口 3018～3020。开工前记下 `git rev-parse HEAD` 作为 AC-08 的对比起点。
 
@@ -19,8 +19,8 @@ Preflight：动 `apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`comp
 | T01 | 写 `scripts/api-snapshot.mjs`；拆前跑一次快照和 AC-06 全套，记下基线 | `done`        | 无，基线：快照文件路径、各套件通过数                                                  |
 | T02 | 拆 API 控制器和共用文件                                              | `done`        | AC-01；AC-05（拆后快照与 T01 逐字节相同）；API 测试、契约 e2e、`e2e:cors`、`e2e:demo` |
 | T03 | 拆 Web 控制台页和 Web API 客户端                                     | `done`        | AC-02 Web 部分；Web e2e、`e2e:demo-ui`                                                |
-| T04 | 拆 Mobile 屏幕、共用组件和 Mobile API 客户端，导航先不动             | `in_progress` | AC-02 Mobile 部分；`e2e:mobile`                                                       |
-| T05 | Mobile 底部切换改为 Expo Router Tabs                                 | `pending`     | AC-03；AC-07（模拟器原生链）；`e2e:mobile`                                            |
+| T04 | 拆 Mobile 屏幕、共用组件和 Mobile API 客户端，导航先不动             | `done`        | AC-02 Mobile 部分；`e2e:mobile`                                                       |
+| T05 | Mobile 底部切换改为 Expo Router Tabs                                 | `in_progress` | AC-03；AC-07（模拟器原生链）；`e2e:mobile`                                            |
 | T06 | ESLint 加 400 行上限                                                 | `pending`     | AC-04                                                                                 |
 | T07 | 最终代码审查（独立 Subagent）                                        | `pending`     | 派审查前跑 AC-06 全套、AC-08 全量门禁与零改动核对；审查记录                           |
 
@@ -62,3 +62,5 @@ Preflight：动 `apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`comp
 - 串行基线：本单元按 [试行记录](../../parallel-trial.md)「值不值」的口径记人工触点（开对话、批审批、答停下、传话、人工验收、排障各几次），每次在这里加一行；归档时汇总进试行记录表的「串行基线」行。
 - 2026-10-26 人工触点：开对话 1 次（本次启动）；批审批 0、答停下 0、传话 0、人工验收 0、排障 0。用户授权本地按任务提交，不推送；所有槽位命令固定 `FW_SLOT=1`。
 - 2026-10-26 拆前环境偏差：Web e2e 的 reuseExistingServer 在代理下误判服务可复用，6 项连接拒绝；命令级设置 NO_PROXY/no_proxy 后 6/6 通过，不改配置、不计产品 bug。无须用户排障。
+
+| T04 | passed | `pnpm --filter @apps/mobile typecheck`；`pnpm exec eslint apps/mobile`；`FW_SLOT=1 pnpm e2e:mobile` | `apps/mobile/components/mobile/`、`apps/mobile/components/mobile-app.tsx`、`apps/mobile/lib/api/`、`apps/mobile/lib/api.ts`、`docs/work/FW-008-module-split/evidence/t04-mobile.log` | AC-02 Mobile：登录、今日、我的、巡检屏幕及 PrimaryButton/ErrorBanner 分文件；API 请求/错误与认证、巡检、证据模块拆分，上传的平台分支、实现和文案保留。类型、lint 通过，Mobile e2e 7/7；槽位服务清理。拆分发现旧问题：`apps/mobile/lib/api.ts` 原 `replace(/\/$/)` 未传替换值，按规格记下、不修。 |
