@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- 工作单元状态：`in_progress`
-- 归档状态：`active`
-- 当前任务：T08
+- 工作单元状态：`verified`
+- 归档状态：`archived`
+- 当前任务：T08 已完成
 - 阻塞：无。
-- 下一步：T08 串行跑 AC-15 全套与全量门禁，通过后派独立 Subagent 最终审查。
+- 下一步：无，已按归档流程 Promote 当前事实并清理证据。
 
 Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps/api/src/db/schema.ts`、`apps/api/drizzle/`（均为 hardline）、`apps/api/src`、`apps/web/src`、`apps/web/vite.config.ts`、`apps/mobile`（`components/`、`lib/`）、`tests/`、`playwright.*.config.ts`、`scripts/demo-chain.mjs`、`scripts/api-snapshot.mjs`；不动 `package.json`、锁文件。全程用槽位 1，不占 3018～3020。T05、T06 动 Mobile 前先读 `~/.agents/skills/expo-overview`，按分流读 `expo-data-fetching`，查 SDK 57 文档，在证据里记一行。
 
@@ -23,7 +23,7 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps
 | T05 | Mobile 改用会话 cookie（Expo Web）                       | `done` | AC-11、AC-12；`e2e:mobile`                                            |
 | T06 | Mobile 原生链与冷启动保持登录                            | `done` | AC-13（模拟器）                                                       |
 | T07 | Web 构建产物加 CSP；演示链与快照脚本改用 cookie          | `done` | AC-14；构建产物 e2e；AC-15 脚本部分（`e2e:demo`、`api-snapshot.mjs`） |
-| T08 | 最终代码审查（独立 Subagent）                            | `in_progress` | 派审查前跑 AC-15 全套与全量门禁；审查记录                         |
+| T08 | 最终代码审查（独立 Subagent）                            | `done` | 派审查前跑 AC-15 全套与全量门禁；审查记录                         |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
 方式 B 按用户可观察的切片切，不按数据、后端、前端分层切：每行写交付哪几条 AC，并在本任务内取得它们的证据；一条 AC 跨几个切片时记在完成它的那个任务。可以有一个先行任务只做数据结构与共享契约（表、迁移、共享类型，不含接口和页面），这一列写「无，机器门」。不设"Agent 验收""机器门汇总"这类只收集其他任务证据的任务；单元结束的全量套件和构建在「最终代码审查」任务里、派审查之前跑。
@@ -66,6 +66,8 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps
 | T07 AC-15 脚本 | passed | `FW_SLOT=1 pnpm e2e:demo`; `FW_SLOT=1 node --env-file=apps/api/.env.development scripts/api-snapshot.mjs docs/work/FW-009-web-httponly-session/evidence/api-after.json` | `scripts/demo-chain.mjs`; `scripts/api-snapshot.mjs`; `docs/work/FW-009-web-httponly-session/evidence/api-after.json` | 演示链退出码 0；快照 66 次请求、13 个路由 × 3 角色，登录/请求/退出均用 `fw_session` cookie，响应无 token，结果已写文件；两项 finally 均清理会话、数据库、上传文件和槽位 API，无 3110～3112 监听。 |
 
 | T08 AC-15 全套 | passed | `FW_SLOT=1 pnpm --filter @apps/api test`; `FW_SLOT=1 pnpm e2e`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e:mobile`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e:cors`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm exec playwright test --config=playwright.web.config.ts`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e:demo`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e:demo-ui`; `FW_SLOT=1 pnpm --filter @apps/api test`（最终串行重跑） | `tests/`; `scripts/` | API 28/28、槽位 1/1、Mobile 9/9、CORS 3/3、Web 7/7、demo 退出 0、demo-ui 1/1；每套串行运行并清理端口。首次全量门禁曾因 Mobile 两个未使用 session props 和三处既有格式错误失败，已删冗余 props、格式化迁移元数据与 seed；最终 typecheck、lint、format:check、build 全部通过。 |
+
+| T08 最终代码审查 | passed | 独立 Subagent；按 `docs/howto/final-review.md` 读取 `spec.md`、`plan.md` 与 `73a4db0..HEAD` 完整差异 | `docs/howto/final-review.md`; `apps/web/vite.config.ts`; `apps/api/src/auth.ts`; `apps/api/drizzle/0001_sessions.sql` | 七个失败域及第 14 节失败路径逐项审查，无确认的运行时、权限、数据、迁移、敏感数据或结构膨胀问题。审查者提出的 CSP 自定义 API base URL P1 是待验证假设：CSP `connect-src`/`img-src` 的 API host-source 按 origin 匹配，path 不参与匹配；本项目 API 仅支持 HTTP(S)，当前 `new URL(...).origin` 符合 AC-14 的“API 源”语义，故不改规格或代码。审查指出的 cookie 解析重复/空值与自定义 CORS/base URL 组合属于未列 AC 的覆盖建议，不新增测试。 |
 
 ## 回修
 

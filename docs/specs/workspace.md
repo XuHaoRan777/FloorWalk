@@ -30,7 +30,7 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 
 ## 没有的
 
-没有聊天、用户/门店/模板管理页、缓存、CI/CD、云部署、APK 签名或商店发布。Web 将 Bearer Token 保存在 `localStorage`；同源脚本若发生 XSS，可读取并窃取有效 Token。改为 HttpOnly 会话需要调整认证契约，列入第二组待开单元。
+没有聊天、用户/门店/模板管理页、缓存、CI/CD、云部署、APK 签名或商店发布。Web 与 Mobile 使用服务端会话表和 HttpOnly cookie，不把 token 放进脚本可读存储。Web 生产构建与 preview 带 CSP，开发服务器不添加 CSP。
 
 ## 数据契约（归档时再生成）
 
@@ -38,8 +38,8 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 | ---------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | workspace 与命令 | 四包编排和根检查入口                            | [package.json](../../package.json)、[pnpm-workspace.yaml](../../pnpm-workspace.yaml)                                                                                                                                                                                                                                                                                                                                                            |
 | shared           | APP_NAME 与巡检主链 zod 契约                    | [源码](../../packages/shared/src/index.ts)、[契约](../../packages/shared/src/contract/index.ts)                                                                                                                                                                                                                                                                                                                                                 |
-| API              | /health、登录、/me、巡检/审核/证据/看板骨架接口 | [控制器](../../apps/api/src/health.controller.ts)、[认证接口](../../apps/api/src/auth.controller.ts)、[巡检](../../apps/api/src/inspection.controller.ts)、[证据](../../apps/api/src/evidence.controller.ts)、[审核](../../apps/api/src/review.controller.ts)、[看板](../../apps/api/src/dashboard.controller.ts)、[共用查询](../../apps/api/src/inspection-queries.ts)、[认证](../../apps/api/src/auth.ts)、[启动](../../apps/api/src/main.ts) |
-| Web              | /、/console、登录会话与审核/看板 API            | [路由](../../apps/web/src/router.tsx)、[客户端](../../apps/web/src/lib/api.ts)                                                                                                                                                                                                                                                                                                                                                                  |
+| API              | /health、会话登录/退出、/me、巡检/审核/证据/看板接口 | [控制器](../../apps/api/src/health.controller.ts)、[认证接口](../../apps/api/src/auth.controller.ts)、[巡检](../../apps/api/src/inspection.controller.ts)、[证据](../../apps/api/src/evidence.controller.ts)、[审核](../../apps/api/src/review.controller.ts)、[看板](../../apps/api/src/dashboard.controller.ts)、[共用查询](../../apps/api/src/inspection-queries.ts)、[认证](../../apps/api/src/auth.ts)、[启动](../../apps/api/src/main.ts) |
+| Web              | /、/console、HttpOnly 登录会话、审核/看板 API、生产 CSP | [路由](../../apps/web/src/router.tsx)、[客户端](../../apps/web/src/lib/api.ts)、[构建配置](../../apps/web/vite.config.ts) |
 | Mobile           | 登录、今日巡检、巡检详情、检查项与证据上传      | [导航](../../apps/mobile/app/_layout.tsx)、[屏幕](../../apps/mobile/components/mobile/)、[API](../../apps/mobile/lib/api.ts)、[功能客户端](../../apps/mobile/lib/api/)                                                                                                                                                                                                                                                                          |
 
 ## 修订记录
@@ -52,3 +52,4 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 | 2026-10-25 | FW-005、FW-006 将 Mobile 首页和 Web 控制台壳替换为巡检、审核与总部看板流程。                                                             |
 | 2026-10-25 | FW-007 集成并归档 g01：API、Mobile、Web 与跨端演示链在真实接口上闭环通过。                                                               |
 | 2026-10-26 | FW-008 拆分 API/Web/Mobile 功能模块，Mobile 改用 Tabs 导航；业务源码 400 行上限纳入 lint。                                               |
+| 2026-10-27 | FW-009 三端改用 HttpOnly 服务端会话；Web 生产构建和 preview 增加 CSP。                                                                   |

@@ -6,7 +6,7 @@
 
 共享契约以 `packages/shared/src/contract/` 为机器校验形式，覆盖表、枚举、状态迁移、路由与角色、接口 schema、错误码、照片上传约束及规则函数。API 通过 `/api` 前缀提供全部业务接口，路由表是角色检查和 e2e 的共同来源。
 
-角色为 `inspector`、`supervisor`、`hq`。店员只能访问本人所属门店的巡检单，不限创建人；主管和总部可读全部；只有主管能审核。JWT 缺少 `JWT_SECRET` 时 API 拒绝启动，token 有效期为一小时，过期后返回 401 `UNAUTHENTICATED`；受保护请求从数据库读取当前角色与门店绑定。
+角色为 `inspector`、`supervisor`、`hq`。店员只能访问本人所属门店的巡检单，不限创建人；主管和总部可读全部；只有主管能审核。登录成功后服务端创建固定 1 小时会话，客户端只保存 HttpOnly `fw_session` cookie；服务端会话表只保存会话 ID 的 SHA-256。受保护请求校验会话未吊销、未过期且用户与角色绑定仍有效，从数据库读取当前角色与门店绑定。
 
 ## 巡检规则
 
@@ -14,15 +14,16 @@
 
 提交要求所有检查项均非 `pending`，必拍项至少有一张照片。分数为合格项数除以总项数乘 100，四舍五入取整，并在提交时锁定；重新提交重新计算。存在 `critical` 项不合格时不能通过。看板按每家门店 `decided_at` 最大的 `passed` 或 `failed` 巡检单显示分数。照片上传字段为 `file`，只接受 `image/jpeg`、`image/png`，单张不超过 10 MB；照片链接使用 API 当前访问地址拼接。
 
-统一错误格式为 `{code, message}`：401 `UNAUTHENTICATED`；403 `FORBIDDEN`；409 `INVALID_STATE`；422 `INCOMPLETE`；422 `CRITICAL_FAILED`；400 `VALIDATION_FAILED`；404 `NOT_FOUND`。浏览器来源由 `CORS_ORIGINS` 控制，未配置时允许本机开发与三个 e2e 槽位端口。
+统一错误格式为 `{code, message}`：401 `UNAUTHENTICATED`；403 `FORBIDDEN`；409 `INVALID_STATE`；422 `INCOMPLETE`；422 `CRITICAL_FAILED`；400 `VALIDATION_FAILED`；404 `NOT_FOUND`。浏览器来源由 `CORS_ORIGINS` 控制，未配置时允许本机开发与三个 e2e 槽位端口；带 Origin 的跨站写请求必须在白名单内，CORS 使用 credentials。
 
 ## 接口
 
-除 `POST /api/auth/login` 外，接口需携带 `Authorization: Bearer <token>`。
+除登录与退出外，接口使用 `fw_session` cookie 认证；不接受 Bearer token。
 
 | 方法与路径                                         | 说明                                                                         |
 | -------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `POST /api/auth/login`                             | 邮箱密码登录，返回 token 与用户                                              |
+| `POST /api/auth/session`                           | 邮箱密码登录，返回用户并设置 HttpOnly 会话 cookie                            |
+| `DELETE /api/auth/session`                         | 撤销当前会话并清除 cookie；未登录也返回 204                                   |
 | `GET /api/me`                                      | 当前用户                                                                     |
 | `GET /api/inspector/today`                         | 本店门店、模板、今日提交标记及本店所有打回单                                 |
 | `POST /api/inspections`                            | 新建草稿                                                                     |
@@ -52,8 +53,9 @@ schema 为 `floorwalk`，主键均为 uuid，时间均为 timestamptz，所有�
 | `inspection_items` | `inspection_id`、`position`、复制的 `title`、`photo_required`、`critical`、`result`、`note` |
 | `evidence`         | `inspection_item_id`、`storage_key`、`mime`、`size`                                         |
 | `reviews`          | `inspection_id`、`reviewer_id`、`action`、`comment`、`rework_item_ids`（仅打回时有值）      |
+| `sessions`         | `token_hash`（唯一）、`user_id`、`created_at`、`expires_at`、`revoked_at`（可空）             |
 
-`templates.name` 唯一；另有索引 `inspections(site_id, status)`、`inspections(created_at)`、`evidence(inspection_item_id)`。角色/状态/结果与照片大小等数据库 CHECK 约束，以及表间完整约束，以共享契约中的 `databaseConstraints` 和现有迁移为准。
+`templates.name` 唯一；另有索引 `inspections(site_id, status)`、`inspections(created_at)`、`evidence(inspection_item_id)`、`sessions(user_id)`。角色/状态/结果与照片大小等数据库 CHECK 约束，以及表间完整约束，以共享契约中的 `databaseConstraints` 和现有迁移为准。
 
 ## 种子数据
 
@@ -71,3 +73,4 @@ Northbean Coffee 有 12 家门店 `NB-001`～`NB-012`，每家店一个店员账
 | 2026-10-25 | 提交锁定分数，审核状态迁移与门店看板使用真实业务数据；照片上传和签名链接可用。                                                                                |
 | 2026-10-25 | FW-004 完成提交、审核、照片证据与看板业务规则，演示链 API 闭环通过。                                                                                          |
 | 2026-10-26 | FW-008 按认证、巡检、证据、审核、看板拆控制器；接口、权限与业务规则保持不变。                                                                                 |
+| 2026-10-27 | FW-009 改用服务端会话表与 HttpOnly cookie，移除旧登录和 Bearer 认证；写请求检查 Origin，CORS 开启 credentials。                                                     |
