@@ -15,7 +15,7 @@
 | 巡检单上聊天                                  | 无                  | 无代码                                                                                                            |
 | Web Demo 说明                                 | 无                  | 无代码                                                                                                            |
 | 总部只读看板                                  | 有                  | [Web 控制台](specs/web-console.md)                                                                                |
-| Northbean 种子：12 店、3 账号、约 20 条历史单 | 有                  | [巡检契约](specs/inspection.md)                                                                                   |
+| Northbean 种子：12 店、14 个账号、18 条历史单 | 有                  | 12 个店员账号 + 主管 + 总部；[巡检契约](specs/inspection.md)                                                       |
 
 ## 当前工作
 

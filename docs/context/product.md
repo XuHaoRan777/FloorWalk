@@ -16,13 +16,13 @@ FloorWalk 做连锁门店巡店：现场按模板拍照提交，主管审，总�
 
 Organization（演示里即 Northbean Coffee）、User、Site、Template、TemplateItem、Inspection、InspectionItem、Evidence、Review、按单 Chat。
 
-巡检单状态意图：`draft → submitted → in_review → rework|passed|failed → closed`。分数在提交时按当时模板版本锁定。严重项失败则整单不合格。这些尚未实现，实现后写入 [`../specs/`](../specs/README.md)。
+巡检单的目标状态意图为 `draft → submitted → in_review → rework|passed|failed → closed`。当前代码已实现 `draft → submitted → in_review → rework|passed|failed`，`passed` 和 `failed` 为终态，尚未实现 `closed`。分数在提交时按巡检单中复制的检查项快照锁定，重新提交时重新计算；存在严重项不合格时不能审核通过。当前事实以 [`../specs/`](../specs/README.md) 及其下的功能规格为准。
 
 ## 三端意图
 
-- Mobile：今日待巡、做巡检、记录、我的。主路径是逐项勾选 + 拍照。
-- Admin：审核队列、门店、模板、用户。
-- Web：写明 Demo 的说明页 + 登录后总部只读看板。店员不在 Web 提交。
+- Mobile：今日待巡、做巡检、记录、我的。当前已实现今日待巡、做巡检和我的；记录页及直接调用相机尚未实现。主路径是逐项勾选 + 上传照片。
+- Admin：当前已实现审核队列；门店、模板、用户管理页尚未实现。
+- Web：当前已有登录首页、主管审核和总部只读看板；正式 Demo 说明页尚未实现。店员不在 Web 提交。
 
 ## 演示
 

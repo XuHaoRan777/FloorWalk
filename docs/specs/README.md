@@ -2,7 +2,7 @@
 
 本目录是项目唯一的"现在是什么"。每份文档写代码能观察到的行为、契约和缺口，不写目标或计划。**代码和这里不一致时，代码是事实，修这里。**
 
-当前已有可运行工程骨架，尚无业务功能。产品意图见 [`../context/product.md`](../context/product.md)；上线缺口见 [`../backlog.md`](../backlog.md)。
+当前已有可运行的三端业务闭环：店员登录、创建并填写巡检、上传照片、提交和补交；主管审核；总部查看门店得分。未完成的外围能力（配置管理、聊天、Mobile 历史记录、直接调用相机、正式 Demo 说明和 Web HttpOnly 会话）见 [`../backlog.md`](../backlog.md)。产品目标与禁区见 [`../context/product.md`](../context/product.md)。
 
 ## 索引
 
