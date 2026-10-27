@@ -23,7 +23,7 @@
 
 | ID     | 工作单元                                                                            | 状态     | 依赖   | 下一步           |
 | ------ | ----------------------------------------------------------------------------------- | -------- | ------ | ---------------- |
-| FW-009 | [会话改为 HttpOnly cookie 与服务端会话表](work/FW-009-web-httponly-session/spec.md) | approved | FW-008 | T01 会话表与契约 |
+| FW-009 | [会话改为 HttpOnly cookie 与服务端会话表](work/FW-009-web-httponly-session/spec.md) | in_progress | FW-008 | T02 API 会话认证 |
 
 ## 待开单元（未批准，按建议顺序）
 

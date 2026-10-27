@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   pgSchema,
   text,
@@ -28,6 +29,21 @@ export const users = floorwalk.table('users', {
   siteId: uuid('site_id').references(() => sites.id),
   createdAt: createdAt(),
 });
+
+export const sessions = floorwalk.table(
+  'sessions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    tokenHash: text('token_hash').notNull().unique(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => [index('sessions_user_id_idx').on(table.userId)],
+);
 
 export const templates = floorwalk.table('templates', {
   id: uuid('id').defaultRandom().primaryKey(),

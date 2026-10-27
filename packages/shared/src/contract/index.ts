@@ -128,7 +128,6 @@ export const loginRequestSchema = z.object({
 });
 
 export const loginResponseSchema = z.object({
-  token: z.string().min(1),
   user: userSchema,
 });
 
@@ -227,8 +226,9 @@ export const evidenceUploadRequestSchema = z.object({
 
 export const dashboardLatestStatuses = ['passed', 'failed'] as const;
 export const databaseConstraints = {
-  unique: ['templates.name'],
+  unique: ['templates.name', 'sessions.token_hash'],
   indexes: [
+    'sessions(user_id)',
     'inspections(site_id, status)',
     'inspections(created_at)',
     'evidence(inspection_item_id)',
@@ -261,22 +261,30 @@ export const inspectionStatusTransitions = {
 
 export type ApiRouteRole = UserRole;
 export type ApiRouteDefinition = {
-  method: 'GET' | 'POST' | 'PATCH';
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   path: `/api/${string}`;
   roles: readonly ApiRouteRole[];
   requestSchema: ZodTypeAny | null;
   responseSchema: ZodTypeAny;
-  successStatus: 200 | 201;
+  successStatus: 200 | 201 | 204;
 };
 
 export const apiRoutes = {
-  login: {
+  createSession: {
     method: 'POST',
-    path: '/api/auth/login',
+    path: '/api/auth/session',
     roles: [],
     requestSchema: loginRequestSchema,
     responseSchema: loginResponseSchema,
     successStatus: 201,
+  },
+  deleteSession: {
+    method: 'DELETE',
+    path: '/api/auth/session',
+    roles: [],
+    requestSchema: null,
+    responseSchema: z.undefined(),
+    successStatus: 204,
   },
   me: {
     method: 'GET',

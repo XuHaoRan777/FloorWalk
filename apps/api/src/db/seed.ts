@@ -29,7 +29,7 @@ export async function seedDatabase(
   try {
     await client.query('BEGIN');
     await client.query(
-      'TRUNCATE TABLE floorwalk.reviews, floorwalk.evidence, floorwalk.inspection_items, floorwalk.inspections, floorwalk.users, floorwalk.template_items, floorwalk.templates, floorwalk.sites RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE floorwalk.sessions, floorwalk.reviews, floorwalk.evidence, floorwalk.inspection_items, floorwalk.inspections, floorwalk.users, floorwalk.template_items, floorwalk.templates, floorwalk.sites RESTART IDENTITY CASCADE',
     );
 
     const sites = new Map<string, string>();

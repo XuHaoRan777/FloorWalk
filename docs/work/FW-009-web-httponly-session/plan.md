@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- 工作单元状态：`approved`
+- 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：无
+- 当前任务：T02
 - 阻塞：无
-- 下一步：用户批准 spec 后从 T01 开始。
+- 下一步：T02 API 会话认证与契约测试。
 
 Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps/api/src/db/schema.ts`、`apps/api/drizzle/`（均为 hardline）、`apps/api/src`、`apps/web/src`、`apps/web/vite.config.ts`、`apps/mobile`（`components/`、`lib/`）、`tests/`、`playwright.*.config.ts`、`scripts/demo-chain.mjs`、`scripts/api-snapshot.mjs`；不动 `package.json`、锁文件。全程用槽位 1，不占 3018～3020。T05、T06 动 Mobile 前先读 `~/.agents/skills/expo-overview`，按分流读 `expo-data-fetching`，查 SDK 57 文档，在证据里记一行。
 
@@ -16,7 +16,7 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps
 
 | ID  | 任务                                                     | 状态      | 交付的 AC 与证据                                                      |
 | --- | -------------------------------------------------------- | --------- | --------------------------------------------------------------------- |
-| T01 | 会话表与迁移；契约改路由与类型                           | `pending` | 无，机器门（迁移在新槽位库跑通、类型检查、契约包构建）                |
+| T01 | 会话表与迁移；契约改路由与类型                           | `done` | 无，机器门（迁移在新槽位库跑通、类型检查、契约包构建）                |
 | T02 | API 会话登录、会话认证与失败路径；移除 `/api/auth/login` | `pending` | AC-01、AC-02、AC-03、AC-04、AC-06；API 测试、契约 e2e                 |
 | T03 | 退出吊销与 Origin 检查、CORS credentials                 | `pending` | AC-05、AC-07、AC-08；API 测试、`e2e:cors`                             |
 | T04 | Web 改用会话 cookie                                      | `pending` | AC-09、AC-10；Web e2e、`e2e:demo-ui`                                  |
@@ -33,8 +33,11 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps
 
 | 任务 | status | command | artifact | 备注 |
 | ---- | ------ | ------- | -------- | ---- |
+| 启动 | passed | `git rev-parse HEAD`；`git status --short`；`python scripts/validate_docs.py` | `AGENTS.md` | 起始 HEAD `73a4db0fc753a12bd17e3ebed87f216052517ad8`；工作区干净；文档 0 问题。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
+
+| T01 | passed | `pnpm --filter @libs/shared build`；`pnpm --filter @libs/shared typecheck`；`FW_SLOT=1 pnpm --filter @apps/api test src/db/seed.test.ts` | `apps/api/drizzle/0001_sessions.sql` | 仅新增 sessions 前向迁移；槽位 1 迁移及种子 4/4。shared 类型与双模块构建通过；应用消费者在后续各任务切换契约。种子显式清空 sessions；无新增依赖，无自启服务。 |
 
 ## 回修
 
@@ -53,3 +56,5 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps
 - 2026-10-27 原生 cookie 能否跨 Expo Go 冷启动保留未验证（React Native 的 `ForwardingCookieHandler` 由系统 cookie 存储持久化，但未在本机实测），列为 T06 的停止条件，不改用 SecureStore 绕过。
 - 设计默认（讨论时给出）：同站点部署；`SameSite=Strict`；1 小时有效期；打开页面调 `/api/me`。
 - 串行基线：按 [试行记录](../../parallel-trial.md)「值不值」的口径分类记人工触点：开对话、批审批、答停下、传话（含用户回到 Claude 会话转述进度）、人工验收、排障，每次在这里加一行；归档时汇总进试行记录表，和 FW-008 那行按类别对照。
+
+- 2026-10-27 人工触点：开对话 1 次（本次执行指令，授权 FW-009 按任务本地提交、不推送；不是额外批准）。
