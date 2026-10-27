@@ -90,3 +90,4 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps
 - 串行基线：按 [试行记录](../../parallel-trial.md)「值不值」的口径分类记人工触点：开对话、批审批、答停下、传话（含用户回到 Claude 会话转述进度）、人工验收、排障，每次在这里加一行；归档时汇总进试行记录表，和 FW-008 那行按类别对照。
 
 - 2026-10-27 人工触点：开对话 1 次（本次执行指令，授权 FW-009 按任务本地提交、不推送；不是额外批准）。
+- 2026-10-27 T08 全量门禁首次 lint/format 失败：Mobile 两个子组件仍声明未使用 `session` props，迁移元数据与 seed 有格式差异；按范围内缺 import/格式问题直接修复，删除冗余 props 并格式化三文件，最终门禁全绿。
