@@ -5,16 +5,13 @@ import type { InspectionDetail } from '@libs/shared';
 import { api, ApiError, userFacingError } from '../../lib/api';
 import { ErrorBanner } from './error-banner';
 import { PrimaryButton } from './primary-button';
-import type { Session } from './session';
 import { styles } from './styles';
 
 export function InspectionScreen({
-  session,
   id,
   onBack,
   onUnauthorized,
 }: {
-  session: Session;
   id: string;
   onBack: () => void;
   onUnauthorized: () => void;

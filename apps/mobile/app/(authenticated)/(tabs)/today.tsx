@@ -16,7 +16,6 @@ export default function TodayPage() {
   if (!session) return null;
   return (
     <TodayScreen
-      session={session}
       today={today}
       onRefresh={() => void loadToday()}
       onUnauthorized={expire}

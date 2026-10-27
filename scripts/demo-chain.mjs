@@ -20,8 +20,10 @@ const env = {
   HOST: '127.0.0.1',
   DATABASE_URL: databaseUrl.toString(),
   STORAGE_DIR: path.resolve('apps', 'api', '.e2e', `slot-${slot}`, 'storage'),
+  NODE_ENV: 'development',
 };
 const baseUrl = `http://127.0.0.1:${apiPort}`;
+const sessionCookies = new Map();
 
 function runPnpm(args) {
   const result = spawnSync(command, args, {
@@ -36,6 +38,15 @@ function runPnpm(args) {
 function stopApi() {
   if (!api?.pid) return;
   if (process.platform === 'win32') {
+    spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-Command',
+        `Get-NetTCPConnection -State Listen -LocalPort ${apiPort} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }`,
+      ],
+      { stdio: 'ignore', windowsHide: true },
+    );
     spawnSync('taskkill', ['/pid', String(api.pid), '/t', '/f'], {
       stdio: 'ignore',
       windowsHide: true,
@@ -87,38 +98,75 @@ async function call(pathname, options = {}, expectedStatus = 200) {
   return body;
 }
 
-const authHeaders = (token) => ({ authorization: `Bearer ${token}` });
-const jsonOptions = (token, body) => ({
+function readSessionCookie(response) {
+  const setCookies = response.headers.getSetCookie?.() ?? [
+    response.headers.get('set-cookie') ?? '',
+  ];
+  const cookie = setCookies
+    .find((header) => header.startsWith('fw_session='))
+    ?.split(';', 1)[0];
+  if (!cookie || cookie === 'fw_session=')
+    throw new Error('登录响应未设置会话 cookie。');
+  return cookie;
+}
+
+async function login(role) {
+  const response = await fetch(`${baseUrl}/api/auth/session`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      email: `${role}@northbean.example`,
+      password: 'northbean-demo',
+    }),
+  });
+  if (response.status !== 201)
+    throw new Error(`登录 ${role} 预期 201，得到 ${response.status}。`);
+  const result = await response.json();
+  sessionCookies.set(role, readSessionCookie(response));
+  return result;
+}
+
+const authHeaders = (role) => {
+  const cookie = sessionCookies.get(role);
+  if (!cookie) throw new Error(`缺少 ${role} 会话 cookie。`);
+  return { cookie };
+};
+const jsonOptions = (role, body) => ({
   method: 'POST',
-  headers: { ...authHeaders(token), 'content-type': 'application/json' },
+  headers: { ...authHeaders(role), 'content-type': 'application/json' },
   body: JSON.stringify(body),
 });
 
+async function logoutAll() {
+  let failed = false;
+  for (const [role, cookie] of sessionCookies) {
+    try {
+      const response = await fetch(`${baseUrl}/api/auth/session`, {
+        method: 'DELETE',
+        headers: { cookie },
+      });
+      if (response.status !== 204) failed = true;
+    } catch {
+      failed = true;
+    }
+  }
+  sessionCookies.clear();
+  if (failed) throw new Error('无法清理演示链会话。');
+}
+
 try {
   await waitForApi();
-  const login = await call(
-    '/api/auth/login',
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        email: 'inspector@northbean.example',
-        password: 'northbean-demo',
-      }),
-    },
-    201,
-  );
-  const inspectorToken = login.token;
+  await login('inspector');
   const today = await call('/api/inspector/today', {
-    headers: authHeaders(inspectorToken),
+    headers: authHeaders('inspector'),
   });
   const inspection = await call(
     '/api/inspections',
-    jsonOptions(inspectorToken, { templateId: today.template.id }),
+    jsonOptions('inspector', { templateId: today.template.id }),
     201,
   );
   const detailPath = `/api/inspections/${inspection.id}`;
-  let detail = await call(detailPath, { headers: authHeaders(inspectorToken) });
+  let detail = await call(detailPath, { headers: authHeaders('inspector') });
   let coldItemId;
   for (const item of detail.items) {
     const isCold = item.title.includes('冷柜');
@@ -126,7 +174,7 @@ try {
     await call(`${detailPath}/items/${item.id}`, {
       method: 'PATCH',
       headers: {
-        ...authHeaders(inspectorToken),
+        ...authHeaders('inspector'),
         'content-type': 'application/json',
       },
       body: JSON.stringify({ result: isCold ? 'fail' : 'pass' }),
@@ -141,7 +189,7 @@ try {
       `${detailPath}/items/${item.id}/evidence`,
       {
         method: 'POST',
-        headers: authHeaders(inspectorToken),
+        headers: authHeaders('inspector'),
         body: form,
       },
       201,
@@ -149,33 +197,21 @@ try {
   }
   const firstSubmit = await call(
     `${detailPath}/submit`,
-    { headers: authHeaders(inspectorToken), method: 'POST' },
+    { headers: authHeaders('inspector'), method: 'POST' },
     201,
   );
   if (firstSubmit.score !== 88)
     throw new Error(`演示链第一阶段应得 88，实际 ${firstSubmit.score}。`);
 
-  const supervisorLogin = await call(
-    '/api/auth/login',
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        email: 'supervisor@northbean.example',
-        password: 'northbean-demo',
-      }),
-    },
-    201,
-  );
-  const supervisorToken = supervisorLogin.token;
+  await login('supervisor');
   await call(
     `${detailPath}/review`,
-    jsonOptions(supervisorToken, { action: 'start' }),
+    jsonOptions('supervisor', { action: 'start' }),
     201,
   );
   await call(
     `${detailPath}/review`,
-    jsonOptions(supervisorToken, {
+    jsonOptions('supervisor', {
       action: 'rework',
       reworkItemIds: [coldItemId],
     }),
@@ -185,7 +221,7 @@ try {
   await call(`${detailPath}/items/${coldItemId}`, {
     method: 'PATCH',
     headers: {
-      ...authHeaders(inspectorToken),
+      ...authHeaders('inspector'),
       'content-type': 'application/json',
     },
     body: JSON.stringify({ result: 'pass' }),
@@ -200,15 +236,15 @@ try {
     `${detailPath}/items/${coldItemId}/evidence`,
     {
       method: 'POST',
-      headers: authHeaders(inspectorToken),
+      headers: authHeaders('inspector'),
       body: coldPhoto,
     },
     201,
   );
-  detail = await call(detailPath, { headers: authHeaders(inspectorToken) });
+  detail = await call(detailPath, { headers: authHeaders('inspector') });
   const secondSubmit = await call(
     `${detailPath}/submit`,
-    { headers: authHeaders(inspectorToken), method: 'POST' },
+    { headers: authHeaders('inspector'), method: 'POST' },
     201,
   );
   if (secondSubmit.score !== 100)
@@ -217,20 +253,24 @@ try {
     );
   await call(
     `${detailPath}/review`,
-    jsonOptions(supervisorToken, { action: 'start' }),
+    jsonOptions('supervisor', { action: 'start' }),
     201,
   );
   await call(
     `${detailPath}/review`,
-    jsonOptions(supervisorToken, { action: 'approve' }),
+    jsonOptions('supervisor', { action: 'approve' }),
     201,
   );
   const dashboard = await call('/api/dashboard/sites', {
-    headers: authHeaders(supervisorToken),
+    headers: authHeaders('supervisor'),
   });
   const nb001 = dashboard.find((row) => row.site.code === 'NB-001');
   if (nb001?.latestScore !== 100)
     throw new Error(`看板应显示 NB-001 为 100，实际 ${nb001?.latestScore}。`);
 } finally {
-  stopApi();
+  try {
+    await logoutAll();
+  } finally {
+    stopApi();
+  }
 }

@@ -11,7 +11,6 @@ export default function InspectionPage() {
     <InspectionScreen
       key={id}
       id={id}
-      session={session}
       onUnauthorized={expire}
       onBack={() => router.dismissTo('/today')}
     />

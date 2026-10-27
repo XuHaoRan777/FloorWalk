@@ -40,6 +40,7 @@ const env = {
   HOST: '127.0.0.1',
   DATABASE_URL: databaseUrl.toString(),
   STORAGE_DIR: storageDir,
+  NODE_ENV: 'development',
 };
 const baseUrl = `http://127.0.0.1:${apiPort}`;
 env.API_PUBLIC_BASE_URL = baseUrl;
@@ -97,8 +98,19 @@ function stopApi() {
 }
 
 const records = [];
-const tokens = {};
+const sessionCookies = new Map();
 const json = (body) => ({ 'content-type': 'application/json', ...body });
+function readSessionCookie(response) {
+  const setCookies = response.headers.getSetCookie?.() ?? [
+    response.headers.get('set-cookie') ?? '',
+  ];
+  const cookie = setCookies
+    .find((header) => header.startsWith('fw_session='))
+    ?.split(';', 1)[0];
+  if (!cookie || cookie === 'fw_session=')
+    throw new Error('登录响应未设置会话 cookie。');
+  return cookie;
+}
 async function call(
   label,
   pathname,
@@ -107,18 +119,61 @@ async function call(
   body,
   expected = 200,
 ) {
-  const headers = role ? { authorization: `Bearer ${tokens[role]}` } : {};
+  const headers = role ? { cookie: sessionCookies.get(role) } : {};
+  if (role && !headers.cookie) throw new Error(`缺少 ${role} 会话 cookie。`);
   const multipart = body instanceof FormData;
   const response = await fetch(`${baseUrl}${pathname}`, {
     method,
     headers: body && !multipart ? json(headers) : headers,
     body: body ? (multipart ? body : JSON.stringify(body)) : undefined,
   });
-  const result = await response.json();
+  const result = response.status === 204 ? undefined : await response.json();
   if (response.status !== expected)
     throw new Error(`${label}: 预期 ${expected}，得到 ${response.status}`);
   records.push({ label, status: response.status, body: result });
+  if (method === 'DELETE' && pathname === apiRoutes.deleteSession.path)
+    sessionCookies.delete(role);
   return result;
+}
+async function login(role) {
+  const response = await fetch(`${baseUrl}${apiRoutes.createSession.path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      email: `${role}@northbean.example`,
+      password: 'northbean-demo',
+    }),
+  });
+  if (response.status !== apiRoutes.createSession.successStatus)
+    throw new Error(
+      `login:${role}: 预期 ${apiRoutes.createSession.successStatus}，得到 ${response.status}`,
+    );
+  const result = await response.json();
+  apiRoutes.createSession.responseSchema.parse(result);
+  sessionCookies.set(role, readSessionCookie(response));
+  records.push({
+    label: `login:${role}`,
+    status: response.status,
+    body: result,
+  });
+  return result;
+}
+async function cleanupSessions() {
+  let failed = false;
+  for (const [role, cookie] of sessionCookies) {
+    try {
+      const response = await fetch(
+        `${baseUrl}${apiRoutes.deleteSession.path}`,
+        { method: 'DELETE', headers: { cookie } },
+      );
+      if (response.status !== apiRoutes.deleteSession.successStatus)
+        failed = true;
+    } catch {
+      failed = true;
+    }
+  }
+  sessionCookies.clear();
+  if (failed) throw new Error('无法清理快照会话。');
 }
 const photo = () => {
   const form = new FormData();
@@ -129,18 +184,6 @@ const photo = () => {
   );
   return form;
 };
-const login = (role) =>
-  call(
-    `login:${role}`,
-    apiRoutes.login.path,
-    null,
-    'POST',
-    {
-      email: `${role}@northbean.example`,
-      password: 'northbean-demo',
-    },
-    201,
-  );
 const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 function normalize(value) {
   if (Array.isArray(value)) return value.map(normalize);
@@ -174,13 +217,13 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   if (!ready) throw new Error('槽位 API 启动超时。');
-  for (const role of userRoles) tokens[role] = (await login(role)).token;
+  for (const role of userRoles) await login(role);
   const today = await call('setup:today', apiRoutes.today.path, 'inspector');
   let detail;
   let evidence;
   let inspection;
   for (const [key, route] of Object.entries(apiRoutes)) {
-    if (key === 'login') continue; // The three real logins above cover this route.
+    if (key === 'createSession' || key === 'deleteSession') continue;
     if (key === 'submitInspection') {
       for (const item of detail.items) {
         await call(
@@ -276,12 +319,27 @@ try {
   );
   if (dashboard.find((row) => row.site.code === 'NB-001')?.latestScore !== 100)
     throw new Error('演示链看板应显示 100。');
+  for (const role of userRoles) {
+    const result = await call(
+      `deleteSession:${role}`,
+      apiRoutes.deleteSession.path,
+      role,
+      'DELETE',
+      undefined,
+      apiRoutes.deleteSession.successStatus,
+    );
+    apiRoutes.deleteSession.responseSchema.parse(result);
+  }
   await mkdir(path.dirname(path.resolve(output)), { recursive: true });
   await writeFile(output, `${JSON.stringify(normalize(records), null, 2)}\n`);
   console.log(
-    `快照完成：${records.length} 次请求；12 个路由 × 3 个角色；${output}`,
+    `快照完成：${records.length} 次请求；${Object.keys(apiRoutes).length} 个路由 × 3 个角色；${output}`,
   );
 } finally {
-  stopApi();
-  await resetSlotResources(); // Remove all snapshot writes and uploaded files.
+  try {
+    await cleanupSessions();
+  } finally {
+    stopApi();
+    await resetSlotResources(); // Remove all snapshot writes and uploaded files.
+  }
 }

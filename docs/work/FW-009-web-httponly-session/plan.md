@@ -6,9 +6,9 @@
 
 - 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：T06
+- 当前任务：T08
 - 阻塞：无。
-- 下一步：T06 Android Expo Go 原生链与冷启动保持登录。
+- 下一步：T08 串行跑 AC-15 全套与全量门禁，通过后派独立 Subagent 最终审查。
 
 Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps/api/src/db/schema.ts`、`apps/api/drizzle/`（均为 hardline）、`apps/api/src`、`apps/web/src`、`apps/web/vite.config.ts`、`apps/mobile`（`components/`、`lib/`）、`tests/`、`playwright.*.config.ts`、`scripts/demo-chain.mjs`、`scripts/api-snapshot.mjs`；不动 `package.json`、锁文件。全程用槽位 1，不占 3018～3020。T05、T06 动 Mobile 前先读 `~/.agents/skills/expo-overview`，按分流读 `expo-data-fetching`，查 SDK 57 文档，在证据里记一行。
 
@@ -21,9 +21,9 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps
 | T03 | 退出吊销与 Origin 检查、CORS credentials                 | `done` | AC-05、AC-07、AC-08；API 测试、`e2e:cors`                             |
 | T04 | Web 改用会话 cookie                                      | `done` | AC-09、AC-10；Web e2e、`e2e:demo-ui`                                  |
 | T05 | Mobile 改用会话 cookie（Expo Web）                       | `done` | AC-11、AC-12；`e2e:mobile`                                            |
-| T06 | Mobile 原生链与冷启动保持登录                            | `in_progress` | AC-13（模拟器）                                                       |
-| T07 | Web 构建产物加 CSP；演示链与快照脚本改用 cookie          | `pending` | AC-14；构建产物 e2e；AC-15 脚本部分（`e2e:demo`、`api-snapshot.mjs`） |
-| T08 | 最终代码审查（独立 Subagent）                            | `pending` | 派审查前跑 AC-15 全套与全量门禁；审查记录                             |
+| T06 | Mobile 原生链与冷启动保持登录                            | `done` | AC-13（模拟器）                                                       |
+| T07 | Web 构建产物加 CSP；演示链与快照脚本改用 cookie          | `done` | AC-14；构建产物 e2e；AC-15 脚本部分（`e2e:demo`、`api-snapshot.mjs`） |
+| T08 | 最终代码审查（独立 Subagent）                            | `in_progress` | 派审查前跑 AC-15 全套与全量门禁；审查记录                         |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
 方式 B 按用户可观察的切片切，不按数据、后端、前端分层切：每行写交付哪几条 AC，并在本任务内取得它们的证据；一条 AC 跨几个切片时记在完成它的那个任务。可以有一个先行任务只做数据结构与共享契约（表、迁移、共享类型，不含接口和页面），这一列写「无，机器门」。不设"Agent 验收""机器门汇总"这类只收集其他任务证据的任务；单元结束的全量套件和构建在「最终代码审查」任务里、派审查之前跑。
@@ -59,6 +59,14 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps
 
 | T05 AC-12 | passed | `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e:mobile` | `tests/mobile/mobile-inspection.spec.ts` | 9/9；session ID 不在 localStorage/sessionStorage，`document.cookie` 不含 `fw_session`；刷新保持登录、退出后 `/api/me` 为 401。 |
 
+| T06 AC-13 | passed | `Medium_Phone_API_37.0` + Expo Go 57.0.9；槽位 API 3110 / Metro 3112；`adb reverse tcp:3110 tcp:3110`、`adb reverse tcp:3112 tcp:3112` | `docs/work/FW-009-web-httponly-session/evidence/t06-cold-start.png`；`docs/work/FW-009-web-httponly-session/evidence/t06-logout-cold-start.png` | 模拟器原生登录、开始巡检、真实系统照片选择器从 `/sdcard/Pictures` 选图并上传两张，八项提交显示 `submitted`、88；数据库核实照片 2。强停 Expo Go 后深链重开仍显示“今日待巡”，第二次退出后强停重开回登录页；数据库核实退出 session revoked、活动会话 0。logcat 的 ReactNativeJS/E、FATAL EXCEPTION、Expo CLI 告警均为 0。进程与 adb reverse 已清理；复用现有 globalSetup 重置槽位 1 数据和存储。 |
+
+| T07 AC-14 | passed | `$env:FW_SLOT='1'; $env:PORT='3111'; $env:VITE_API_BASE_URL='http://127.0.0.1:3110/api'; pnpm --filter @apps/web typecheck; pnpm --filter @apps/web build; node --import=tsx node_modules/@playwright/test/cli.js test --config=playwright.csp.config.ts` | `apps/web/vite.config.ts`; `tests/csp/production.spec.ts`; `playwright.csp.config.ts` | 类型检查、生产构建通过；CSP 浏览器测试 1/1：响应头与 meta policy 都匹配，登录后打开带照片巡检单，图片 naturalWidth > 0，`securitypolicyviolation` 为空。首次运行因缺少 `--import=tsx` 导致 global setup 的 ESM 装载异常，未进入用例；改用仓库既有 Playwright 入口重跑通过。preview/API 监听已清理。`frame-ancestors` 通过 meta 不生效的限制已按 AC 在此记录，preview 同时发响应头。 |
+
+| T07 AC-15 脚本 | passed | `FW_SLOT=1 pnpm e2e:demo`; `FW_SLOT=1 node --env-file=apps/api/.env.development scripts/api-snapshot.mjs docs/work/FW-009-web-httponly-session/evidence/api-after.json` | `scripts/demo-chain.mjs`; `scripts/api-snapshot.mjs`; `docs/work/FW-009-web-httponly-session/evidence/api-after.json` | 演示链退出码 0；快照 66 次请求、13 个路由 × 3 角色，登录/请求/退出均用 `fw_session` cookie，响应无 token，结果已写文件；两项 finally 均清理会话、数据库、上传文件和槽位 API，无 3110～3112 监听。 |
+
+| T08 AC-15 全套 | passed | `FW_SLOT=1 pnpm --filter @apps/api test`; `FW_SLOT=1 pnpm e2e`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e:mobile`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e:cors`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm exec playwright test --config=playwright.web.config.ts`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e:demo`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e:demo-ui`; `FW_SLOT=1 pnpm --filter @apps/api test`（最终串行重跑） | `tests/`; `scripts/` | API 28/28、槽位 1/1、Mobile 9/9、CORS 3/3、Web 7/7、demo 退出 0、demo-ui 1/1；每套串行运行并清理端口。首次全量门禁曾因 Mobile 两个未使用 session props 和三处既有格式错误失败，已删冗余 props、格式化迁移元数据与 seed；最终 typecheck、lint、format:check、build 全部通过。 |
+
 ## 回修
 
 <!-- 交付后、归档前用户的反馈，一条一行：日期、用户说的、改了什么、提交号；改到 AC 的写用户原话；带「硬线：」的提交在归档前补审，补审记进证据表。归档后的反馈进 testlog。 -->
@@ -77,6 +85,7 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps
 - 2026-10-27 T04 的 Web e2e 通过；同阶段 `e2e:demo-ui` 在 Mobile 登录处因尚未执行 T05 而遇旧登录接口 404，未修改 Mobile，计划在 T05 完成后重跑。
 - 2026-10-27 按 SDK 57 网络文档分流读取 Expo 数据获取技能；React Native 0.86 网络页标注 Cookie 认证存在不稳定情形。实现继续按已批准的 cookie 规格，T06 以 Android Expo Go 冷启动实测，不存 SecureStore。
 - 2026-10-27 T04 时 `e2e:demo-ui` 因 Mobile 尚未执行 T05 命中旧 `/api/auth/login` 返回 404；T05 完成后重跑 1/1 通过，属任务顺序导致的暂时失败。
+- 2026-10-27 Android 模拟器的登录 cookie 在 Expo Go 强停后仍恢复有效；退出后强停重开回登录页。初次测试过程中一次提交因漏填“地面清洁”被页面正确拒绝，随后补齐并提交成功；没有修改应用或 AC。
 - 设计默认（讨论时给出）：同站点部署；`SameSite=Strict`；1 小时有效期；打开页面调 `/api/me`。
 - 串行基线：按 [试行记录](../../parallel-trial.md)「值不值」的口径分类记人工触点：开对话、批审批、答停下、传话（含用户回到 Claude 会话转述进度）、人工验收、排障，每次在这里加一行；归档时汇总进试行记录表，和 FW-008 那行按类别对照。
 

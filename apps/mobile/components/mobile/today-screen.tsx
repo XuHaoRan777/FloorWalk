@@ -4,17 +4,14 @@ import type { TodayResponse } from '@libs/shared';
 import { api, ApiError, userFacingError } from '../../lib/api';
 import { ErrorBanner } from './error-banner';
 import { PrimaryButton } from './primary-button';
-import type { Session } from './session';
 import { styles } from './styles';
 
 export function TodayScreen({
-  session,
   today,
   onRefresh,
   onOpenInspection,
   onUnauthorized,
 }: {
-  session: Session;
   today: TodayResponse | null;
   onRefresh: () => void;
   onOpenInspection: (id: string) => void;
