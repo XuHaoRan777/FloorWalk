@@ -5,23 +5,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { getJwtSecret } from './auth.js';
 import { HttpErrorFilter } from './http-exception.filter.js';
-
-function getCorsOrigins() {
-  const configured = process.env.CORS_ORIGINS?.split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-  if (configured?.length) return configured;
-  return [
-    'http://127.0.0.1:3019',
-    'http://127.0.0.1:3020',
-    'http://localhost:3019',
-    'http://localhost:3020',
-    ...[1, 2, 3].flatMap((slot) => [
-      `http://127.0.0.1:${3100 + slot * 10 + 1}`,
-      `http://127.0.0.1:${3100 + slot * 10 + 2}`,
-    ]),
-  ];
-}
+import { getCorsOrigins } from './cors.js';
 
 async function bootstrap() {
   getJwtSecret();
@@ -34,7 +18,7 @@ async function bootstrap() {
     throw new Error('HOST 不能为空。');
   }
   const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: getCorsOrigins() });
+  app.enableCors({ origin: getCorsOrigins(), credentials: true });
   app.useGlobalFilters(new HttpErrorFilter());
   app.enableShutdownHooks();
   await app.listen(port, host);

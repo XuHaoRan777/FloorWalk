@@ -12,7 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import argon2 from 'argon2';
 import {
   apiRoutePath,
@@ -25,6 +25,7 @@ import { createPool } from './db/client.js';
 import {
   AuthGuard,
   hashSessionId,
+  readSessionCookie,
   sessionCookie,
   type AuthUser,
 } from './auth.js';
@@ -81,7 +82,22 @@ export class AuthController {
 
   @Delete(apiRoutePath(apiRoutes.deleteSession))
   @HttpCode(204)
-  logout(@Res({ passthrough: true }) response: Response) {
+  async logout(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const sessionId = readSessionCookie(request);
+    if (sessionId) {
+      const pool = createPool();
+      try {
+        await pool.query(
+          'UPDATE floorwalk.sessions SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL',
+          [hashSessionId(sessionId)],
+        );
+      } finally {
+        await pool.end();
+      }
+    }
     response.setHeader('Set-Cookie', sessionCookie('', 0));
   }
 

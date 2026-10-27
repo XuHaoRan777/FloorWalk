@@ -22,24 +22,26 @@ const slotEnvironment = {
   PORT: String(apiPort),
   HOST: '127.0.0.1',
   DATABASE_URL: slotDatabaseUrl.toString(),
-  STORAGE_DIR: path.resolve(
-    'apps',
-    'api',
-    '.e2e',
-    `slot-${slot}`,
-    'storage',
-  ),
+  STORAGE_DIR: path.resolve('apps', 'api', '.e2e', `slot-${slot}`, 'storage'),
+  NODE_ENV: 'development',
 };
 
-const noProxy = [process.env.NO_PROXY, process.env.no_proxy, '127.0.0.1', 'localhost']
+const noProxy = [
+  process.env.NO_PROXY,
+  process.env.no_proxy,
+  '127.0.0.1',
+  'localhost',
+]
   .filter(Boolean)
   .join(',');
 process.env.NO_PROXY = noProxy;
 process.env.no_proxy = noProxy;
 
 export default defineConfig({
+  globalSetup: './tests/e2e/global-setup.ts',
   testDir: './tests',
   testMatch: 'cors.spec.ts',
+  workers: 1,
   webServer: [
     {
       command: 'pnpm --filter @apps/api dev',
@@ -51,14 +53,22 @@ export default defineConfig({
     {
       command: 'pnpm --filter @apps/web dev',
       url: `http://127.0.0.1:${webPort}/`,
-      env: { ...process.env, PORT: String(webPort) },
+      env: {
+        ...process.env,
+        PORT: String(webPort),
+        VITE_API_BASE_URL: `http://127.0.0.1:${apiPort}/api`,
+      },
       reuseExistingServer: false,
       timeout: 120000,
     },
     {
       command: `pnpm --filter @apps/mobile exec expo start --web --port ${metroPort}`,
       url: `http://127.0.0.1:${metroPort}/status`,
-      env: { ...process.env, RCT_METRO_PORT: String(metroPort) },
+      env: {
+        ...process.env,
+        RCT_METRO_PORT: String(metroPort),
+        EXPO_PUBLIC_API_BASE_URL: `http://127.0.0.1:${apiPort}/api`,
+      },
       reuseExistingServer: false,
       timeout: 120000,
     },
