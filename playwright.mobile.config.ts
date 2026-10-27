@@ -44,6 +44,7 @@ const apiEnv = {
   DATABASE_URL: databaseUrl.toString(),
   STORAGE_DIR: storageDir,
   API_PUBLIC_BASE_URL: `http://127.0.0.1:${apiPort}`,
+  NODE_ENV: 'development',
 };
 const webEnv = {
   NODE_ENV: inheritedEnv.NODE_ENV ?? 'development',

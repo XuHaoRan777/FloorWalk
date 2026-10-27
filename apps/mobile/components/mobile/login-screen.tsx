@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
 import { api, ApiError, userFacingError } from '../../lib/api';
-import { setAuthToken } from '../../lib/storage';
 import { ErrorBanner } from './error-banner';
 import { PrimaryButton } from './primary-button';
 import type { Session } from './session';
@@ -24,7 +23,6 @@ export function LoginScreen({
     setError(null);
     try {
       const response = await api.login(email.trim(), password);
-      await setAuthToken(response.token);
       onLogin(response);
     } catch (cause) {
       setError(

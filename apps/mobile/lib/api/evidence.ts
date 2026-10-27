@@ -5,7 +5,6 @@ import { ApiError } from './errors';
 import { getMessage, logRaw, request } from './request';
 
 export const uploadEvidence = async (
-  token: string,
   inspectionId: string,
   itemId: string,
   uri: string,
@@ -30,7 +29,6 @@ export const uploadEvidence = async (
   }
   return request<Evidence>(
     `/inspections/${inspectionId}/items/${itemId}/evidence`,
-    token,
     {
       method: 'POST',
       body: form,

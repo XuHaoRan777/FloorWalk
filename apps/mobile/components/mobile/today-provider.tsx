@@ -17,20 +17,19 @@ type TodayState = {
 };
 const TodayContext = createContext<TodayState | null>(null);
 export function TodayProvider({ children }: { children: ReactNode }) {
-  const { session, logout: onLogout } = useSession();
+  const { session, expire } = useSession();
   const [today, setToday] = useState<TodayResponse | null>(null);
   const [loadingError, setLoadingError] = useState<string | null>(null);
-  const token = session?.token;
   const loadToday = useCallback(async () => {
-    if (!token) return;
+    if (!session) return;
     try {
       setLoadingError(null);
-      setToday(await api.today(token));
+      setToday(await api.today());
     } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 401) onLogout();
+      if (cause instanceof ApiError && cause.status === 401) expire();
       else setLoadingError(userFacingError(cause));
     }
-  }, [onLogout, token]);
+  }, [expire, session]);
   useEffect(() => {
     void loadToday();
   }, [loadToday]);

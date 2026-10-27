@@ -5,7 +5,7 @@ import { useSession } from '../../../components/mobile/session-provider';
 import { useToday } from '../../../components/mobile/today-provider';
 
 export default function TodayPage() {
-  const { session, logout } = useSession();
+  const { session, expire } = useSession();
   const { today, loadToday } = useToday();
   const router = useRouter();
   useFocusEffect(
@@ -19,7 +19,7 @@ export default function TodayPage() {
       session={session}
       today={today}
       onRefresh={() => void loadToday()}
-      onUnauthorized={logout}
+      onUnauthorized={expire}
       onOpenInspection={(id) =>
         router.push({ pathname: '/inspection/[id]', params: { id } })
       }

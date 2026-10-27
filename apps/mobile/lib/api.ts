@@ -1,4 +1,4 @@
-import { login, me } from './api/auth';
+import { login, logout, me } from './api/auth';
 import { uploadEvidence } from './api/evidence';
 import {
   inspection,
@@ -12,6 +12,7 @@ export { userFacingError } from './api/request';
 
 export const api = {
   login,
+  logout,
   me,
   today,
   createInspection,

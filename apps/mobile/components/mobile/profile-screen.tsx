@@ -1,5 +1,6 @@
 import { ScrollView, Text, View } from 'react-native';
 import { PrimaryButton } from './primary-button';
+import { ErrorBanner } from './error-banner';
 import type { Session } from './session';
 import { styles } from './styles';
 
@@ -7,10 +8,12 @@ export function ProfileScreen({
   session,
   siteName,
   onLogout,
+  logoutError,
 }: {
   session: Session;
   siteName: string;
   onLogout: () => void;
+  logoutError?: string | null;
 }) {
   return (
     <ScrollView contentContainerStyle={styles.page}>
@@ -30,6 +33,7 @@ export function ProfileScreen({
           {siteName || session.user.siteId || '未绑定门店'}
         </Text>
       </View>
+      <ErrorBanner message={logoutError ?? null} />
       <PrimaryButton onPress={onLogout} variant="secondary">
         退出登录
       </PrimaryButton>

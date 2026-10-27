@@ -28,10 +28,7 @@ export function TodayScreen({
     setLoading(true);
     setError(null);
     try {
-      const created = await api.createInspection(
-        session.token,
-        today.template.id,
-      );
+      const created = await api.createInspection(today.template.id);
       onOpenInspection(created.id);
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) onUnauthorized();

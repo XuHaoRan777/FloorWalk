@@ -44,21 +44,17 @@ export function getMessage(status: number, code?: string) {
   return '接口暂时不可用，请稍后重试。';
 }
 
-export async function request<T>(
-  path: string,
-  token?: string,
-  options: RequestInit = {},
-) {
+export async function request<T>(path: string, options: RequestInit = {}) {
   let response: Response;
   try {
     response = await fetch(`${baseUrl}${path}`, {
       ...options,
+      credentials: 'include',
       headers: {
         Accept: 'application/json',
         ...(options.body instanceof FormData
           ? {}
           : { 'Content-Type': 'application/json' }),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
     });

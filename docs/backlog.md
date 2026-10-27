@@ -23,7 +23,7 @@
 
 | ID     | 工作单元                                                                            | 状态     | 依赖   | 下一步           |
 | ------ | ----------------------------------------------------------------------------------- | -------- | ------ | ---------------- |
-| FW-009 | [会话改为 HttpOnly cookie 与服务端会话表](work/FW-009-web-httponly-session/spec.md) | in_progress | FW-008 | T05 Mobile 会话 cookie |
+| FW-009 | [会话改为 HttpOnly cookie 与服务端会话表](work/FW-009-web-httponly-session/spec.md) | in_progress | FW-008 | T06 Android Expo Go 冷启动 |
 
 ## 待开单元（未批准，按建议顺序）
 

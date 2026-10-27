@@ -7,62 +7,78 @@ import {
   type ReactNode,
 } from 'react';
 import { api, ApiError, userFacingError } from '../../lib/api';
-import { clearAuthToken, getAuthToken } from '../../lib/storage';
+import { clearLegacyAuthToken } from '../../lib/storage';
 import type { Session } from './session';
 
 type SessionState = {
   session: Session | null;
   hydrating: boolean;
   hydrationError: string | null;
+  logoutError: string | null;
   login: (session: Session) => void;
   logout: () => void;
+  expire: () => void;
 };
 const SessionContext = createContext<SessionState | null>(null);
+let startupSession: Promise<Session | null> | null = null;
+
+function restoreSession() {
+  if (!startupSession) {
+    startupSession = (async () => {
+      await clearLegacyAuthToken();
+      try {
+        return { user: await api.me() };
+      } catch (cause) {
+        if (cause instanceof ApiError && cause.status === 401) return null;
+        throw cause;
+      }
+    })();
+  }
+  return startupSession;
+}
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [hydrating, setHydrating] = useState(true);
   const [hydrationError, setHydrationError] = useState<string | null>(null);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
 
-  const logout = useCallback(async () => {
-    await clearAuthToken();
-    setSession(null);
+  const logout = useCallback(() => {
+    setLogoutError(null);
+    void api
+      .logout()
+      .then(() => setSession(null))
+      .catch((cause: unknown) => setLogoutError(userFacingError(cause)));
   }, []);
+  const expire = useCallback(() => setSession(null), []);
 
   useEffect(() => {
     let active = true;
-    void (async () => {
-      const token = await getAuthToken();
-      if (!token) {
+    void restoreSession()
+      .then((restored) => {
+        if (active && restored) setSession(restored);
+      })
+      .catch((cause: unknown) => {
+        if (active) setHydrationError(userFacingError(cause));
+      })
+      .finally(() => {
         if (active) setHydrating(false);
-        return;
-      }
-      try {
-        const user = await api.me(token);
-        if (active) setSession({ token, user });
-      } catch (cause) {
-        await clearAuthToken();
-        if (!(cause instanceof ApiError && cause.status === 401) && active)
-          setHydrationError(userFacingError(cause));
-      }
-      if (active) setHydrating(false);
-    })();
+      });
     return () => {
       active = false;
     };
   }, []);
 
-  const onLogout = useCallback(() => {
-    void logout();
-  }, [logout]);
   return (
     <SessionContext.Provider
       value={{
         session,
         hydrating,
         hydrationError,
+        logoutError,
         login: setSession,
-        logout: onLogout,
+        logout,
+        expire,
       }}
     >
       {children}

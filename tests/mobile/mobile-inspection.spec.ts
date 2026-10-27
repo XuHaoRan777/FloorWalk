@@ -6,9 +6,8 @@ const apiBase = `http://127.0.0.1:${3100 + Number(process.env.FW_SLOT) * 10}/api
 
 async function readToday(page: import('@playwright/test').Page) {
   return page.evaluate(async (baseUrl) => {
-    const token = localStorage.getItem('floorwalk.auth.token');
     const response = await fetch(`${baseUrl}/inspector/today`, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
     });
     return response.json();
   }, apiBase) as Promise<{
@@ -27,8 +26,37 @@ test('店员登录、重启保持登录、查看我的并退出', async ({ page 
   await expect(page.getByRole('heading', { name: '开始巡检' })).toBeVisible();
   await page.getByLabel('邮箱').fill(email);
   await page.getByLabel('密码').fill(password);
+  const loginResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/auth/session') &&
+      response.request().method() === 'POST',
+  );
   await page.getByTestId('login-button').click();
+  const loginResponse = await loginResponsePromise;
+  expect(loginResponse.status()).toBe(201);
+  const cookieHeader = await loginResponse.headerValue('set-cookie');
+  const sessionId = cookieHeader?.match(/(?:^|,\s*)fw_session=([^;]*)/)?.[1];
+  const sessionCookieIsHttpOnly = Boolean(
+    sessionId && /(?:^|;\s*)HttpOnly(?:;|$)/i.test(cookieHeader ?? ''),
+  );
+  expect(sessionCookieIsHttpOnly).toBe(true);
+  if (!sessionId) throw new Error('Login response did not set fw_session');
+
   await expect(page.getByText('今日待巡')).toBeVisible();
+  const storageContainsSessionId = await page.evaluate((id) => {
+    const storages = [localStorage, sessionStorage];
+    return storages.some((storage) =>
+      Array.from({ length: storage.length }, (_, index) =>
+        storage.getItem(storage.key(index) ?? ''),
+      ).some((value) => value?.includes(id)),
+    );
+  }, sessionId);
+  expect(storageContainsSessionId).toBe(false);
+  const documentContainsSessionCookie = await page.evaluate(() =>
+    document.cookie.includes('fw_session'),
+  );
+  expect(documentContainsSessionCookie).toBe(false);
+
   const today = await readToday(page);
   await expect(
     page.getByRole('heading', { name: today.site.name }),
@@ -47,8 +75,17 @@ test('店员登录、重启保持登录、查看我的并退出', async ({ page 
   await expect(
     page.getByLabel('当前门店').filter({ hasText: today.site.name }),
   ).toBeVisible();
+  const logoutResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/auth/session') &&
+      response.request().method() === 'DELETE',
+  );
   await page.getByRole('button', { name: '退出登录' }).click();
+  const logoutResponse = await logoutResponsePromise;
+  expect(logoutResponse.status()).toBe(204);
   await expect(page.getByRole('heading', { name: '开始巡检' })).toBeVisible();
+  const meResponse = await page.context().request.get(`${apiBase}/me`);
+  expect(meResponse.status()).toBe(401);
 });
 
 test('错误密码显示中文错误提示', async ({ page }) => {
@@ -64,7 +101,7 @@ test('连不上 API 时显示网络错误，并在控制台打印原始错误', 
   page.on('console', (message) => {
     logs.push(message.text());
   });
-  await page.route('**/api/auth/login', (route) => route.abort());
+  await page.route('**/api/auth/session', (route) => route.abort());
   await page.goto('/');
   await page.getByLabel('邮箱').fill(email);
   await page.getByLabel('密码').fill(password);
@@ -152,12 +189,16 @@ test('NB-002 打回单显示主管意见并可重新提交', async ({ page }) =>
   await expect(page.getByText(/已提交：/)).toBeVisible();
 });
 
-test('无效登录凭证会回到登录页', async ({ page }) => {
+test('首次启动时删除旧的本地 token 并显示登录页', async ({ page }) => {
   await page.addInitScript(() =>
     localStorage.setItem('floorwalk.auth.token', 'invalid-token'),
   );
   await page.goto('/');
   await expect(page.getByRole('heading', { name: '开始巡检' })).toBeVisible();
+  const legacyTokenWasRemoved = await page.evaluate(
+    () => localStorage.getItem('floorwalk.auth.token') === null,
+  );
+  expect(legacyTokenWasRemoved).toBe(true);
 });
 
 test('FW-008 AC-03 未登录直接访问受保护和未知地址回登录，且没有底部栏', async ({

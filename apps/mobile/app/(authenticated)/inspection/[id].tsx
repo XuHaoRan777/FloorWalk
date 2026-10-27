@@ -4,7 +4,7 @@ import { useSession } from '../../../components/mobile/session-provider';
 
 export default function InspectionPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { session, logout } = useSession();
+  const { session, expire } = useSession();
   const router = useRouter();
   if (!session) return null;
   return (
@@ -12,7 +12,7 @@ export default function InspectionPage() {
       key={id}
       id={id}
       session={session}
-      onUnauthorized={logout}
+      onUnauthorized={expire}
       onBack={() => router.dismissTo('/today')}
     />
   );

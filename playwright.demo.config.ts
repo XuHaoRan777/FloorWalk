@@ -46,6 +46,7 @@ const apiEnv = {
   DATABASE_URL: databaseUrl.toString(),
   STORAGE_DIR: path.resolve(`apps/api/.e2e/slot-${slot}/storage`),
   API_PUBLIC_BASE_URL: `${apiUrl}`,
+  NODE_ENV: 'development',
 };
 
 export default defineConfig({

@@ -31,7 +31,7 @@ export function InspectionScreen({
 
   const load = useCallback(async () => {
     try {
-      const nextDetail = await api.inspection(session.token, id);
+      const nextDetail = await api.inspection(id);
       setDetail(nextDetail);
       return nextDetail;
     } catch (cause) {
@@ -39,7 +39,7 @@ export function InspectionScreen({
       setError(userFacingError(cause));
       return null;
     }
-  }, [id, onUnauthorized, session.token]);
+  }, [id, onUnauthorized]);
 
   useEffect(() => {
     void load();
@@ -60,7 +60,6 @@ export function InspectionScreen({
     setBusyItems((current) => ({ ...current, [itemId]: true }));
     try {
       const updatedItem = await api.updateItem(
-        session.token,
         detail.id,
         itemId,
         result,
@@ -102,7 +101,6 @@ export function InspectionScreen({
       if (result.canceled || !result.assets[0]) return;
       const asset = result.assets[0];
       const evidence = await api.uploadEvidence(
-        session.token,
         detail.id,
         itemId,
         asset.uri,
@@ -151,7 +149,6 @@ export function InspectionScreen({
       for (const item of latestDetail.items) {
         if (item.result !== 'pending' && notes[item.id] !== undefined) {
           await api.updateItem(
-            session.token,
             latestDetail.id,
             item.id,
             item.result,
@@ -159,7 +156,7 @@ export function InspectionScreen({
           );
         }
       }
-      const response = await api.submit(session.token, latestDetail.id);
+      const response = await api.submit(latestDetail.id);
       setSubmitted(response);
       await load();
     } catch (cause) {
