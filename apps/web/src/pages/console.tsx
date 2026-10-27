@@ -23,7 +23,10 @@ import {
 } from '@/components/ui/sidebar';
 import {
   clearSession,
-  getMe,
+  clearLegacySession,
+  deleteSession,
+  checkSession,
+  hasCheckedSession,
   readSession,
   unauthorizedEvent,
   type InspectionDetail,
@@ -54,35 +57,44 @@ function useConsoleSession() {
       window.removeEventListener(unauthorizedEvent, handleUnauthorized);
   }, [navigate]);
   useEffect(() => {
+    clearLegacySession();
     const current = readSession();
-    if (!current) {
+    if (current) {
+      setLoading(false);
+      return;
+    }
+    if (hasCheckedSession()) {
       void navigate({ to: '/' });
       return;
     }
     let active = true;
-    void getMe(current.token)
-      .then((user) => {
+    void checkSession()
+      .then((next) => {
         if (!active) return;
-        const next = { token: current.token, user };
         writeSession(next);
         setSession(next);
       })
       .catch((reason: unknown) => {
         if (!active) return;
-        if (reason instanceof UnauthorizedError) {
-          clearSession();
-          void navigate({ to: '/' });
-        } else setError(getErrorMessage(reason));
+        clearSession();
+        if (!(reason instanceof UnauthorizedError))
+          setError(getErrorMessage(reason));
+        void navigate({ to: '/' });
       })
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
   }, [navigate]);
-  const logout = useCallback(() => {
-    clearSession();
-    setSession(null);
-    void navigate({ to: '/' });
+  const logout = useCallback(async () => {
+    try {
+      await deleteSession();
+      clearSession();
+      setSession(null);
+      void navigate({ to: '/' });
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    }
   }, [navigate]);
   return { session, loading, error, setError, logout };
 }
@@ -93,13 +105,16 @@ export function ConsolePage() {
     readSession()?.user.role === 'hq' ? 'dashboard' : 'queue',
   );
   const [selected, setSelected] = useState<InspectionDetail | null>(null);
+  useEffect(() => {
+    if (session?.user.role === 'hq') setSection('dashboard');
+  }, [session?.user.role]);
   if (loading || !session)
     return (
       <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground">
         正在验证登录状态…
       </div>
     );
-  const { user, token } = session;
+  const { user } = session;
   const isHq = user.role === 'hq';
   const showDashboard = isHq && section === 'dashboard';
   return (
@@ -183,16 +198,14 @@ export function ConsolePage() {
             </div>
           ) : selected ? (
             <ReviewDetail
-              token={token}
               initialInspection={selected}
               canReview={user.role === 'supervisor'}
               onBack={() => setSelected(null)}
             />
           ) : showDashboard ? (
-            <DashboardView token={token} onQueue={() => setSection('queue')} />
+            <DashboardView onQueue={() => setSection('queue')} />
           ) : (
             <QueueView
-              token={token}
               canReview={user.role === 'supervisor'}
               onSelect={(inspection) => {
                 setSelected(inspection);

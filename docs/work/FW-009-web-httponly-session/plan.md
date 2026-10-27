@@ -6,9 +6,9 @@
 
 - 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：T04
-- 阻塞：无
-- 下一步：T04 Web 改用会话 cookie。
+- 当前任务：T05
+- 阻塞：`e2e:demo-ui` 的 Mobile 登录验证待 T05 切换到会话 cookie 后重跑。
+- 下一步：T05 Mobile 改用会话 cookie（Expo Web）。
 
 Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps/api/src/db/schema.ts`、`apps/api/drizzle/`（均为 hardline）、`apps/api/src`、`apps/web/src`、`apps/web/vite.config.ts`、`apps/mobile`（`components/`、`lib/`）、`tests/`、`playwright.*.config.ts`、`scripts/demo-chain.mjs`、`scripts/api-snapshot.mjs`；不动 `package.json`、锁文件。全程用槽位 1，不占 3018～3020。T05、T06 动 Mobile 前先读 `~/.agents/skills/expo-overview`，按分流读 `expo-data-fetching`，查 SDK 57 文档，在证据里记一行。
 
@@ -19,8 +19,8 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps
 | T01 | 会话表与迁移；契约改路由与类型                           | `done` | 无，机器门（迁移在新槽位库跑通、类型检查、契约包构建）                |
 | T02 | API 会话登录、会话认证与失败路径；移除 `/api/auth/login` | `done` | AC-01、AC-02、AC-03、AC-04、AC-06；API 测试、契约 e2e                 |
 | T03 | 退出吊销与 Origin 检查、CORS credentials                 | `done` | AC-05、AC-07、AC-08；API 测试、`e2e:cors`                             |
-| T04 | Web 改用会话 cookie                                      | `in_progress` | AC-09、AC-10；Web e2e、`e2e:demo-ui`                                  |
-| T05 | Mobile 改用会话 cookie（Expo Web）                       | `pending` | AC-11、AC-12；`e2e:mobile`                                            |
+| T04 | Web 改用会话 cookie                                      | `done` | AC-09、AC-10；Web e2e、`e2e:demo-ui`                                  |
+| T05 | Mobile 改用会话 cookie（Expo Web）                       | `in_progress` | AC-11、AC-12；`e2e:mobile`                                            |
 | T06 | Mobile 原生链与冷启动保持登录                            | `pending` | AC-13（模拟器）                                                       |
 | T07 | Web 构建产物加 CSP；演示链与快照脚本改用 cookie          | `pending` | AC-14；构建产物 e2e；AC-15 脚本部分（`e2e:demo`、`api-snapshot.mjs`） |
 | T08 | 最终代码审查（独立 Subagent）                            | `pending` | 派审查前跑 AC-15 全套与全量门禁；审查记录                             |
@@ -47,6 +47,12 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps
 
 | T03 AC-08 | passed | `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e:cors` | `tests/cors.spec.ts` | 3/3；Web 槽位与 Metro 槽位以 credentials 登录并读到 `/api/me`，外来 origin 无法读取 credentialed 响应。测试串行；3110～3112 在结束时无监听进程。 |
 
+| T04 AC-09 | passed | `pnpm --filter @apps/web typecheck`；`FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm exec playwright test --config=playwright.web.config.ts tests/web/console.spec.ts` | `apps/web/src/lib/api/request.ts`；`tests/web/console.spec.ts` | 7/7；登录/退出走会话接口，API 请求包含 credentials、不带 Authorization；首次加载调用 `/api/me` 恢复会话并显示加载态；页面沿用角色分流和权限行为。类型检查通过。 |
+
+| T04 AC-10 | passed | `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm exec playwright test --config=playwright.web.config.ts tests/web/console.spec.ts` | `tests/web/console.spec.ts` | 7/7；登录后的 session ID 未出现在 localStorage/sessionStorage，`document.cookie` 不含 `fw_session`；刷新仍保持登录，退出后回登录页且 `/api/me` 为 401。 |
+
+| AC-15 demo-ui | failed | `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e:demo-ui` | `tests/web-results/demo-slot-1/inspection-chain-店员、主管与总部通过真实界面完成-NB-001巡检闭环/error-context.md` | 失败停在 Mobile 登录后未出现「今日待巡」，页面为「请求的数据不存在。」；服务端已移除旧 `/api/auth/login`，Mobile 改造属于 T05。归档前需在 T05 后重跑跨端链。仅测试 Mobile 当前旧契约，未改 Mobile 代码。 |
+
 ## 回修
 
 <!-- 交付后、归档前用户的反馈，一条一行：日期、用户说的、改了什么、提交号；改到 AC 的写用户原话；带「硬线：」的提交在归档前补审，补审记进证据表。归档后的反馈进 testlog。 -->
@@ -62,6 +68,7 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/auth.ts`、`apps
 - 2026-10-27 有了会话表，cookie 里放随机会话 ID 而不是 JWT：吊销要查表，JWT 的自包含就没有用处，JWT 签发随之移除（AC-06）。两端都改用 cookie 后 API 不再接受 Bearer，失败路径从"两种认证的组合"简化为一种。
 - 2026-10-27 Origin 检查改为"带 Origin 且不在白名单才拒绝"：Mobile 原生请求不带 Origin，按讨论时"缺 Origin 也拒绝"的写法会挡掉 Mobile；浏览器的跨站点写请求总带 Origin，放行无 Origin 的请求不削弱对浏览器 CSRF 的防护。
 - 2026-10-27 原生 cookie 能否跨 Expo Go 冷启动保留未验证（React Native 的 `ForwardingCookieHandler` 由系统 cookie 存储持久化，但未在本机实测），列为 T06 的停止条件，不改用 SecureStore 绕过。
+- 2026-10-27 T04 的 Web e2e 通过；同阶段 `e2e:demo-ui` 在 Mobile 登录处因尚未执行 T05 而遇旧登录接口 404，未修改 Mobile，计划在 T05 完成后重跑。
 - 设计默认（讨论时给出）：同站点部署；`SameSite=Strict`；1 小时有效期；打开页面调 `/api/me`。
 - 串行基线：按 [试行记录](../../parallel-trial.md)「值不值」的口径分类记人工触点：开对话、批审批、答停下、传话（含用户回到 Claude 会话转述进度）、人工验收、排障，每次在这里加一行；归档时汇总进试行记录表，和 FW-008 那行按类别对照。
 

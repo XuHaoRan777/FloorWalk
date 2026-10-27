@@ -9,7 +9,7 @@ export type User = {
   createdAt: string;
 };
 
-export type Session = { token: string; user: User };
+export type Session = { user: User };
 
 export type InspectionItem = {
   id: string;

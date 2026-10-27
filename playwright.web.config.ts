@@ -21,6 +21,7 @@ const slotEnvironment = {
   HOST: '127.0.0.1',
   DATABASE_URL: slotDatabaseUrl.toString(),
   STORAGE_DIR: `${projectRoot}/apps/api/.e2e/slot-${slot}/storage`,
+  NODE_ENV: 'development',
 };
 
 const apiUrl = `http://127.0.0.1:${apiPort}`;

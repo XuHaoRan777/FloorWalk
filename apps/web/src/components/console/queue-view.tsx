@@ -7,11 +7,9 @@ import { formatTime, getErrorMessage } from './helpers';
 import { StatusPill } from './status-pill';
 
 export function QueueView({
-  token,
   canReview,
   onSelect,
 }: {
-  token: string;
   canReview: boolean;
   onSelect: (inspection: InspectionDetail) => void;
 }) {
@@ -21,11 +19,11 @@ export function QueueView({
   const load = useCallback(() => {
     setLoading(true);
     setError('');
-    void getReviewQueue(token)
+    void getReviewQueue()
       .then(setQueue)
       .catch((reason: unknown) => setError(getErrorMessage(reason)))
       .finally(() => setLoading(false));
-  }, [token]);
+  }, []);
   useEffect(() => load(), [load]);
   return (
     <>

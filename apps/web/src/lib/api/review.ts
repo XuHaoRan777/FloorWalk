@@ -1,12 +1,11 @@
 import type { InspectionDetail, Review } from './types';
 import { request } from './request';
 
-export function getReviewQueue(token: string) {
-  return request<InspectionDetail[]>('/review/queue', {}, token);
+export function getReviewQueue() {
+  return request<InspectionDetail[]>('/review/queue');
 }
 
 export function reviewInspection(
-  token: string,
   id: string,
   body: {
     action: Review['action'];
@@ -14,12 +13,8 @@ export function reviewInspection(
     reworkItemIds?: string[];
   },
 ) {
-  return request<InspectionDetail>(
-    `/inspections/${id}/review`,
-    {
-      method: 'POST',
-      body: JSON.stringify(body),
-    },
-    token,
-  );
+  return request<InspectionDetail>(`/inspections/${id}/review`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }

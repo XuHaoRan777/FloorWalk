@@ -4,7 +4,6 @@ const apiBase = (
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
   'http://127.0.0.1:3018/api'
 ).replace(/\/$/, '');
-export const sessionStorageKey = 'floorwalk.session';
 export const unauthorizedEvent = 'floorwalk:unauthorized';
 
 function messageFor(status: number, message?: string) {
@@ -19,17 +18,18 @@ function messageFor(status: number, message?: string) {
 export async function request<T>(
   path: string,
   options: RequestInit = {},
-  token?: string,
 ): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
   if (options.body && !headers.has('Content-Type'))
     headers.set('Content-Type', 'application/json');
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-
   let response: Response;
   try {
-    response = await fetch(`${apiBase}${path}`, { ...options, headers });
+    response = await fetch(`${apiBase}${path}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
   } catch {
     throw new ApiError(0, '网络连接失败，请检查网络后重试。');
   }
@@ -40,7 +40,8 @@ export async function request<T>(
     : undefined;
   if (!response.ok) {
     if (response.status === 401) {
-      window.dispatchEvent(new Event(unauthorizedEvent));
+      if (typeof window !== 'undefined')
+        window.dispatchEvent(new Event(unauthorizedEvent));
       throw new UnauthorizedError(messageFor(401, body?.message));
     }
     throw new ApiError(

@@ -3,7 +3,15 @@ import { useNavigate } from '@tanstack/react-router';
 import { ArrowRight, CircleAlert, ShieldCheck } from 'lucide-react';
 import { APP_NAME } from '@libs/shared';
 import { Button } from '@/components/ui/button';
-import { ApiError, login, readSession, writeSession } from '@/lib/api';
+import {
+  ApiError,
+  clearLegacySession,
+  checkSession,
+  hasCheckedSession,
+  login,
+  readSession,
+  writeSession,
+} from '@/lib/api';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -11,9 +19,34 @@ export function HomePage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(
+    () => !hasCheckedSession(),
+  );
 
   useEffect(() => {
-    if (readSession()) void navigate({ to: '/console' });
+    clearLegacySession();
+    if (readSession()) {
+      void navigate({ to: '/console' });
+      return;
+    }
+    if (hasCheckedSession()) {
+      setCheckingSession(false);
+      return;
+    }
+    let active = true;
+    void checkSession()
+      .then((session) => {
+        if (!active) return;
+        writeSession(session);
+        void navigate({ to: '/console' });
+      })
+      .catch(() => {
+        if (!active) return;
+        setCheckingSession(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [navigate]);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -34,6 +67,13 @@ export function HomePage() {
       )
       .finally(() => setBusy(false));
   };
+
+  if (checkingSession)
+    return (
+      <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground">
+        正在验证登录状态…
+      </div>
+    );
 
   return (
     <div className="min-h-dvh bg-muted/30">

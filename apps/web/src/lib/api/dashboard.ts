@@ -1,6 +1,6 @@
 import type { DashboardSite } from './types';
 import { request } from './request';
 
-export function getDashboard(token: string) {
-  return request<DashboardSite[]>('/dashboard/sites', {}, token);
+export function getDashboard() {
+  return request<DashboardSite[]>('/dashboard/sites');
 }

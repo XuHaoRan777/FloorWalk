@@ -13,12 +13,10 @@ import { actionLabel } from './labels';
 import { StatusPill } from './status-pill';
 
 export function ReviewDetail({
-  token,
   initialInspection,
   canReview,
   onBack,
 }: {
-  token: string;
   initialInspection: InspectionDetail;
   canReview: boolean;
   onBack: () => void;
@@ -36,11 +34,11 @@ export function ReviewDetail({
   useEffect(() => {
     if (!canReview || inspection.status !== 'submitted') return;
     setBusy(true);
-    void reviewInspection(token, inspection.id, { action: 'start' })
+    void reviewInspection(inspection.id, { action: 'start' })
       .then(setInspection)
       .catch((reason: unknown) => setError(getErrorMessage(reason)))
       .finally(() => setBusy(false));
-  }, [canReview, inspection.id, inspection.status, token]);
+  }, [canReview, inspection.id, inspection.status]);
   const submitReview = (action: Review['action']) => {
     if (action === 'rework' && selectedItems.length === 0) {
       setReworkPrompt(true);
@@ -49,7 +47,7 @@ export function ReviewDetail({
     }
     setBusy(true);
     setError('');
-    void reviewInspection(token, inspection.id, {
+    void reviewInspection(inspection.id, {
       action,
       comment: comment.trim() || null,
       ...(action === 'rework' ? { reworkItemIds: selectedItems } : {}),
@@ -139,11 +137,7 @@ export function ReviewDetail({
               {item.evidence.length > 0 && (
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {item.evidence.map((evidence) => (
-                    <EvidenceImage
-                      key={evidence.id}
-                      token={token}
-                      evidence={evidence}
-                    />
+                    <EvidenceImage key={evidence.id} evidence={evidence} />
                   ))}
                 </div>
               )}

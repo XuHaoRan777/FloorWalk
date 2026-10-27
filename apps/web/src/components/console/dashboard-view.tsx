@@ -6,24 +6,18 @@ import { ErrorBanner } from './error-banner';
 import { getErrorMessage } from './helpers';
 import { statusLabel } from './labels';
 
-export function DashboardView({
-  token,
-  onQueue,
-}: {
-  token: string;
-  onQueue: () => void;
-}) {
+export function DashboardView({ onQueue }: { onQueue: () => void }) {
   const [sites, setSites] = useState<DashboardSite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const load = useCallback(() => {
     setLoading(true);
     setError('');
-    void getDashboard(token)
+    void getDashboard()
       .then(setSites)
       .catch((reason: unknown) => setError(getErrorMessage(reason)))
       .finally(() => setLoading(false));
-  }, [token]);
+  }, []);
   useEffect(() => load(), [load]);
   return (
     <>

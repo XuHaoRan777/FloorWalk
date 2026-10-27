@@ -11,7 +11,6 @@ const apiBase = `http://127.0.0.1:${apiPort}`;
 const demoPassword = 'northbean-demo';
 
 type LoginResponse = {
-  token: string;
   user: { role: 'inspector' | 'supervisor' | 'hq' };
 };
 
@@ -19,10 +18,10 @@ async function apiLogin(
   request: APIRequestContext,
   email: string,
 ): Promise<LoginResponse> {
-  const response = await request.post(`${apiBase}/api/auth/login`, {
+  const response = await request.post(`${apiBase}/api/auth/session`, {
     data: { email, password: demoPassword },
   });
-  expect(response.ok()).toBeTruthy();
+  expect(response.status()).toBe(201);
   return (await response.json()) as LoginResponse;
 }
 
@@ -59,10 +58,8 @@ test('AC-01 登录、刷新保持会话、退出和三角色分流', async ({ pa
 });
 
 test('AC-02 审核队列与 API 返回保持一致', async ({ page, request }) => {
-  const { token } = await apiLogin(request, 'supervisor@northbean.example');
-  const response = await request.get(`${apiBase}/api/review/queue`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  await apiLogin(request, 'supervisor@northbean.example');
+  const response = await request.get(`${apiBase}/api/review/queue`);
   expect(response.ok()).toBeTruthy();
   const queue = (await response.json()) as Array<{
     site: { name: string };
@@ -85,10 +82,8 @@ test('AC-03 详情展示检查项、照片和按时间排列的审核历史', as
   page,
   request,
 }) => {
-  const { token } = await apiLogin(request, 'supervisor@northbean.example');
-  const response = await request.get(`${apiBase}/api/review/queue`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  await apiLogin(request, 'supervisor@northbean.example');
+  const response = await request.get(`${apiBase}/api/review/queue`);
   const queue = (await response.json()) as Array<{
     id: string;
     status: string;
@@ -111,10 +106,8 @@ test('AC-03 详情展示检查项、照片和按时间排列的审核历史', as
 });
 
 test('AC-04 主管操作和严重项失败时的通过禁用', async ({ page, request }) => {
-  const { token } = await apiLogin(request, 'supervisor@northbean.example');
-  const response = await request.get(`${apiBase}/api/review/queue`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  await apiLogin(request, 'supervisor@northbean.example');
+  const response = await request.get(`${apiBase}/api/review/queue`);
   const queue = (await response.json()) as Array<{
     id: string;
     status: string;
@@ -149,10 +142,8 @@ test('AC-05 总部看板与 API 返回一致，且没有审核按钮', async ({
   page,
   request,
 }) => {
-  const { token } = await apiLogin(request, 'hq@northbean.example');
-  const response = await request.get(`${apiBase}/api/dashboard/sites`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  await apiLogin(request, 'hq@northbean.example');
+  const response = await request.get(`${apiBase}/api/dashboard/sites`);
   expect(response.ok()).toBeTruthy();
   const sites = (await response.json()) as Array<{
     site: { name: string };
@@ -213,4 +204,46 @@ test('AC-06 网络、403、409、422 显示中文提示；任意接口 401 回�
   });
   await page.reload();
   await expect(page.getByLabel('邮箱')).toBeVisible();
+});
+
+test('AC-10 会话 ID 不暴露给脚本，刷新保持登录，退出后失效', async ({
+  page,
+}) => {
+  const loginResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/auth/session') &&
+      response.request().method() === 'POST',
+  );
+  await login(page, 'supervisor@northbean.example');
+  const loginResponse = await loginResponsePromise;
+  expect(loginResponse.status()).toBe(201);
+
+  const cookieHeader = await loginResponse.headerValue('set-cookie');
+  const sessionId = cookieHeader?.match(/(?:^|,\s*)fw_session=([^;]*)/)?.[1];
+  expect(typeof sessionId === 'string' && sessionId.length > 0).toBe(true);
+  if (!sessionId) throw new Error('Login response did not set fw_session');
+
+  await expect(page.getByRole('heading', { name: /审核队列/ })).toBeVisible();
+  const storageContainsSessionId = await page.evaluate((id) => {
+    const values = [localStorage, sessionStorage].flatMap((storage) =>
+      Array.from({ length: storage.length }, (_, index) =>
+        storage.getItem(storage.key(index) ?? ''),
+      ),
+    );
+    return values.some((value) => value?.includes(id));
+  }, sessionId);
+  expect(storageContainsSessionId).toBe(false);
+
+  const documentContainsSessionCookie = await page.evaluate(() =>
+    document.cookie.includes('fw_session'),
+  );
+  expect(documentContainsSessionCookie).toBe(false);
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: /审核队列/ })).toBeVisible();
+  await page.getByRole('button', { name: '退出登录' }).click();
+  await expect(page.getByLabel('邮箱')).toBeVisible();
+
+  const meResponse = await page.request.get(`${apiBase}/api/me`);
+  expect(meResponse.status()).toBe(401);
 });
