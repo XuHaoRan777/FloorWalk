@@ -4,7 +4,6 @@ import path from 'node:path';
 import { Test } from '@nestjs/testing';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
-import { JwtService } from '@nestjs/jwt';
 import { AppModule } from './app.module.js';
 import { HttpErrorFilter } from './http-exception.filter.js';
 import { createPool } from './db/client.js';
@@ -30,9 +29,9 @@ import {
 
 describe('inspection contract API', () => {
   let app: NestExpressApplication;
-  let inspectorToken: string;
-  let supervisorToken: string;
-  let hqToken: string;
+  let inspectorCookie: string;
+  let supervisorCookie: string;
+  let hqCookie: string;
   let inspectionId: string;
   let otherSiteInspectionId: string;
   let seedEvidenceId: string;
@@ -54,14 +53,17 @@ describe('inspection contract API', () => {
 
     const login = async (email: string) => {
       const response = await request(app.getHttpServer())
-        .post('/api/auth/login')
+        .post('/api/auth/session')
         .send({ email, password: 'northbean-demo' })
         .expect(201);
-      return loginResponseSchema.parse(response.body).token;
+      loginResponseSchema.parse(response.body);
+      return (response.headers['set-cookie'] as unknown as string[])[0].split(
+        ';',
+      )[0];
     };
-    inspectorToken = await login('inspector@northbean.example');
-    supervisorToken = await login('supervisor@northbean.example');
-    hqToken = await login('hq@northbean.example');
+    inspectorCookie = await login('inspector@northbean.example');
+    supervisorCookie = await login('supervisor@northbean.example');
+    hqCookie = await login('hq@northbean.example');
 
     const pool = createPool();
     try {
@@ -111,6 +113,7 @@ describe('inspection contract API', () => {
           createdInspectionId,
         ]);
       }
+      await pool.query('DELETE FROM floorwalk.sessions');
       if (createdEvidenceStorageKey) {
         await rm(
           path.resolve(
@@ -127,45 +130,37 @@ describe('inspection contract API', () => {
   });
 
   it('publishes the complete route table under /api', () => {
-    expect(Object.keys(apiRoutes)).toHaveLength(12);
+    expect(Object.keys(apiRoutes)).toHaveLength(13);
     for (const route of Object.values(apiRoutes)) {
       expect(route.path.startsWith('/api/')).toBe(true);
       expect(route.responseSchema).toBeDefined();
-      expect([200, 201]).toContain(route.successStatus);
+      expect([200, 201, 204]).toContain(route.successStatus);
     }
   });
 
   it('authenticates roles and enforces site and role access', async () => {
     const me = await request(app.getHttpServer())
       .get('/api/me')
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(200);
     expect(userSchema.parse(me.body).role).toBe('inspector');
     await request(app.getHttpServer())
       .get(`/api/inspections/${otherSiteInspectionId}`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(403)
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('FORBIDDEN'),
       );
     await request(app.getHttpServer())
       .get('/api/dashboard/sites')
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(403);
     await request(app.getHttpServer())
       .post(`/api/inspections/${inspectionId}/review`)
-      .set('Authorization', `Bearer ${hqToken}`)
+      .set('Cookie', hqCookie)
       .send({ action: 'approve' })
       .expect(403);
     await request(app.getHttpServer()).get('/api/me').expect(401);
-    const expiredToken = new JwtService({
-      secret: process.env.JWT_SECRET,
-    }).sign({ id: '00000000-0000-0000-0000-000000000001' }, { expiresIn: -1 });
-    await request(app.getHttpServer())
-      .get('/api/me')
-      .set('Authorization', `Bearer ${expiredToken}`)
-      .expect(401);
-
     const deniedByRoute = new Map<
       string,
       Partial<
@@ -181,13 +176,13 @@ describe('inspection contract API', () => {
           supervisor: async () => {
             const response = await request(app.getHttpServer())
               .get('/api/inspector/today')
-              .set('Authorization', `Bearer ${supervisorToken}`);
+              .set('Cookie', supervisorCookie);
             return { status: response.status, body: response.body };
           },
           hq: async () => {
             const response = await request(app.getHttpServer())
               .get('/api/inspector/today')
-              .set('Authorization', `Bearer ${hqToken}`);
+              .set('Cookie', hqCookie);
             return { status: response.status, body: response.body };
           },
         },
@@ -198,14 +193,14 @@ describe('inspection contract API', () => {
           supervisor: async () => {
             const response = await request(app.getHttpServer())
               .post('/api/inspections')
-              .set('Authorization', `Bearer ${supervisorToken}`)
+              .set('Cookie', supervisorCookie)
               .send({ templateId });
             return { status: response.status, body: response.body };
           },
           hq: async () => {
             const response = await request(app.getHttpServer())
               .post('/api/inspections')
-              .set('Authorization', `Bearer ${hqToken}`)
+              .set('Cookie', hqCookie)
               .send({ templateId });
             return { status: response.status, body: response.body };
           },
@@ -219,7 +214,7 @@ describe('inspection contract API', () => {
               .patch(
                 `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000`,
               )
-              .set('Authorization', `Bearer ${supervisorToken}`)
+              .set('Cookie', supervisorCookie)
               .send({ result: 'pass' });
             return { status: response.status, body: response.body };
           },
@@ -228,7 +223,7 @@ describe('inspection contract API', () => {
               .patch(
                 `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000`,
               )
-              .set('Authorization', `Bearer ${hqToken}`)
+              .set('Cookie', hqCookie)
               .send({ result: 'pass' });
             return { status: response.status, body: response.body };
           },
@@ -242,7 +237,7 @@ describe('inspection contract API', () => {
               .post(
                 `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000/evidence`,
               )
-              .set('Authorization', `Bearer ${supervisorToken}`);
+              .set('Cookie', supervisorCookie);
             return { status: response.status, body: response.body };
           },
           hq: async () => {
@@ -250,7 +245,7 @@ describe('inspection contract API', () => {
               .post(
                 `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000/evidence`,
               )
-              .set('Authorization', `Bearer ${hqToken}`);
+              .set('Cookie', hqCookie);
             return { status: response.status, body: response.body };
           },
         },
@@ -261,13 +256,13 @@ describe('inspection contract API', () => {
           supervisor: async () => {
             const response = await request(app.getHttpServer())
               .post(`/api/inspections/${inspectionId}/submit`)
-              .set('Authorization', `Bearer ${supervisorToken}`);
+              .set('Cookie', supervisorCookie);
             return { status: response.status, body: response.body };
           },
           hq: async () => {
             const response = await request(app.getHttpServer())
               .post(`/api/inspections/${inspectionId}/submit`)
-              .set('Authorization', `Bearer ${hqToken}`);
+              .set('Cookie', hqCookie);
             return { status: response.status, body: response.body };
           },
         },
@@ -278,7 +273,7 @@ describe('inspection contract API', () => {
           inspector: async () => {
             const response = await request(app.getHttpServer())
               .get('/api/review/queue')
-              .set('Authorization', `Bearer ${inspectorToken}`);
+              .set('Cookie', inspectorCookie);
             return { status: response.status, body: response.body };
           },
         },
@@ -289,14 +284,14 @@ describe('inspection contract API', () => {
           inspector: async () => {
             const response = await request(app.getHttpServer())
               .post(`/api/inspections/${inspectionId}/review`)
-              .set('Authorization', `Bearer ${inspectorToken}`)
+              .set('Cookie', inspectorCookie)
               .send({ action: 'approve' });
             return { status: response.status, body: response.body };
           },
           hq: async () => {
             const response = await request(app.getHttpServer())
               .post(`/api/inspections/${inspectionId}/review`)
-              .set('Authorization', `Bearer ${hqToken}`)
+              .set('Cookie', hqCookie)
               .send({ action: 'approve' });
             return { status: response.status, body: response.body };
           },
@@ -308,7 +303,7 @@ describe('inspection contract API', () => {
           inspector: async () => {
             const response = await request(app.getHttpServer())
               .get('/api/dashboard/sites')
-              .set('Authorization', `Bearer ${inspectorToken}`);
+              .set('Cookie', inspectorCookie);
             return { status: response.status, body: response.body };
           },
         },
@@ -330,7 +325,7 @@ describe('inspection contract API', () => {
 
   it('exposes every contracted endpoint with its response schema', async () => {
     const login = await request(app.getHttpServer())
-      .post('/api/auth/login')
+      .post('/api/auth/session')
       .send({
         email: 'inspector@northbean.example',
         password: 'northbean-demo',
@@ -338,18 +333,18 @@ describe('inspection contract API', () => {
       .expect(201);
     const me = await request(app.getHttpServer())
       .get('/api/me')
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(200);
     const today = await request(app.getHttpServer())
       .get('/api/inspector/today')
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(200);
     const todayBody = todayResponseSchema.parse(today.body);
     expect(todayBody.site.code).toBe('NB-001');
     expect(todayBody.submittedToday).toBe(false);
     const seededDetail = await request(app.getHttpServer())
       .get(`/api/inspections/${inspectionId}`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(200);
     const seededDetailBody = inspectionDetailSchema.parse(seededDetail.body);
     expect(seededDetailBody.reviews.length).toBeGreaterThan(0);
@@ -361,7 +356,7 @@ describe('inspection contract API', () => {
     );
     const seedSigned = await request(app.getHttpServer())
       .get(`/api/evidence/${seedEvidenceId}`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(200);
     const seedSignedBody = signedEvidenceResponseSchema.parse(seedSigned.body);
     const seedPhotoUrl = new URL(seedSignedBody.url);
@@ -393,7 +388,7 @@ describe('inspection contract API', () => {
       );
     const created = await request(app.getHttpServer())
       .post('/api/inspections')
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .send({ templateId })
       .expect(201);
     createdInspectionId = inspectionSchema.parse(created.body).id;
@@ -424,7 +419,7 @@ describe('inspection contract API', () => {
     }
     const beforeShanghaiDay = await request(app.getHttpServer())
       .get('/api/inspector/today')
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(200);
     expect(
       todayResponseSchema.parse(beforeShanghaiDay.body).submittedToday,
@@ -443,7 +438,7 @@ describe('inspection contract API', () => {
     }
     const insideShanghaiDay = await request(app.getHttpServer())
       .get('/api/inspector/today')
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(200);
     expect(
       todayResponseSchema.parse(insideShanghaiDay.body).submittedToday,
@@ -451,7 +446,7 @@ describe('inspection contract API', () => {
 
     const detail = await request(app.getHttpServer())
       .get(`/api/inspections/${createdInspectionId}`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(200);
     const detailBody = inspectionDetailSchema.parse(detail.body);
     expect(detailBody.site.code).toBe('NB-001');
@@ -464,14 +459,14 @@ describe('inspection contract API', () => {
     const createdItemId = detail.body.items[0].id as string;
     await request(app.getHttpServer())
       .post(`/api/inspections/${createdInspectionId}/submit`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(422)
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('INCOMPLETE'),
       );
     const updated = await request(app.getHttpServer())
       .patch(`/api/inspections/${createdInspectionId}/items/${createdItemId}`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .send({ result: 'pass' })
       .expect(200);
     updateInspectionItemResponseSchema.parse(updated.body);
@@ -480,7 +475,7 @@ describe('inspection contract API', () => {
       .post(
         `/api/inspections/${createdInspectionId}/items/${createdItemId}/evidence`,
       )
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .attach('file', Buffer.from('contract-test'), {
         filename: 'contract.jpg',
         contentType: 'image/jpeg',
@@ -491,7 +486,7 @@ describe('inspection contract API', () => {
     createdEvidenceStorageKey = createdEvidence.storageKey;
     const signed = await request(app.getHttpServer())
       .get(`/api/evidence/${createdEvidenceId}`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(200);
     signedEvidenceResponseSchema.parse(signed.body);
 
@@ -499,7 +494,7 @@ describe('inspection contract API', () => {
       .post(
         `/api/inspections/${createdInspectionId}/items/${createdItemId}/evidence`,
       )
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .attach('file', Buffer.from('invalid-mime'), {
         filename: 'contract.gif',
         contentType: 'image/gif',
@@ -512,7 +507,7 @@ describe('inspection contract API', () => {
       .post(
         `/api/inspections/${createdInspectionId}/items/${createdItemId}/evidence`,
       )
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .attach('file', Buffer.alloc(10 * 1024 * 1024 + 1), {
         filename: 'too-large.jpg',
         contentType: 'image/jpeg',
@@ -528,7 +523,7 @@ describe('inspection contract API', () => {
     for (const item of detailBody.items.slice(1)) {
       await request(app.getHttpServer())
         .patch(`/api/inspections/${createdInspectionId}/items/${item.id}`)
-        .set('Authorization', `Bearer ${inspectorToken}`)
+        .set('Cookie', inspectorCookie)
         .send({ result: 'pass' })
         .expect(200);
       if (item.photoRequired && item.id !== skippedPhotoItem?.id)
@@ -536,7 +531,7 @@ describe('inspection contract API', () => {
           .post(
             `/api/inspections/${createdInspectionId}/items/${item.id}/evidence`,
           )
-          .set('Authorization', `Bearer ${inspectorToken}`)
+          .set('Cookie', inspectorCookie)
           .attach('file', Buffer.from('contract-test'), {
             filename: `${item.id}.jpg`,
             contentType: 'image/jpeg',
@@ -547,7 +542,7 @@ describe('inspection contract API', () => {
     expect(skippedPhotoItem).toBeDefined();
     await request(app.getHttpServer())
       .post(`/api/inspections/${createdInspectionId}/submit`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(422)
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('INCOMPLETE'),
@@ -556,7 +551,7 @@ describe('inspection contract API', () => {
       .post(
         `/api/inspections/${createdInspectionId}/items/${skippedPhotoItem!.id}/evidence`,
       )
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .attach('file', Buffer.from('contract-test'), {
         filename: `${skippedPhotoItem!.id}.jpg`,
         contentType: 'image/jpeg',
@@ -565,19 +560,19 @@ describe('inspection contract API', () => {
 
     const submitted = await request(app.getHttpServer())
       .post(`/api/inspections/${createdInspectionId}/submit`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(201);
     submitInspectionResponseSchema.parse(submitted.body);
     const afterSubmitToday = await request(app.getHttpServer())
       .get('/api/inspector/today')
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(200);
     expect(
       todayResponseSchema.parse(afterSubmitToday.body).submittedToday,
     ).toBe(true);
     const queue = await request(app.getHttpServer())
       .get('/api/review/queue')
-      .set('Authorization', `Bearer ${supervisorToken}`)
+      .set('Cookie', supervisorCookie)
       .expect(200);
     const queueBody = reviewQueueResponseSchema.parse(queue.body);
     expect(queueBody.every((entry) => entry.site.code)).toBe(true);
@@ -586,13 +581,13 @@ describe('inspection contract API', () => {
     );
     const reviewed = await request(app.getHttpServer())
       .post(`/api/inspections/${createdInspectionId}/review`)
-      .set('Authorization', `Bearer ${supervisorToken}`)
+      .set('Cookie', supervisorCookie)
       .send({ action: 'start' })
       .expect(201);
     reviewResponseSchema.parse(reviewed.body);
     await request(app.getHttpServer())
       .post(`/api/inspections/${createdInspectionId}/review`)
-      .set('Authorization', `Bearer ${supervisorToken}`)
+      .set('Cookie', supervisorCookie)
       .send({
         action: 'rework',
         reworkItemIds: ['00000000-0000-4000-8000-000000000000'],
@@ -603,12 +598,12 @@ describe('inspection contract API', () => {
       );
     await request(app.getHttpServer())
       .post(`/api/inspections/${createdInspectionId}/review`)
-      .set('Authorization', `Bearer ${supervisorToken}`)
+      .set('Cookie', supervisorCookie)
       .send({ action: 'approve' })
       .expect(201);
     await request(app.getHttpServer())
       .patch(`/api/inspections/${createdInspectionId}/items/${createdItemId}`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .send({ result: 'fail' })
       .expect(409)
       .expect(({ body }) =>
@@ -618,7 +613,7 @@ describe('inspection contract API', () => {
       .post(
         `/api/inspections/${createdInspectionId}/items/${createdItemId}/evidence`,
       )
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .attach('file', Buffer.from('contract-test'), {
         filename: 'blocked.jpg',
         contentType: 'image/jpeg',
@@ -629,7 +624,7 @@ describe('inspection contract API', () => {
       );
     const criticalCreated = await request(app.getHttpServer())
       .post('/api/inspections')
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .send({ templateId })
       .expect(201);
     const criticalInspectionId = inspectionSchema.parse(
@@ -637,7 +632,7 @@ describe('inspection contract API', () => {
     ).id;
     const criticalDetail = await request(app.getHttpServer())
       .get(`/api/inspections/${criticalInspectionId}`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(200);
     const criticalItems = inspectionDetailSchema.parse(
       criticalDetail.body,
@@ -656,7 +651,7 @@ describe('inspection contract API', () => {
     for (const item of criticalItems) {
       await request(app.getHttpServer())
         .patch(`/api/inspections/${criticalInspectionId}/items/${item.id}`)
-        .set('Authorization', `Bearer ${inspectorToken}`)
+        .set('Cookie', inspectorCookie)
         .send({ result: item.id === criticalItemId ? 'fail' : 'pass' })
         .expect(200);
       if (item.photoRequired) {
@@ -664,7 +659,7 @@ describe('inspection contract API', () => {
           .post(
             `/api/inspections/${criticalInspectionId}/items/${item.id}/evidence`,
           )
-          .set('Authorization', `Bearer ${inspectorToken}`)
+          .set('Cookie', inspectorCookie)
           .attach('file', Buffer.from('critical-test'), {
             filename: `${item.id}.jpg`,
             contentType: 'image/jpeg',
@@ -677,16 +672,16 @@ describe('inspection contract API', () => {
     }
     await request(app.getHttpServer())
       .post(`/api/inspections/${criticalInspectionId}/submit`)
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(201);
     await request(app.getHttpServer())
       .post(`/api/inspections/${criticalInspectionId}/review`)
-      .set('Authorization', `Bearer ${supervisorToken}`)
+      .set('Cookie', supervisorCookie)
       .send({ action: 'start' })
       .expect(201);
     await request(app.getHttpServer())
       .post(`/api/inspections/${criticalInspectionId}/review`)
-      .set('Authorization', `Bearer ${supervisorToken}`)
+      .set('Cookie', supervisorCookie)
       .send({ action: 'approve' })
       .expect(422)
       .expect(({ body }) =>
@@ -723,13 +718,18 @@ describe('inspection contract API', () => {
       );
     const dashboard = await request(app.getHttpServer())
       .get('/api/dashboard/sites')
-      .set('Authorization', `Bearer ${supervisorToken}`)
+      .set('Cookie', supervisorCookie)
       .expect(200);
     dashboardSitesResponseSchema.parse(dashboard.body);
     expect(todayBody.template.items).toHaveLength(8);
 
+    const deletedSession = await request(app.getHttpServer())
+      .delete('/api/auth/session')
+      .expect(204);
+    expect(deletedSession.text).toBe('');
     const routeResponses = {
-      login,
+      createSession: login,
+      deleteSession: deletedSession,
       me,
       today,
       createInspection: created,
@@ -745,13 +745,15 @@ describe('inspection contract API', () => {
     for (const [routeKey, route] of Object.entries(apiRoutes)) {
       const response = routeResponses[routeKey as keyof typeof routeResponses];
       expect(response.status).toBe(route.successStatus);
-      route.responseSchema.parse(response.body);
+      route.responseSchema.parse(
+        route.successStatus === 204 ? undefined : response.body,
+      );
     }
   }, 60000);
 
   it('normalizes validation, not found, and CORS responses', async () => {
     await request(app.getHttpServer())
-      .post('/api/auth/login')
+      .post('/api/auth/session')
       .send({ email: 'invalid' })
       .expect(400)
       .expect(({ body }) =>
@@ -759,14 +761,14 @@ describe('inspection contract API', () => {
       );
     await request(app.getHttpServer())
       .get('/api/inspections/00000000-0000-0000-0000-000000000000')
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(404)
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
       );
     await request(app.getHttpServer())
       .get('/api/inspections/not-a-uuid')
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect(400)
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
@@ -774,7 +776,7 @@ describe('inspection contract API', () => {
     await request(app.getHttpServer())
       .get('/api/me')
       .set('Origin', 'http://127.0.0.1:3019')
-      .set('Authorization', `Bearer ${inspectorToken}`)
+      .set('Cookie', inspectorCookie)
       .expect('access-control-allow-origin', 'http://127.0.0.1:3019');
   });
 });

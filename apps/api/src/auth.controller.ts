@@ -1,14 +1,18 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   NotFoundException,
   Post,
   Req,
+  Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { randomBytes } from 'node:crypto';
+import type { Response } from 'express';
 import argon2 from 'argon2';
 import {
   apiRoutePath,
@@ -18,17 +22,21 @@ import {
   userSchema,
 } from '@libs/shared';
 import { createPool } from './db/client.js';
-import { AuthGuard, getJwtSecret, type AuthUser } from './auth.js';
+import {
+  AuthGuard,
+  hashSessionId,
+  sessionCookie,
+  type AuthUser,
+} from './auth.js';
 import { type AuthedRequest } from './inspection-queries.js';
 
 @Controller('api')
 export class AuthController {
-  private readonly jwt = new JwtService({
-    secret: getJwtSecret(),
-  });
-
-  @Post(apiRoutePath(apiRoutes.login))
-  async login(@Body() body: unknown) {
+  @Post(apiRoutePath(apiRoutes.createSession))
+  async login(
+    @Body() body: unknown,
+    @Res({ passthrough: true }) response: Response,
+  ) {
     const input = loginRequestSchema.parse(body);
     const pool = createPool();
     try {
@@ -58,22 +66,23 @@ export class AuthController {
         siteId: row.site_id,
         createdAt: new Date(row.created_at).toISOString(),
       });
-      return loginResponseSchema.parse({
-        token: this.jwt.sign(
-          {
-            id: user.id,
-            email: user.email,
-            displayName: user.displayName,
-            role: user.role,
-            siteId: user.siteId,
-          },
-          { expiresIn: '1h' },
-        ),
-        user,
-      });
+      const sessionId = randomBytes(32).toString('base64url');
+      await pool.query(
+        `INSERT INTO floorwalk.sessions (token_hash, user_id, expires_at)
+         VALUES ($1, $2, now() + interval '1 hour')`,
+        [hashSessionId(sessionId), user.id],
+      );
+      response.setHeader('Set-Cookie', sessionCookie(sessionId));
+      return loginResponseSchema.parse({ user });
     } finally {
       await pool.end();
     }
+  }
+
+  @Delete(apiRoutePath(apiRoutes.deleteSession))
+  @HttpCode(204)
+  logout(@Res({ passthrough: true }) response: Response) {
+    response.setHeader('Set-Cookie', sessionCookie('', 0));
   }
 
   @UseGuards(AuthGuard)
