@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- 工作单元状态：`approved`
+- 工作单元状态：`blocked`
 - 归档状态：`active`
-- 当前任务：T04
-- 阻塞：无
-- 下一步：完整机器门禁后由独立 Subagent 做最终代码审查。
+- 当前任务：无
+- 阻塞：AC-03 的 `e2e:mobile` 全套稳定复现选择器歧义；隔离用例通过，按范围不改 `tests/`。
+- 下一步：等待用户决定是否授权最小测试定位修复，或保持范围并暂缓验收归档。
 
 Preflight：动 `apps/api/src`（`auth.ts` 是 hardline）和新增的 API 测试；不动 `apps/web`、`apps/mobile`、契约、`schema.ts`、迁移、`package.json`、锁文件、`scripts/`、`tests/`。全程用槽位 1，不占 3018～3020，同一槽位的套件串行跑。开工前记下 `git rev-parse HEAD`。
 
@@ -19,7 +19,7 @@ Preflight：动 `apps/api/src`（`auth.ts` 是 hardline）和新增的 API 测�
 | T01 | 拆前基线：快照、并发测试先写好并记下改动前的连接峰值 | `done` | 无，基线：快照文件路径、改动前连接峰值、各套件通过数                                      |
 | T02 | 连接池 provider 与生命周期；守卫和控制器改为注入     | `done` | AC-01、AC-02、AC-04、AC-05；API 测试、契约 e2e                                            |
 | T03 | 行为不变的回归                                       | `done` | AC-03（拆后快照逐字节相同；Web e2e、`e2e:mobile`、`e2e:cors`、`e2e:demo`、`e2e:demo-ui`） |
-| T04 | 最终代码审查（独立 Subagent）                        | `in_progress` | 派审查前跑全量门禁；审查记录                                                              |
+| T04 | 最终代码审查（独立 Subagent）                        | `done` | 派审查前跑全量门禁；审查记录                                                              |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
 方式 B 按用户可观察的切片切，不按数据、后端、前端分层切：每行写交付哪几条 AC，并在本任务内取得它们的证据；一条 AC 跨几个切片时记在完成它的那个任务。可以有一个先行任务只做数据结构与共享契约（表、迁移、共享类型，不含接口和页面），这一列写「无，机器门」。不设"Agent 验收""机器门汇总"这类只收集其他任务证据的任务；单元结束的全量套件和构建在「最终代码审查」任务里、派审查之前跑。
@@ -45,6 +45,8 @@ Preflight：动 `apps/api/src`（`auth.ts` 是 hardline）和新增的 API 测�
 | T03 | passed | `FW_SLOT=1; NO_PROXY=127.0.0.1,localhost; no_proxy=127.0.0.1,localhost pnpm exec playwright test --config=playwright.web.config.ts` | `tests/web/console.spec.ts` | 拆后 Web e2e 7/7。 |
 | T03 | failed | `FW_SLOT=1 pnpm e2e:mobile`; `FW_SLOT=1 pnpm exec playwright test --config=playwright.mobile.config.ts -g "NB-002 打回单显示主管意见并可重新提交"` | `tests/mobile/mobile-inspection.spec.ts` | 全套两次 8/9：登录后 `getByText('今日待巡')` 严格模式命中页面标题与 tab 两项；隔离用例 1/1。属用户明确排除的 `tests/` 范围问题，未修改断言，AC-03 留待处理。 |
 | T03 | passed | `FW_SLOT=1 pnpm e2e:cors`; `FW_SLOT=1 pnpm e2e:demo`; `FW_SLOT=1; NO_PROXY=127.0.0.1,localhost; no_proxy=127.0.0.1,localhost pnpm e2e:demo-ui` | `tests/cors.spec.ts`; `scripts/demo-chain.mjs`; `tests/demo/inspection-chain.spec.ts` | CORS 3/3；演示链退出码 0；demo-ui 1/1。 |
+| T04 | passed | `pnpm typecheck`; `pnpm lint`; `pnpm format:check`; `pnpm build`; `FW_SLOT=1 pnpm --filter @apps/api test`; `FW_SLOT=1 pnpm e2e` | workspace；`apps/api/src/contract.e2e.test.ts`; `tests/e2e/slot-facility.spec.ts` | 类型、lint、格式、构建通过；API 30/30；槽位设施 1/1。Web/CORS/demo/demo-ui 与 mobile 结果见 T03；mobile 全套仍有已记录的单条选择器歧义。 |
+| T04 | passed | 独立 Subagent：审查 `3e5c9633efab0e9462a4b7465a012179db8b161f..37f61c84f5fb51e6dd38eb8918fa2b58ad1d864a`，按 `docs/howto/final-review.md` 七失败域检查 | FW-010 完整差异 | 独立 Subagent；无代码 finding。七域结论及 AC-03 遗留风险见审查报告；审查者核对 `git diff --check` 通过。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
@@ -63,4 +65,7 @@ Preflight：动 `apps/api/src`（`auth.ts` 是 hardline）和新增的 API 测�
 - 2026-10-28 连接池用 Nest provider 随应用实例创建与关闭，不用模块级单例：API 测试在同一进程里多次 `createNestApplication`，单例会在实例之间泄漏连接。
 - 2026-10-28 范围外问题：`e2e:mobile` 的 NB-002 用例整套运行时对 `今日待巡` 用 `getByText` 命中标题与 tab 两个元素，隔离运行通过；按本单元边界不改 `tests/`，记入 AC-03 失败证据继续其余回归。
 - 2026-10-28 串行基线人工触点：开对话 ×1；其余人工触点 0。
+- 卡在哪一步：T03 的 AC-03 `e2e:mobile` 全套两次在同一严格定位断言失败，导致 AC-03 未满足，不能 Promote 或归档。
+- 要用户定什么：是否授权对排除范围内的 `tests/mobile/mobile-inspection.spec.ts` 做最小选择器消歧并重跑 mobile 套件。
+- 可选项和倾向：授权测试定位修复后完成验收（倾向，保留产品断言）；或维持“不改 tests”并让 FW-010 保持 blocked，待测试范围获批后续办。
 - 串行基线：按 [试行记录](../../parallel-trial.md)「值不值」的口径分类记人工触点：开对话、批审批、答停下、传话（含用户回到 Claude 会话转述进度）、人工验收、排障，每次在这里加一行；归档时汇总进试行记录表，和 FW-008、FW-009 那两行按类别对照。
