@@ -6,9 +6,9 @@
 
 - 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：T05 两端注册行、分区、Tab、空页与简陋 `ChatPanel`
+- 当前任务：T07 三道开组门与 master 全量门禁
 - 阻塞：无
-- 下一步：建立 Web 与 Mobile 的注册行、空页和聊天面板。
+- 下一步：按并行组第 1 节逐项完成三道开组门，并运行 master 全量门禁。
 
 Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、`apps/api/drizzle/`（均为 hardline）、`apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`components/`、`lib/`）、`tests/`、`scripts/demo-chain.mjs`；不动 `package.json`、锁文件。全程用槽位 1，三道门的并发隔离用 1～3。T06 动 Mobile 前先读 `~/.agents/skills/expo-overview`，按分流读 `expo-router` 与 `expo-data-fetching`，查 SDK 57 文档，在证据里记一行。
 
@@ -21,8 +21,8 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、
 | T03 | 聊天接口完整实现（含 `before` 分页）             | `done` | AC-04、AC-11；契约 e2e 中聊天路由                                                   |
 | T04 | API 演示链加聊天与记录页两步                     | `done` | AC-07（聊天两步绿）                                                                 |
 | T05 | 两端注册行、分区、Tab、空页与简陋 `ChatPanel`    | `done` | AC-05、AC-06；Web e2e、`e2e:mobile`                                                 |
-| T06 | 跨端最薄链路（模拟器）                           | `in_progress` | AC-08                                                                               |
-| T07 | 三道开组门与 master 全量门禁                     | `pending` | AC-09、AC-10                                                                        |
+| T06 | 跨端最薄链路（模拟器）                           | `done` | AC-08                                                                               |
+| T07 | 三道开组门与 master 全量门禁                     | `in_progress` | AC-09、AC-10                                                                        |
 | T08 | 最终代码审查（独立 Subagent）                    | `pending` | 审查记录                                                                            |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
@@ -44,6 +44,7 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、
 | T04 / AC-07 | passed | `$env:FW_SLOT='1'; pnpm e2e:demo` | `scripts/demo-chain.mjs` | 槽位 1 完整 API 演示链退出码 0；日志确认 NB-002 主管文字、店员图片往返两条新消息，店员记录第一页含打回单。演示 API 已停止，3110 无监听。首次运行的图片读取指向配置主机导致拒绝连接，脚本改用本地槽位 API 的签名路径后通过。 |
 | T05 / Mobile 阅读前置 | passed | `Get-Content expo-overview, expo-router, expo-data-fetching, ui-skills-root, expo-ui, expo-native-ui; Invoke-WebRequest Expo SDK v57 imagepicker docs` | `C:/Users/29019/.agents/skills/expo-overview/SKILL.md`, `C:/Users/29019/.agents/skills/expo-router/SKILL.md`, `C:/Users/29019/.agents/skills/expo-data-fetching/SKILL.md` | 已按总览分流读取 Router 与数据获取；UI 工作规则及 expo-ui/native-ui 已读；核对 Expo SDK `57.0.31`、Router `57.0.29`、ImagePicker `57.0.20` 与 SDK 57 官方 ImagePicker 文档，继续沿用已有 RN 控件/原生 `expo-file-system File` 上传，不加依赖。 |
 | T05 / AC-05、AC-06 | passed | `$env:FW_SLOT='1'; pnpm --filter @libs/shared build; pnpm --filter @apps/web typecheck; pnpm --filter @apps/mobile typecheck; pnpm --filter @apps/web lint; pnpm --filter @apps/mobile lint; NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm exec playwright test --config playwright.web.config.ts; $env:FW_SLOT='1'; pnpm e2e:mobile; git diff --check` | `apps/web/src/pages/console.tsx`, `apps/web/src/components/console/chat-panel.tsx`, `apps/mobile/app/(authenticated)/(tabs)/records.tsx`, `apps/mobile/components/mobile/chat-panel.tsx`, `tests/web/console.spec.ts`, `tests/mobile/mobile-inspection.spec.ts` | 类型、lint 与 diff 检查通过；Web 7/7、Mobile 9/9。Mobile 测试曾因既有 Tab 数量断言仍为 2 而失败，断言更新为 3 并验证「记录」标签后全套通过；未放宽行为断言。Web 侧覆盖主管/总部管理入口、店员无入口和主管聊天输入。Web/Mobile e2e 串行使用槽位 1；结束后 3110–3112 无监听进程。不加依赖。 |
+| T06 / AC-08 | passed | `Android 17 模拟器 + Expo Go；adb reverse 3110/3112；Android 系统相册选图；Web 审核页查看并回复；重开 Mobile 巡检页；签名图 HTTP 读取；adb logcat` | `docs/work/FW-011-g02-contract/evidence/mobile-chat.png`, `docs/work/FW-011-g02-contract/evidence/mobile-reopened.png` | 模拟器店员登录 NB-001 并打开同一巡检；从系统 Photos 选图，原生 multipart 发送图文；Web 主管重开审核详情看到店员消息和图片，并发送 `FW011-web-reply-20261028`；重开 Mobile 同单后 UI 树显示主管回复。API GET 返回 2 条（店员图文、主管文字），签名图 URL 200、`image/png` 且 PNG magic bytes 正确；原生 `adb logcat -d -s ReactNativeJS:V Expo:V ReactNative:V` 未见 JS Error/Unhandled。`Cannot connect to Expo CLI` 不作为失败判据。结束后关闭本次 API/Web/Metro/AVD；项目 `seedDatabase` 恢复槽位 1 标准种子并清理临时聊天及图片；3110–3112 已释放。不加依赖。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
