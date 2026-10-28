@@ -2,12 +2,14 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import type { Request } from 'express';
-import { createPool } from './db/client.js';
+import { DATABASE_POOL } from './db/pool.provider.js';
+import type { Pool } from 'pg';
 
 export type AuthUser = {
   id: string;
@@ -25,6 +27,8 @@ export function getJwtSecret() {
 
 @Injectable()
 export class AuthGuard implements CanActivate {
+  constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+
   async canActivate(context: ExecutionContext) {
     const request = context
       .switchToHttp()
@@ -36,21 +40,16 @@ export class AuthGuard implements CanActivate {
         message: '需要登录。',
       });
     try {
-      const pool = createPool();
-      try {
-        const result = await pool.query<AuthUser>(
-          `SELECT u.id, u.email, u.display_name AS "displayName", u.role, u.site_id AS "siteId"
-           FROM floorwalk.sessions s JOIN floorwalk.users u ON u.id = s.user_id
-           WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
-          [hashSessionId(sessionId)],
-        );
-        const user = result.rows[0];
-        if (!user || !['inspector', 'supervisor', 'hq'].includes(user.role))
-          throw new Error('unknown user');
-        request.user = user;
-      } finally {
-        await pool.end();
-      }
+      const result = await this.pool.query<AuthUser>(
+        `SELECT u.id, u.email, u.display_name AS "displayName", u.role, u.site_id AS "siteId"
+         FROM floorwalk.sessions s JOIN floorwalk.users u ON u.id = s.user_id
+         WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
+        [hashSessionId(sessionId)],
+      );
+      const user = result.rows[0];
+      if (!user || !['inspector', 'supervisor', 'hq'].includes(user.role))
+        throw new Error('unknown user');
+      request.user = user;
       return true;
     } catch {
       throw new UnauthorizedException({

@@ -8,9 +8,17 @@ import { AuthController } from './auth.controller.js';
 import { EvidenceController } from './evidence.controller.js';
 import { ReviewController } from './review.controller.js';
 import { DashboardController } from './dashboard.controller.js';
+import {
+  databasePoolProvider,
+  DatabasePoolLifecycle,
+} from './db/pool.provider.js';
 
 @Module({
-  providers: [{ provide: APP_GUARD, useClass: OriginGuard }],
+  providers: [
+    databasePoolProvider,
+    DatabasePoolLifecycle,
+    { provide: APP_GUARD, useClass: OriginGuard },
+  ],
   controllers: [
     HealthController,
     AuthController,

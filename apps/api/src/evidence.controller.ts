@@ -3,6 +3,7 @@ import {
   ConflictException,
   Controller,
   Get,
+  Inject,
   NotFoundException,
   Param,
   ParseUUIDPipe,
@@ -25,7 +26,8 @@ import {
   maxEvidenceSizeBytes,
   signedEvidenceResponseSchema,
 } from '@libs/shared';
-import { createPool } from './db/client.js';
+import { DATABASE_POOL } from './db/pool.provider.js';
+import type { Pool } from 'pg';
 import { AuthGuard } from './auth.js';
 import {
   type AuthedRequest,
@@ -38,6 +40,8 @@ import {
 
 @Controller('api')
 export class EvidenceController {
+  constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+
   @UseGuards(AuthGuard)
   @Post(apiRoutePath(apiRoutes.addEvidence))
   @UseInterceptors(
@@ -62,7 +66,7 @@ export class EvidenceController {
         size: file.size,
       },
     });
-    const pool = createPool();
+    const pool = this.pool;
     const client = await pool.connect();
     let target: string | undefined;
     let committed = false;
@@ -121,7 +125,6 @@ export class EvidenceController {
       throw error;
     } finally {
       client.release();
-      await pool.end();
     }
   }
 
@@ -131,38 +134,33 @@ export class EvidenceController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Req() request: AuthedRequest,
   ) {
-    const pool = createPool();
-    try {
-      const result = await pool.query<{
-        storageKey: string;
-        siteId: string;
-        inspectorId: string;
-      }>(
-        `SELECT e.storage_key AS "storageKey", i.site_id AS "siteId", i.inspector_id AS "inspectorId"
+    const result = await this.pool.query<{
+      storageKey: string;
+      siteId: string;
+      inspectorId: string;
+    }>(
+      `SELECT e.storage_key AS "storageKey", i.site_id AS "siteId", i.inspector_id AS "inspectorId"
          FROM floorwalk.evidence e
          JOIN floorwalk.inspection_items ii ON ii.id = e.inspection_item_id
          JOIN floorwalk.inspections i ON i.id = ii.inspection_id
          WHERE e.id = $1`,
-        [id],
-      );
-      const evidence = result.rows[0];
-      if (!evidence)
-        throw new NotFoundException({
-          code: 'NOT_FOUND',
-          message: '照片不存在。',
-        });
-      assertInspectionAccess(evidence, request.user);
-      const baseUrl = (
-        process.env.API_PUBLIC_BASE_URL ??
-        `http://${process.env.HOST ?? '127.0.0.1'}:${process.env.PORT ?? '3018'}`
-      ).replace(/\/$/, '');
-      const expiresAt = Date.now() + 60 * 60 * 1000;
-      return signedEvidenceResponseSchema.parse({
-        url: `${baseUrl}/storage/${encodeURIComponent(evidence.storageKey)}?expires=${expiresAt}&signature=${evidenceSignature(evidence.storageKey, expiresAt)}`,
-        expiresAt: new Date(expiresAt).toISOString(),
+      [id],
+    );
+    const evidence = result.rows[0];
+    if (!evidence)
+      throw new NotFoundException({
+        code: 'NOT_FOUND',
+        message: '照片不存在。',
       });
-    } finally {
-      await pool.end();
-    }
+    assertInspectionAccess(evidence, request.user);
+    const baseUrl = (
+      process.env.API_PUBLIC_BASE_URL ??
+      `http://${process.env.HOST ?? '127.0.0.1'}:${process.env.PORT ?? '3018'}`
+    ).replace(/\/$/, '');
+    const expiresAt = Date.now() + 60 * 60 * 1000;
+    return signedEvidenceResponseSchema.parse({
+      url: `${baseUrl}/storage/${encodeURIComponent(evidence.storageKey)}?expires=${expiresAt}&signature=${evidenceSignature(evidence.storageKey, expiresAt)}`,
+      expiresAt: new Date(expiresAt).toISOString(),
+    });
   }
 }

@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { AppModule } from './app.module.js';
+import { DATABASE_POOL } from './db/pool.provider.js';
 import { HttpErrorFilter } from './http-exception.filter.js';
 import { createPool } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
@@ -126,6 +127,17 @@ describe('inspection contract API', () => {
     } finally {
       await pool.end();
       await app.close();
+      const remaining = createPool();
+      try {
+        const { rows } = await remaining.query<{ count: string }>(
+          `SELECT count(*)::text AS count FROM pg_stat_activity
+           WHERE datname = current_database()
+             AND application_name = 'floorwalk-api'`,
+        );
+        expect(Number(rows[0].count)).toBe(0);
+      } finally {
+        await remaining.end();
+      }
     }
   });
 
@@ -334,9 +346,7 @@ describe('inspection contract API', () => {
       let completed = 0;
       const requests = Array.from({ length: 50 }, (_, index) => {
         const path =
-          index < 25
-            ? '/api/me'
-            : `/api/inspections/${inspectionId}`;
+          index < 25 ? '/api/me' : `/api/inspections/${inspectionId}`;
         return request(app.getHttpServer())
           .get(path)
           .set('Cookie', inspectorCookie)
@@ -349,7 +359,8 @@ describe('inspection contract API', () => {
       while (completed < requests.length) {
         const { rows } = await monitorPool.query<{ count: string }>(
           `SELECT count(*)::text AS count FROM pg_stat_activity
-           WHERE datname = current_database() AND pid <> $1`,
+           WHERE datname = current_database() AND pid <> $1
+             AND application_name = 'floorwalk-api'`,
           [monitorPid],
         );
         peakConnections = Math.max(peakConnections, Number(rows[0].count));
@@ -358,7 +369,8 @@ describe('inspection contract API', () => {
       const statuses = await Promise.all(requests);
       const { rows } = await monitorPool.query<{ count: string }>(
         `SELECT count(*)::text AS count FROM pg_stat_activity
-         WHERE datname = current_database() AND pid <> $1`,
+         WHERE datname = current_database() AND pid <> $1
+           AND application_name = 'floorwalk-api'`,
         [monitorPid],
       );
       peakConnections = Math.max(peakConnections, Number(rows[0].count));
@@ -370,6 +382,20 @@ describe('inspection contract API', () => {
       await monitorPool.end();
     }
   }, 60000);
+
+  it('creates an independent database pool for each Nest application instance', async () => {
+    const secondModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+    const secondApp =
+      secondModule.createNestApplication<NestExpressApplication>();
+    await secondApp.init();
+    try {
+      expect(secondApp.get(DATABASE_POOL)).not.toBe(app.get(DATABASE_POOL));
+    } finally {
+      await secondApp.close();
+    }
+  });
 
   it('exposes every contracted endpoint with its response schema', async () => {
     const login = await request(app.getHttpServer())

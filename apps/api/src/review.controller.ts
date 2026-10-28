@@ -4,6 +4,7 @@ import {
   ConflictException,
   Controller,
   Get,
+  Inject,
   NotFoundException,
   Param,
   ParseUUIDPipe,
@@ -20,7 +21,8 @@ import {
   reviewRequestSchema,
   reviewResponseSchema,
 } from '@libs/shared';
-import { createPool } from './db/client.js';
+import { DATABASE_POOL } from './db/pool.provider.js';
+import type { Pool } from 'pg';
 import { AuthGuard } from './auth.js';
 import {
   type AuthedRequest,
@@ -31,24 +33,21 @@ import {
 
 @Controller('api')
 export class ReviewController {
+  constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+
   @UseGuards(AuthGuard)
   @Get(apiRoutePath(apiRoutes.reviewQueue))
   async queue(@Req() request: AuthedRequest) {
     assertRole(request.user, ...apiRoutes.reviewQueue.roles);
-    const pool = createPool();
-    try {
-      const result = await pool.query(
-        `SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId",
+    const result = await this.pool.query(
+      `SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId",
           status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt"
          FROM floorwalk.inspections WHERE status IN ('submitted', 'in_review') ORDER BY created_at`,
-      );
-      const details = await Promise.all(
-        result.rows.map((row) => loadInspectionDetail(pool, row)),
-      );
-      return reviewQueueResponseSchema.parse(details);
-    } finally {
-      await pool.end();
-    }
+    );
+    const details = await Promise.all(
+      result.rows.map((row) => loadInspectionDetail(this.pool, row)),
+    );
+    return reviewQueueResponseSchema.parse(details);
   }
 
   @UseGuards(AuthGuard)
@@ -60,7 +59,7 @@ export class ReviewController {
   ) {
     assertRole(request.user, ...apiRoutes.reviewInspection.roles);
     const input = reviewRequestSchema.parse(body);
-    const pool = createPool();
+    const pool = this.pool;
     const client = await pool.connect();
     let committed = false;
     try {
@@ -144,7 +143,6 @@ export class ReviewController {
       throw error;
     } finally {
       client.release();
-      await pool.end();
     }
   }
 }

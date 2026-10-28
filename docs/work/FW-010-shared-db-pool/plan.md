@@ -6,9 +6,9 @@
 
 - 工作单元状态：`approved`
 - 归档状态：`active`
-- 当前任务：T02
+- 当前任务：T03
 - 阻塞：无
-- 下一步：建立应用级连接池 provider，逐个改造守卫与控制器。
+- 下一步：拆后快照和行为不变回归。
 
 Preflight：动 `apps/api/src`（`auth.ts` 是 hardline）和新增的 API 测试；不动 `apps/web`、`apps/mobile`、契约、`schema.ts`、迁移、`package.json`、锁文件、`scripts/`、`tests/`。全程用槽位 1，不占 3018～3020，同一槽位的套件串行跑。开工前记下 `git rev-parse HEAD`。
 
@@ -17,8 +17,8 @@ Preflight：动 `apps/api/src`（`auth.ts` 是 hardline）和新增的 API 测�
 | ID  | 任务                                                 | 状态      | 交付的 AC 与证据                                                                          |
 | --- | ---------------------------------------------------- | --------- | ----------------------------------------------------------------------------------------- |
 | T01 | 拆前基线：快照、并发测试先写好并记下改动前的连接峰值 | `done` | 无，基线：快照文件路径、改动前连接峰值、各套件通过数                                      |
-| T02 | 连接池 provider 与生命周期；守卫和控制器改为注入     | `in_progress` | AC-01、AC-02、AC-04、AC-05；API 测试、契约 e2e                                            |
-| T03 | 行为不变的回归                                       | `pending` | AC-03（拆后快照逐字节相同；Web e2e、`e2e:mobile`、`e2e:cors`、`e2e:demo`、`e2e:demo-ui`） |
+| T02 | 连接池 provider 与生命周期；守卫和控制器改为注入     | `done` | AC-01、AC-02、AC-04、AC-05；API 测试、契约 e2e                                            |
+| T03 | 行为不变的回归                                       | `in_progress` | AC-03（拆后快照逐字节相同；Web e2e、`e2e:mobile`、`e2e:cors`、`e2e:demo`、`e2e:demo-ui`） |
 | T04 | 最终代码审查（独立 Subagent）                        | `pending` | 派审查前跑全量门禁；审查记录                                                              |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
@@ -39,6 +39,8 @@ Preflight：动 `apps/api/src`（`auth.ts` 是 hardline）和新增的 API 测�
 | T01 | passed | `FW_SLOT=1 pnpm e2e:cors` | `tests/cors.spec.ts` | e2e:cors 3/3。 |
 | T01 | passed | `FW_SLOT=1 pnpm e2e:demo` | `scripts/demo-chain.mjs` | 演示链退出码 0。 |
 | T01 | passed | `FW_SLOT=1; NO_PROXY=127.0.0.1,localhost; no_proxy=127.0.0.1,localhost pnpm e2e:demo-ui` | `tests/demo/inspection-chain.spec.ts` | e2e:demo-ui 1/1。所有自启动服务结束后 3018～3020、3110～3112 均无监听进程。 |
+| T02 | passed | `pnpm --filter @apps/api typecheck`; `FW_SLOT=1 pnpm --filter @apps/api test -- src/contract.e2e.test.ts`; `FW_SLOT=1 pnpm --filter @apps/api test` | `apps/api/src/contract.e2e.test.ts` | 类型检查通过；契约测试 6/6、API 全套 30/30；AC-04 峰值 10（拆前对照 50）；覆盖独立 Nest app 池和 app.close 后连接为 0。 |
+| T02 | passed | `rg -n "createPool\\(|pool\\.end\\(" apps/api/src --glob "!**/*.test.ts" --glob "!**/*.e2e.test.ts"` | `apps/api/src` | AC-02：命中全部位于 `db/` 下，包含生命周期 provider、migrate、seed 和 client；非 `db/` 业务代码无命中。3018～3020、3110～3112 无监听。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
