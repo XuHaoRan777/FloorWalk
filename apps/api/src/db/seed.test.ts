@@ -25,18 +25,21 @@ describe('Northbean seed', () => {
       users: string;
       inspectors: string;
       templates: string;
+      current_templates: string;
       template_items: string;
     }>(`SELECT
       (SELECT COUNT(*) FROM floorwalk.sites) AS sites,
       (SELECT COUNT(*) FROM floorwalk.users) AS users,
       (SELECT COUNT(*) FROM floorwalk.users WHERE role = 'inspector') AS inspectors,
       (SELECT COUNT(*) FROM floorwalk.templates) AS templates,
+      (SELECT COUNT(*) FROM floorwalk.templates WHERE is_current) AS current_templates,
       (SELECT COUNT(*) FROM floorwalk.template_items) AS template_items`);
     expect(result.rows[0]).toEqual({
       sites: '12',
       users: '14',
       inspectors: '12',
       templates: '1',
+      current_templates: '1',
       template_items: '8',
     });
     const siteInspectors = await pool.query<{ site_id: string; count: string }>(
@@ -164,5 +167,35 @@ describe('Northbean seed', () => {
     expect(files.rows.length).toBeGreaterThan(0);
     for (const file of files.rows)
       await access(path.resolve(storageDir, file.storage_key));
+
+    const chat = await pool.query<{
+      code: string;
+      status: string;
+      messages: string;
+      text_messages: string;
+      image_messages: string;
+    }>(`SELECT s.code, i.status, COUNT(m.id)::text AS messages,
+        COUNT(m.id) FILTER (WHERE m.body IS NOT NULL)::text AS text_messages,
+        COUNT(m.id) FILTER (WHERE m.storage_key IS NOT NULL)::text AS image_messages
+      FROM floorwalk.inspections i
+      JOIN floorwalk.sites s ON s.id = i.site_id
+      LEFT JOIN floorwalk.chat_messages m ON m.inspection_id = i.id
+      WHERE s.code = 'NB-002' AND i.status = 'rework'
+      GROUP BY s.code, i.status`);
+    expect(chat.rows).toEqual([
+      {
+        code: 'NB-002',
+        status: 'rework',
+        messages: '2',
+        text_messages: '1',
+        image_messages: '1',
+      },
+    ]);
+    const chatFiles = await pool.query<{ storage_key: string }>(
+      'SELECT storage_key FROM floorwalk.chat_messages WHERE storage_key IS NOT NULL',
+    );
+    expect(chatFiles.rows).toHaveLength(1);
+    expect(chatFiles.rows[0].storage_key).toMatch(/^chat\/.+\.jpg$/);
+    await access(path.resolve(storageDir, chatFiles.rows[0].storage_key));
   });
 });

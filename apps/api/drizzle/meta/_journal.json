@@ -15,6 +15,13 @@
       "when": 1793083102034,
       "tag": "0001_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793192935254,
+      "tag": "0002_g02_contract",
+      "breakpoints": true
     }
   ]
 }

@@ -34,6 +34,7 @@ export const siteSchema = z.object({
   id: uuid,
   code: z.string().min(1),
   name: z.string().min(1),
+  active: z.boolean(),
   createdAt: timestamp,
 });
 
@@ -49,6 +50,7 @@ export const userSchema = z.object({
 export const templateSchema = z.object({
   id: uuid,
   name: z.string().min(1),
+  isCurrent: z.boolean(),
   createdAt: timestamp,
 });
 
@@ -140,6 +142,99 @@ export const todayResponseSchema = z.object({
   reworkInspections: z.array(inspectionSchema),
 });
 
+export const chatMessageSchema = z.object({
+  id: uuid,
+  seq: z.number().int().positive(),
+  inspectionId: uuid,
+  authorId: uuid,
+  displayName: z.string().min(1),
+  role: userRoleSchema,
+  body: z.string().nullable(),
+  imageUrl: z.string().url().nullable(),
+  createdAt: timestamp,
+});
+
+export const chatMessagesResponseSchema = z.object({
+  messages: z.array(chatMessageSchema),
+  hasMoreBefore: z.boolean(),
+});
+
+export const chatMessageRequestSchema = z
+  .object({
+    text: z.string().min(1).max(1000).optional(),
+    file: z
+      .object({
+        mimetype: z.enum(['image/jpeg', 'image/png']),
+        size: z.number().int().positive().max(10 * 1024 * 1024),
+      })
+      .optional(),
+  })
+  .refine((value) => value.text !== undefined || value.file !== undefined);
+
+export const chatImageUrlResponseSchema = z.object({
+  url: z.string().url(),
+  expiresAt: timestamp,
+});
+
+export const inspectorRecordSchema = z.object({
+  id: uuid,
+  status: inspectionStatusSchema,
+  score: z.number().int().min(0).max(100).nullable(),
+  createdAt: timestamp,
+  submittedAt: timestamp.nullable(),
+  decidedAt: timestamp.nullable(),
+});
+
+export const inspectorRecordsResponseSchema = z.object({
+  items: z.array(inspectorRecordSchema),
+  nextCursor: z.string().nullable(),
+});
+
+export const createSiteRequestSchema = z.object({
+  code: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+});
+
+export const updateSiteRequestSchema = z
+  .object({
+    name: z.string().trim().min(1).optional(),
+    active: z.boolean().optional(),
+  })
+  .refine((value) => value.name !== undefined || value.active !== undefined);
+
+export const adminSitesResponseSchema = z.array(siteSchema);
+export const siteResponseSchema = siteSchema;
+
+export const adminTemplateSchema = templateSchema.extend({
+  items: z.array(templateItemSchema),
+});
+
+export const createTemplateRequestSchema = z.object({
+  name: z.string().trim().min(1),
+  items: z.array(
+    z.object({
+      title: z.string().trim().min(1),
+      photoRequired: z.boolean(),
+      critical: z.boolean(),
+    }),
+  ).min(1),
+});
+
+export const updateTemplateRequestSchema = z.object({
+  name: z.string().trim().min(1),
+  items: z.array(
+    z.object({
+      position: z.number().int().positive(),
+      title: z.string().trim().min(1),
+      photoRequired: z.boolean(),
+      critical: z.boolean(),
+    }),
+  ).min(1),
+});
+
+export const adminTemplatesResponseSchema = z.array(adminTemplateSchema);
+export const templateResponseSchema = adminTemplateSchema;
+
 export const createInspectionRequestSchema = z.object({
   templateId: uuid,
 });
@@ -226,12 +321,19 @@ export const evidenceUploadRequestSchema = z.object({
 
 export const dashboardLatestStatuses = ['passed', 'failed'] as const;
 export const databaseConstraints = {
-  unique: ['templates.name', 'sessions.token_hash'],
+  unique: [
+    'templates.name',
+    'templates.is_current WHERE is_current = true',
+    'template_items(template_id, position)',
+    'sessions.token_hash',
+    'chat_messages.seq',
+  ],
   indexes: [
     'sessions(user_id)',
     'inspections(site_id, status)',
     'inspections(created_at)',
     'evidence(inspection_item_id)',
+    'chat_messages(inspection_id, seq)',
   ],
   checks: [
     "users.role IN ('inspector', 'supervisor', 'hq')",
@@ -244,6 +346,9 @@ export const databaseConstraints = {
     'evidence.size >= 0',
     "reviews.action IN ('start', 'approve', 'rework', 'fail')",
     'reviews.rework_item_ids is required only for rework reviews',
+    'char_length(chat_messages.body) <= 1000',
+    'chat_messages.body IS NOT NULL OR chat_messages.storage_key IS NOT NULL',
+    'chat_messages.storage_key, mime, size are all NULL or all NOT NULL',
   ],
 } as const;
 
@@ -261,7 +366,7 @@ export const inspectionStatusTransitions = {
 
 export type ApiRouteRole = UserRole;
 export type ApiRouteDefinition = {
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   path: `/api/${string}`;
   roles: readonly ApiRouteRole[];
   requestSchema: ZodTypeAny | null;
@@ -374,6 +479,101 @@ export const apiRoutes = {
     responseSchema: dashboardSitesResponseSchema,
     successStatus: 200,
   },
+  listInspectionMessages: {
+    method: 'GET',
+    path: '/api/inspections/:id/messages',
+    roles: userRoles,
+    requestSchema: z.object({
+      after: z.coerce.number().int().positive().optional(),
+      before: z.coerce.number().int().positive().optional(),
+      limit: z.coerce.number().int().positive().max(100).default(50),
+    }),
+    responseSchema: chatMessagesResponseSchema,
+    successStatus: 200,
+  },
+  createInspectionMessage: {
+    method: 'POST',
+    path: '/api/inspections/:id/messages',
+    roles: ['inspector', 'supervisor'],
+    requestSchema: chatMessageRequestSchema,
+    responseSchema: chatMessageSchema,
+    successStatus: 201,
+  },
+  getMessageImageUrl: {
+    method: 'GET',
+    path: '/api/messages/:id/image-url',
+    roles: userRoles,
+    requestSchema: null,
+    responseSchema: chatImageUrlResponseSchema,
+    successStatus: 200,
+  },
+  listInspectorInspections: {
+    method: 'GET',
+    path: '/api/inspector/inspections',
+    roles: ['inspector'],
+    requestSchema: z.object({
+      cursor: z.string().optional(),
+      limit: z.coerce.number().int().positive().max(50).default(10),
+    }),
+    responseSchema: inspectorRecordsResponseSchema,
+    successStatus: 200,
+  },
+  listAdminSites: {
+    method: 'GET',
+    path: '/api/admin/sites',
+    roles: ['supervisor', 'hq'],
+    requestSchema: null,
+    responseSchema: adminSitesResponseSchema,
+    successStatus: 200,
+  },
+  createAdminSite: {
+    method: 'POST',
+    path: '/api/admin/sites',
+    roles: ['supervisor', 'hq'],
+    requestSchema: createSiteRequestSchema,
+    responseSchema: siteResponseSchema,
+    successStatus: 201,
+  },
+  updateAdminSite: {
+    method: 'PATCH',
+    path: '/api/admin/sites/:id',
+    roles: ['supervisor', 'hq'],
+    requestSchema: updateSiteRequestSchema,
+    responseSchema: siteResponseSchema,
+    successStatus: 200,
+  },
+  listAdminTemplates: {
+    method: 'GET',
+    path: '/api/admin/templates',
+    roles: ['supervisor', 'hq'],
+    requestSchema: null,
+    responseSchema: adminTemplatesResponseSchema,
+    successStatus: 200,
+  },
+  createAdminTemplate: {
+    method: 'POST',
+    path: '/api/admin/templates',
+    roles: ['supervisor', 'hq'],
+    requestSchema: createTemplateRequestSchema,
+    responseSchema: templateResponseSchema,
+    successStatus: 201,
+  },
+  updateAdminTemplate: {
+    method: 'PUT',
+    path: '/api/admin/templates/:id',
+    roles: ['supervisor', 'hq'],
+    requestSchema: updateTemplateRequestSchema,
+    responseSchema: templateResponseSchema,
+    successStatus: 200,
+  },
+  setCurrentAdminTemplate: {
+    method: 'POST',
+    path: '/api/admin/templates/:id/current',
+    roles: ['supervisor', 'hq'],
+    requestSchema: null,
+    responseSchema: templateResponseSchema,
+    successStatus: 200,
+  },
 } as const satisfies Record<string, ApiRouteDefinition>;
 
 export type ApiRouteKey = keyof typeof apiRoutes;
@@ -418,6 +618,15 @@ export type DashboardSitesResponse = z.infer<
 >;
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
 export type EvidenceUploadRequest = z.infer<typeof evidenceUploadRequestSchema>;
+export type ChatMessage = z.infer<typeof chatMessageSchema>;
+export type ChatMessagesResponse = z.infer<typeof chatMessagesResponseSchema>;
+export type InspectorRecordsResponse = z.infer<
+  typeof inspectorRecordsResponseSchema
+>;
+export type AdminSitesResponse = z.infer<typeof adminSitesResponseSchema>;
+export type AdminTemplatesResponse = z.infer<
+  typeof adminTemplatesResponseSchema
+>;
 
 export type CalculateInspectionScore = (
   results: readonly InspectionItemResult[],

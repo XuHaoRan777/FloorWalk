@@ -1,4 +1,5 @@
 import argon2 from 'argon2';
+import { randomUUID } from 'node:crypto';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,11 +26,12 @@ export async function seedDatabase(
   const client = await pool.connect();
   const storageDir = path.resolve(storagePath);
   await rm(path.join(storageDir, 'seed'), { recursive: true, force: true });
+  await rm(path.join(storageDir, 'chat'), { recursive: true, force: true });
   await mkdir(storageDir, { recursive: true });
   try {
     await client.query('BEGIN');
     await client.query(
-      'TRUNCATE TABLE floorwalk.sessions, floorwalk.reviews, floorwalk.evidence, floorwalk.inspection_items, floorwalk.inspections, floorwalk.users, floorwalk.template_items, floorwalk.templates, floorwalk.sites RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE floorwalk.chat_messages, floorwalk.sessions, floorwalk.reviews, floorwalk.evidence, floorwalk.inspection_items, floorwalk.inspections, floorwalk.users, floorwalk.template_items, floorwalk.templates, floorwalk.sites RESTART IDENTITY CASCADE',
     );
 
     const sites = new Map<string, string>();
@@ -44,7 +46,7 @@ export async function seedDatabase(
     }
 
     const templateResult = await client.query<{ id: string }>(
-      `INSERT INTO floorwalk.templates (name) VALUES ('开店检查') RETURNING id`,
+      `INSERT INTO floorwalk.templates (name, is_current) VALUES ('开店检查', true) RETURNING id`,
     );
     const templateId = templateResult.rows[0].id;
     for (let index = 0; index < templateItems.length; index += 1) {
@@ -159,6 +161,40 @@ export async function seedDatabase(
         itemRows.rows,
       );
     }
+
+    const reworkInspection = await client.query<{
+      id: string;
+      inspector_id: string;
+    }>(
+      `SELECT i.id, i.inspector_id
+       FROM floorwalk.inspections i
+       JOIN floorwalk.sites s ON s.id = i.site_id
+       WHERE s.code = 'NB-002' AND i.status = 'rework'
+       ORDER BY i.created_at DESC LIMIT 1`,
+    );
+    const supervisorId = supervisorResult.rows[0].id;
+    const inspection = reworkInspection.rows[0];
+    if (!inspection) throw new Error('NB-002 打回演示单创建失败。');
+    await client.query(
+      `INSERT INTO floorwalk.chat_messages
+        (inspection_id, author_id, body, created_at)
+       VALUES ($1, $2, $3, now())`,
+      [inspection.id, supervisorId, '请补充冷柜温度照片后重新提交。'],
+    );
+    const imageKey = `chat/${inspection.id}/${randomUUID()}.jpg`;
+    const imageTarget = path.resolve(storageDir, imageKey);
+    await mkdir(path.dirname(imageTarget), { recursive: true });
+    const chatPhoto = Buffer.from(
+      '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9oADAMBAAIAAwAAABAf/9k=',
+      'base64',
+    );
+    await writeFile(imageTarget, chatPhoto);
+    await client.query(
+      `INSERT INTO floorwalk.chat_messages
+        (inspection_id, author_id, storage_key, mime, size, created_at)
+       VALUES ($1, $2, $3, 'image/jpeg', $4, now() + interval '1 second')`,
+      [inspection.id, inspection.inspector_id, imageKey, chatPhoto.byteLength],
+    );
 
     await client.query('COMMIT');
   } catch (error) {
