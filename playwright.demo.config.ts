@@ -84,6 +84,7 @@ export default defineConfig({
       cwd: projectRoot,
       env: {
         ...inheritedEnv,
+        FW_SLOT: String(slot),
         EXPO_PUBLIC_API_BASE_URL: `${apiUrl}/api`,
         RCT_METRO_PORT: String(metroPort),
       },

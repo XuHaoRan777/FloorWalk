@@ -12,7 +12,7 @@ test('店员、主管与总部通过真实界面完成 NB-001 巡检闭环', asy
   await page.getByLabel('邮箱').fill('inspector@northbean.example');
   await page.getByLabel('密码').fill(password);
   await page.getByTestId('login-button').click();
-  await expect(page.getByText('今日待巡')).toBeVisible();
+  await expect(page.getByRole('tab', { name: '今日待巡' })).toBeVisible();
   await page.getByTestId('start-inspection').click();
   await expect(page.getByRole('heading', { name: '巡检详情' })).toBeVisible();
 
