@@ -323,6 +323,54 @@ describe('inspection contract API', () => {
     }
   }, 60000);
 
+  it('keeps API connections within the default pool limit under concurrent requests', async () => {
+    const monitorPool = createPool();
+    let peakConnections = 0;
+    try {
+      const { rows: pidRows } = await monitorPool.query<{ pid: number }>(
+        'SELECT pg_backend_pid() AS pid',
+      );
+      const monitorPid = pidRows[0].pid;
+      let completed = 0;
+      const requests = Array.from({ length: 50 }, (_, index) => {
+        const path =
+          index < 25
+            ? '/api/me'
+            : `/api/inspections/${inspectionId}`;
+        return request(app.getHttpServer())
+          .get(path)
+          .set('Cookie', inspectorCookie)
+          .then((response) => response.status)
+          .finally(() => {
+            completed += 1;
+          });
+      });
+
+      while (completed < requests.length) {
+        const { rows } = await monitorPool.query<{ count: string }>(
+          `SELECT count(*)::text AS count FROM pg_stat_activity
+           WHERE datname = current_database() AND pid <> $1`,
+          [monitorPid],
+        );
+        peakConnections = Math.max(peakConnections, Number(rows[0].count));
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      const statuses = await Promise.all(requests);
+      const { rows } = await monitorPool.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM pg_stat_activity
+         WHERE datname = current_database() AND pid <> $1`,
+        [monitorPid],
+      );
+      peakConnections = Math.max(peakConnections, Number(rows[0].count));
+
+      console.info(`AC-04 peak API connections: ${peakConnections}`);
+      expect(statuses).toEqual(Array(50).fill(200));
+      expect(peakConnections).toBeLessThanOrEqual(10);
+    } finally {
+      await monitorPool.end();
+    }
+  }, 60000);
+
   it('exposes every contracted endpoint with its response schema', async () => {
     const login = await request(app.getHttpServer())
       .post('/api/auth/session')
