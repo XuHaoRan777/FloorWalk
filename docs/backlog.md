@@ -21,9 +21,8 @@
 
 只列 `归档状态：active` 的单元，个数上限与状态一致性由 `python scripts/validate_docs.py` 校验。
 
-| ID     | 工作单元                                                   | 状态     | 依赖   | 下一步                 |
-| ------ | ---------------------------------------------------------- | -------- | ------ | ---------------------- |
-| FW-010 | [API 共用数据库连接池](work/FW-010-shared-db-pool/spec.md) | verified | FW-009 | 清理本地证据后完成归档 |
+| ID  | 工作单元 | 状态 | 依赖 | 下一步 |
+| --- | -------- | ---- | ---- | ------ |
 
 ## 待开单元（未批准，按建议顺序）
 
@@ -60,3 +59,4 @@
 | FW-007 | [并行组 g01 集成](work/FW-007-g01-integration/spec.md)                              | 2026-10-25 | 并行组 g01 归档提交（见 git log）                         |
 | FW-008 | [按功能拆模块](work/FW-008-module-split/spec.md)                                    | 2026-10-26 | 按任务本地提交及归档提交（见 git log），未推送            |
 | FW-009 | [会话改为 HttpOnly cookie 与服务端会话表](work/FW-009-web-httponly-session/spec.md) | 2026-10-27 | 按任务本地提交，未推送（见 git log）                      |
+| FW-010 | [API 共用数据库连接池](work/FW-010-shared-db-pool/spec.md)                          | 2026-10-28 | 归档提交（见 git log）                                    |
