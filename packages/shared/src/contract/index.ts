@@ -144,7 +144,7 @@ export const todayResponseSchema = z.object({
 
 export const chatMessageSchema = z.object({
   id: uuid,
-  seq: z.number().int().positive(),
+  seq: z.string().regex(/^[1-9]\d*$/),
   inspectionId: uuid,
   authorId: uuid,
   displayName: z.string().min(1),
@@ -165,7 +165,11 @@ export const chatMessageRequestSchema = z
     file: z
       .object({
         mimetype: z.enum(['image/jpeg', 'image/png']),
-        size: z.number().int().positive().max(10 * 1024 * 1024),
+        size: z
+          .number()
+          .int()
+          .positive()
+          .max(10 * 1024 * 1024),
       })
       .optional(),
   })
@@ -211,13 +215,15 @@ export const adminTemplateSchema = templateSchema.extend({
 
 export const createTemplateRequestSchema = z.object({
   name: z.string().trim().min(1),
-  items: z.array(
-    z.object({
-      title: z.string().trim().min(1),
-      photoRequired: z.boolean(),
-      critical: z.boolean(),
-    }),
-  ).min(1),
+  items: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1),
+        photoRequired: z.boolean(),
+        critical: z.boolean(),
+      }),
+    )
+    .min(1),
 });
 
 export const updateTemplateRequestSchema = z
@@ -495,11 +501,21 @@ export const apiRoutes = {
     method: 'GET',
     path: '/api/inspections/:id/messages',
     roles: userRoles,
-    requestSchema: z.object({
-      after: z.coerce.number().int().positive().optional(),
-      before: z.coerce.number().int().positive().optional(),
-      limit: z.coerce.number().int().positive().max(100).default(50),
-    }),
+    requestSchema: z
+      .object({
+        after: z
+          .string()
+          .regex(/^[1-9]\d*$/)
+          .optional(),
+        before: z
+          .string()
+          .regex(/^[1-9]\d*$/)
+          .optional(),
+        limit: z.coerce.number().int().positive().max(100).default(50),
+      })
+      .refine(
+        (value) => value.after === undefined || value.before === undefined,
+      ),
     responseSchema: chatMessagesResponseSchema,
     successStatus: 200,
   },

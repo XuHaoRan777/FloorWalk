@@ -14,6 +14,8 @@ import {
   apiRoutes,
   adminSitesResponseSchema,
   adminTemplatesResponseSchema,
+  chatMessageSchema,
+  chatMessagesResponseSchema,
   dashboardSitesResponseSchema,
   evidenceSchema,
   inspectionDetailSchema,
@@ -24,6 +26,7 @@ import {
   reviewResponseSchema,
   siteResponseSchema,
   signedEvidenceResponseSchema,
+  chatImageUrlResponseSchema,
   submitInspectionResponseSchema,
   todayResponseSchema,
   templateResponseSchema,
@@ -42,9 +45,14 @@ describe('inspection contract API', () => {
   let otherSiteInspectionId: string;
   let seedEvidenceId: string;
   let templateId: string;
+  let chatInspectionId: string;
+  let chatImageMessageId: string;
+  let nb002InspectorCookie: string;
   let createdInspectionId: string | undefined;
   let createdEvidenceId: string | undefined;
   let createdEvidenceStorageKey: string | undefined;
+  const createdChatMessageIds: string[] = [];
+  const createdChatStorageKeys: string[] = [];
 
   beforeAll(async () => {
     await runMigrations();
@@ -68,6 +76,7 @@ describe('inspection contract API', () => {
       )[0];
     };
     inspectorCookie = await login('inspector@northbean.example');
+    nb002InspectorCookie = await login('inspector+nb-002@northbean.example');
     supervisorCookie = await login('supervisor@northbean.example');
     hqCookie = await login('hq@northbean.example');
 
@@ -77,6 +86,17 @@ describe('inspection contract API', () => {
         'SELECT id FROM floorwalk.templates LIMIT 1',
       );
       templateId = template.rows[0].id;
+      const chatInspection = await pool.query<{ id: string }>(
+        `SELECT i.id FROM floorwalk.inspections i
+         JOIN floorwalk.sites s ON s.id = i.site_id
+         WHERE s.code = 'NB-002' AND i.status = 'rework' ORDER BY i.created_at DESC LIMIT 1`,
+      );
+      chatInspectionId = chatInspection.rows[0].id;
+      const chatImage = await pool.query<{ id: string }>(
+        'SELECT id FROM floorwalk.chat_messages WHERE inspection_id = $1 AND storage_key IS NOT NULL',
+        [chatInspectionId],
+      );
+      chatImageMessageId = chatImage.rows[0].id;
       const result = await pool.query<{ id: string; code: string }>(
         `SELECT i.id, s.code FROM floorwalk.inspections i
          JOIN floorwalk.sites s ON s.id = i.site_id ORDER BY i.created_at`,
@@ -103,6 +123,10 @@ describe('inspection contract API', () => {
     try {
       if (createdInspectionId) {
         await pool.query(
+          'DELETE FROM floorwalk.chat_messages WHERE inspection_id = $1',
+          [createdInspectionId],
+        );
+        await pool.query(
           `DELETE FROM floorwalk.evidence WHERE inspection_item_id IN
            (SELECT id FROM floorwalk.inspection_items WHERE inspection_id = $1)`,
           [createdInspectionId],
@@ -119,6 +143,11 @@ describe('inspection contract API', () => {
           createdInspectionId,
         ]);
       }
+      if (createdChatMessageIds.length)
+        await pool.query(
+          'DELETE FROM floorwalk.chat_messages WHERE id = ANY($1::uuid[])',
+          [createdChatMessageIds],
+        );
       await pool.query('DELETE FROM floorwalk.sessions');
       if (createdEvidenceStorageKey) {
         await rm(
@@ -129,6 +158,14 @@ describe('inspection contract API', () => {
           { force: true },
         );
       }
+      for (const storageKey of createdChatStorageKeys)
+        await rm(
+          path.resolve(
+            process.env.STORAGE_DIR ?? path.join('apps', 'api', '.storage'),
+            storageKey,
+          ),
+          { force: true },
+        );
     } finally {
       await pool.end();
       await app.close();
@@ -407,7 +444,12 @@ describe('inspection contract API', () => {
             const response = await request(app.getHttpServer())
               .post('/api/admin/templates')
               .set('Cookie', inspectorCookie)
-              .send({ name: '测试模板', items: [{ title: '测试项', photoRequired: false, critical: false }] });
+              .send({
+                name: '测试模板',
+                items: [
+                  { title: '测试项', photoRequired: false, critical: false },
+                ],
+              });
             return { status: response.status, body: response.body };
           },
         },
@@ -419,7 +461,17 @@ describe('inspection contract API', () => {
             const response = await request(app.getHttpServer())
               .put(`/api/admin/templates/${templateId}`)
               .set('Cookie', inspectorCookie)
-              .send({ name: '测试模板', items: [{ position: 1, title: '测试项', photoRequired: false, critical: false }] });
+              .send({
+                name: '测试模板',
+                items: [
+                  {
+                    position: 1,
+                    title: '测试项',
+                    photoRequired: false,
+                    critical: false,
+                  },
+                ],
+              });
             return { status: response.status, body: response.body };
           },
         },
@@ -502,7 +554,12 @@ describe('inspection contract API', () => {
       .send({
         name: '开店检查更新',
         items: [
-          { position: 1, title: '测试项', photoRequired: false, critical: false },
+          {
+            position: 1,
+            title: '测试项',
+            photoRequired: false,
+            critical: false,
+          },
         ],
       })
       .expect(200);
@@ -533,12 +590,20 @@ describe('inspection contract API', () => {
     await request(app.getHttpServer())
       .post('/api/admin/templates')
       .set('Cookie', inspectorCookie)
-      .send({ name: '拒绝', items: [{ title: '项', photoRequired: false, critical: false }] })
+      .send({
+        name: '拒绝',
+        items: [{ title: '项', photoRequired: false, critical: false }],
+      })
       .expect(403);
     await request(app.getHttpServer())
       .put(`/api/admin/templates/${templateId}`)
       .set('Cookie', inspectorCookie)
-      .send({ name: '拒绝', items: [{ position: 1, title: '项', photoRequired: false, critical: false }] })
+      .send({
+        name: '拒绝',
+        items: [
+          { position: 1, title: '项', photoRequired: false, critical: false },
+        ],
+      })
       .expect(403);
     await request(app.getHttpServer())
       .post(`/api/admin/templates/${templateId}/current`)
@@ -548,6 +613,146 @@ describe('inspection contract API', () => {
       .get('/api/inspector/inspections')
       .set('Cookie', supervisorCookie)
       .expect(403);
+  });
+
+  it('supports chat text, images, access checks, and before/after pagination', async () => {
+    const seeded = await request(app.getHttpServer())
+      .get(`/api/inspections/${chatInspectionId}/messages`)
+      .set('Cookie', supervisorCookie)
+      .expect(200);
+    const seedPage = chatMessagesResponseSchema.parse(seeded.body);
+    expect(seedPage.messages).toHaveLength(2);
+    expect(seedPage.messages[0].body).toBeTruthy();
+    expect(seedPage.messages[1].imageUrl).toBeTruthy();
+    const storeInspectorPage = await request(app.getHttpServer())
+      .get(`/api/inspections/${chatInspectionId}/messages`)
+      .set('Cookie', nb002InspectorCookie)
+      .expect(200);
+    expect(
+      chatMessagesResponseSchema.parse(storeInspectorPage.body).messages,
+    ).toHaveLength(2);
+
+    await request(app.getHttpServer())
+      .get(`/api/inspections/${chatInspectionId}/messages`)
+      .set('Cookie', inspectorCookie)
+      .expect(403);
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${inspectionId}/messages`)
+      .set('Cookie', hqCookie)
+      .field('text', '总部不能发言')
+      .expect(403);
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${chatInspectionId}/messages`)
+      .set('Cookie', inspectorCookie)
+      .field('text', '外店不能发言')
+      .expect(403);
+
+    const textResponse = await request(app.getHttpServer())
+      .post(`/api/inspections/${inspectionId}/messages`)
+      .set('Cookie', inspectorCookie)
+      .field('text', '已结束的巡检单仍可留言。')
+      .expect(201);
+    const textMessage = chatMessageSchema.parse(textResponse.body);
+    createdChatMessageIds.push(textMessage.id);
+
+    const image = Buffer.from(
+      '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAgBAQABPxB//9oADAMBAAIAAwAAABAf/9k=',
+      'base64',
+    );
+    const imageResponse = await request(app.getHttpServer())
+      .post(`/api/inspections/${inspectionId}/messages`)
+      .set('Cookie', supervisorCookie)
+      .field('text', '这是补充照片。')
+      .attach('file', image, {
+        filename: 'chat.jpg',
+        contentType: 'image/jpeg',
+      })
+      .expect(201);
+    const imageMessage = chatMessageSchema.parse(imageResponse.body);
+    createdChatMessageIds.push(imageMessage.id);
+    expect(imageMessage.imageUrl).toBeTruthy();
+    const storageKey = decodeURIComponent(
+      new URL(imageMessage.imageUrl!).pathname.replace('/storage/', ''),
+    );
+    createdChatStorageKeys.push(storageKey);
+
+    const imageUrl = await request(app.getHttpServer())
+      .get(`/api/messages/${imageMessage.id}/image-url`)
+      .set('Cookie', hqCookie)
+      .expect(200);
+    const signed = chatImageUrlResponseSchema.parse(imageUrl.body);
+    const signedPath = new URL(signed.url);
+    await request(app.getHttpServer())
+      .get(`${signedPath.pathname}${signedPath.search}`)
+      .expect(200)
+      .expect('content-type', /image\/jpeg/);
+
+    const latest = await request(app.getHttpServer())
+      .get(`/api/inspections/${inspectionId}/messages?limit=50`)
+      .set('Cookie', inspectorCookie)
+      .expect(200);
+    const latestPage = chatMessagesResponseSchema.parse(latest.body);
+    expect(latestPage.messages.slice(-2).map((message) => message.id)).toEqual([
+      textMessage.id,
+      imageMessage.id,
+    ]);
+    expect(latestPage.hasMoreBefore).toBe(false);
+
+    const after = await request(app.getHttpServer())
+      .get(`/api/inspections/${inspectionId}/messages?after=${textMessage.seq}`)
+      .set('Cookie', inspectorCookie)
+      .expect(200);
+    expect(chatMessagesResponseSchema.parse(after.body).messages[0].id).toBe(
+      imageMessage.id,
+    );
+    expect(chatMessagesResponseSchema.parse(after.body).hasMoreBefore).toBe(
+      true,
+    );
+
+    const before = await request(app.getHttpServer())
+      .get(
+        `/api/inspections/${inspectionId}/messages?before=${imageMessage.seq}`,
+      )
+      .set('Cookie', inspectorCookie)
+      .expect(200);
+    expect(
+      chatMessagesResponseSchema.parse(before.body).messages.at(-1)?.id,
+    ).toBe(textMessage.id);
+    await request(app.getHttpServer())
+      .get(
+        `/api/inspections/${inspectionId}/messages?after=${textMessage.seq}&before=${imageMessage.seq}`,
+      )
+      .set('Cookie', inspectorCookie)
+      .expect(400)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
+      );
+
+    let lastBulkMessageId = '';
+    for (let index = 0; index < 50; index += 1) {
+      const response = await request(app.getHttpServer())
+        .post(`/api/inspections/${inspectionId}/messages`)
+        .set('Cookie', inspectorCookie)
+        .field('text', `分页测试 ${index + 1}`)
+        .expect(201);
+      const message = chatMessageSchema.parse(response.body);
+      createdChatMessageIds.push(message.id);
+      lastBulkMessageId = message.id;
+    }
+    const recent = await request(app.getHttpServer())
+      .get(`/api/inspections/${inspectionId}/messages`)
+      .set('Cookie', inspectorCookie)
+      .expect(200);
+    const recentPage = chatMessagesResponseSchema.parse(recent.body);
+    expect(recentPage.messages).toHaveLength(50);
+    expect(recentPage.hasMoreBefore).toBe(true);
+    expect(recentPage.messages.at(-1)?.id).toBe(lastBulkMessageId);
+
+    const imageBySeed = await request(app.getHttpServer())
+      .get(`/api/messages/${chatImageMessageId}/image-url`)
+      .set('Cookie', supervisorCookie)
+      .expect(200);
+    chatImageUrlResponseSchema.parse(imageBySeed.body);
   });
 
   it('keeps API connections within the default pool limit under concurrent requests', async () => {
@@ -1016,6 +1221,71 @@ describe('inspection contract API', () => {
       .delete('/api/auth/session')
       .expect(204);
     expect(deletedSession.text).toBe('');
+    const chatListResponse = await request(app.getHttpServer())
+      .get(`/api/inspections/${chatInspectionId}/messages`)
+      .set('Cookie', supervisorCookie)
+      .expect(200);
+    const chatCreateResponse = await request(app.getHttpServer())
+      .post(`/api/inspections/${inspectionId}/messages`)
+      .set('Cookie', supervisorCookie)
+      .field('text', '路由表 schema 验证消息')
+      .expect(201);
+    createdChatMessageIds.push(
+      chatMessageSchema.parse(chatCreateResponse.body).id,
+    );
+    const chatImageUrlResponse = await request(app.getHttpServer())
+      .get(`/api/messages/${chatImageMessageId}/image-url`)
+      .set('Cookie', supervisorCookie)
+      .expect(200);
+    const recordListResponse = await request(app.getHttpServer())
+      .get('/api/inspector/inspections')
+      .set('Cookie', inspectorCookie)
+      .expect(200);
+    const adminSiteListResponse = await request(app.getHttpServer())
+      .get('/api/admin/sites')
+      .set('Cookie', supervisorCookie)
+      .expect(200);
+    const adminSiteCreateResponse = await request(app.getHttpServer())
+      .post('/api/admin/sites')
+      .set('Cookie', supervisorCookie)
+      .send({ code: 'FW-011-ROUTE', name: '路由表测试门店' })
+      .expect(201);
+    const adminSiteUpdateResponse = await request(app.getHttpServer())
+      .patch(`/api/admin/sites/${adminSiteListResponse.body[0].id}`)
+      .set('Cookie', supervisorCookie)
+      .send({ active: false })
+      .expect(200);
+    const adminTemplateListResponse = await request(app.getHttpServer())
+      .get('/api/admin/templates')
+      .set('Cookie', supervisorCookie)
+      .expect(200);
+    const adminTemplateCreateResponse = await request(app.getHttpServer())
+      .post('/api/admin/templates')
+      .set('Cookie', supervisorCookie)
+      .send({
+        name: 'FW-011 路由表测试模板',
+        items: [{ title: '测试项', photoRequired: false, critical: false }],
+      })
+      .expect(201);
+    const adminTemplateUpdateResponse = await request(app.getHttpServer())
+      .put(`/api/admin/templates/${templateId}`)
+      .set('Cookie', supervisorCookie)
+      .send({
+        name: '开店检查',
+        items: [
+          {
+            position: 1,
+            title: '测试项',
+            photoRequired: false,
+            critical: false,
+          },
+        ],
+      })
+      .expect(200);
+    const adminTemplateCurrentResponse = await request(app.getHttpServer())
+      .post(`/api/admin/templates/${templateId}/current`)
+      .set('Cookie', supervisorCookie)
+      .expect(200);
     const routeResponses = {
       createSession: login,
       deleteSession: deletedSession,
@@ -1030,6 +1300,17 @@ describe('inspection contract API', () => {
       reviewQueue: queue,
       reviewInspection: reviewed,
       dashboardSites: dashboard,
+      listInspectionMessages: chatListResponse,
+      createInspectionMessage: chatCreateResponse,
+      getMessageImageUrl: chatImageUrlResponse,
+      listInspectorInspections: recordListResponse,
+      listAdminSites: adminSiteListResponse,
+      createAdminSite: adminSiteCreateResponse,
+      updateAdminSite: adminSiteUpdateResponse,
+      listAdminTemplates: adminTemplateListResponse,
+      createAdminTemplate: adminTemplateCreateResponse,
+      updateAdminTemplate: adminTemplateUpdateResponse,
+      setCurrentAdminTemplate: adminTemplateCurrentResponse,
     };
     for (const [routeKey, route] of Object.entries(apiRoutes)) {
       const response = routeResponses[routeKey as keyof typeof routeResponses];

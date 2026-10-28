@@ -148,7 +148,7 @@ export const chatMessages = floorwalk.table(
   'chat_messages',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    seq: bigserial('seq', { mode: 'number' }).notNull().unique(),
+    seq: bigserial('seq', { mode: 'bigint' }).notNull().unique(),
     inspectionId: uuid('inspection_id')
       .notNull()
       .references(() => inspections.id),
@@ -162,10 +162,7 @@ export const chatMessages = floorwalk.table(
     createdAt: createdAt(),
   },
   (table) => [
-    index('chat_messages_inspection_seq_idx').on(
-      table.inspectionId,
-      table.seq,
-    ),
+    index('chat_messages_inspection_seq_idx').on(table.inspectionId, table.seq),
     check(
       'chat_messages_body_or_image_check',
       sql`${table.body} IS NOT NULL OR ${table.storageKey} IS NOT NULL`,

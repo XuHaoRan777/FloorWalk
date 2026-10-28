@@ -10,6 +10,7 @@ import { ReviewController } from './review.controller.js';
 import { DashboardController } from './dashboard.controller.js';
 import { AdminController } from './admin.controller.js';
 import { RecordsController } from './records.controller.js';
+import { ChatController } from './chat.controller.js';
 import {
   databasePoolProvider,
   DatabasePoolLifecycle,
@@ -30,6 +31,7 @@ import {
     DashboardController,
     AdminController,
     RecordsController,
+    ChatController,
     StorageController,
   ],
 })
