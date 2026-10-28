@@ -218,6 +218,70 @@ try {
     201,
   );
 
+  await login('inspector+nb-002');
+  const nb002Records = await call('/api/inspector/inspections?limit=10', {
+    headers: authHeaders('inspector+nb-002'),
+  });
+  const nb002Rework = nb002Records.items.find((item) => item.status === 'rework');
+  if (!nb002Rework)
+    throw new Error('NB-002 第一页没有打回巡检单。');
+  const nb002ChatPath = `/api/inspections/${nb002Rework.id}/messages`;
+  const seedConversation = await call(nb002ChatPath, {
+    headers: authHeaders('supervisor'),
+  });
+  if (seedConversation.messages.length !== 2)
+    throw new Error('NB-002 打回单的种子聊天应有两条消息。');
+  const afterSeedSeq = seedConversation.messages.at(-1).seq;
+  const supervisorMessage = new FormData();
+  supervisorMessage.append('text', '请补充冷柜温度照片后重新提交。');
+  const sentBySupervisor = await call(
+    nb002ChatPath,
+    {
+      method: 'POST',
+      headers: authHeaders('supervisor'),
+      body: supervisorMessage,
+    },
+    201,
+  );
+  const seedImage = seedConversation.messages.find((message) => message.imageUrl);
+  if (!seedImage) throw new Error('NB-002 种子聊天缺少图片。');
+  const signedImageUrl = new URL(seedImage.imageUrl);
+  const photoResponse = await fetch(
+    `${baseUrl}${signedImageUrl.pathname}${signedImageUrl.search}`,
+  );
+  if (!photoResponse.ok) throw new Error('无法读取 NB-002 种子聊天图片。');
+  const photo = new Blob([await photoResponse.arrayBuffer()], {
+    type: 'image/jpeg',
+  });
+  const inspectorReply = new FormData();
+  inspectorReply.append('file', photo, 'nb-002-reply.jpg');
+  const sentByInspector = await call(
+    nb002ChatPath,
+    {
+      method: 'POST',
+      headers: authHeaders('inspector+nb-002'),
+      body: inspectorReply,
+    },
+    201,
+  );
+  for (const role of ['supervisor', 'inspector+nb-002']) {
+    const messages = await call(`${nb002ChatPath}?after=${afterSeedSeq}`, {
+      headers: authHeaders(role),
+    });
+    if (
+      messages.messages.length !== 2 ||
+      messages.messages[0].id !== sentBySupervisor.id ||
+      messages.messages[1].id !== sentByInspector.id
+    )
+      throw new Error(`${role} 没有读取到本轮新发的两条消息。`);
+  }
+  const firstRecordsPage = await call('/api/inspector/inspections?limit=10', {
+    headers: authHeaders('inspector+nb-002'),
+  });
+  if (!firstRecordsPage.items.some((item) => item.id === nb002Rework.id))
+    throw new Error('店员记录页第一页缺少 NB-002 打回单。');
+  console.log('AC-07 聊天往返与店员记录页步骤通过。');
+
   await call(`${detailPath}/items/${coldItemId}`, {
     method: 'PATCH',
     headers: {

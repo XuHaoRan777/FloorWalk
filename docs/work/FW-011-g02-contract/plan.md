@@ -6,9 +6,9 @@
 
 - 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：T04 API 演示链加聊天与记录页两步
+- 当前任务：T05 两端注册行、分区、Tab、空页与简陋 `ChatPanel`
 - 阻塞：无
-- 下一步：扩展 API 演示链，验证聊天与店员记录页步骤。
+- 下一步：建立 Web 与 Mobile 的注册行、空页和聊天面板。
 
 Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、`apps/api/drizzle/`（均为 hardline）、`apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`components/`、`lib/`）、`tests/`、`scripts/demo-chain.mjs`；不动 `package.json`、锁文件。全程用槽位 1，三道门的并发隔离用 1～3。T06 动 Mobile 前先读 `~/.agents/skills/expo-overview`，按分流读 `expo-router` 与 `expo-data-fetching`，查 SDK 57 文档，在证据里记一行。
 
@@ -19,8 +19,8 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、
 | T01 | 表、迁移、种子；契约 schema、类型与路由表        | `done` | AC-02；AC-01 的契约代码部分；机器门（迁移在空库与槽位库跑通、类型检查、契约包构建） |
 | T02 | 门店、模板、记录页骨架接口与三处现有接口的新字段 | `done` | AC-03；契约 e2e 中这几条路由的放行与拒绝                                            |
 | T03 | 聊天接口完整实现（含 `before` 分页）             | `done` | AC-04、AC-11；契约 e2e 中聊天路由                                                   |
-| T04 | API 演示链加聊天与记录页两步                     | `in_progress` | AC-07（聊天两步绿）                                                                 |
-| T05 | 两端注册行、分区、Tab、空页与简陋 `ChatPanel`    | `pending` | AC-05、AC-06；Web e2e、`e2e:mobile`                                                 |
+| T04 | API 演示链加聊天与记录页两步                     | `done` | AC-07（聊天两步绿）                                                                 |
+| T05 | 两端注册行、分区、Tab、空页与简陋 `ChatPanel`    | `in_progress` | AC-05、AC-06；Web e2e、`e2e:mobile`                                                 |
 | T06 | 跨端最薄链路（模拟器）                           | `pending` | AC-08                                                                               |
 | T07 | 三道开组门与 master 全量门禁                     | `pending` | AC-09、AC-10                                                                        |
 | T08 | 最终代码审查（独立 Subagent）                    | `pending` | 审查记录                                                                            |
@@ -41,6 +41,7 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、
 | T03 / AC-04 | passed | `$env:FW_SLOT='1'; pnpm --filter @apps/api test -- src/contract.e2e.test.ts` | `apps/api/src/chat.controller.ts`, `apps/api/src/contract.e2e.test.ts` | 聊天文本/图片发读、作者字段、跨店拒绝、总部只读、已结束单可发、签名 URL 读取及数据清理均通过。初次运行失败的是测试对空历史的多余断言，移除后通过。 |
 | T03 / AC-11 | passed | `$env:FW_SLOT='1'; pnpm --filter @apps/api test -- src/contract.e2e.test.ts` | `apps/api/src/chat.controller.ts`, `packages/shared/src/contract/index.ts` | 无游标最近 50 条、before 更早页、after 新消息、游标互斥 400 均有断言；`seq` 以十进制字符串承载 bigint。 |
 | T03 / 机器门 | passed | `$env:FW_SLOT='1'; pnpm --filter @libs/shared build; pnpm --filter @apps/api typecheck; pnpm --filter @apps/api lint; git diff --check` | `apps/api/src/chat.controller.ts` | 全部通过；完整 API 契约 e2e 共 8 项通过。 |
+| T04 / AC-07 | passed | `$env:FW_SLOT='1'; pnpm e2e:demo` | `scripts/demo-chain.mjs` | 槽位 1 完整 API 演示链退出码 0；日志确认 NB-002 主管文字、店员图片往返两条新消息，店员记录第一页含打回单。演示 API 已停止，3110 无监听。首次运行的图片读取指向配置主机导致拒绝连接，脚本改用本地槽位 API 的签名路径后通过。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
