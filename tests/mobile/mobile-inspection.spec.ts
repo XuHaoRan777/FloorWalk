@@ -176,7 +176,7 @@ test('NB-002 打回单显示主管意见并可重新提交', async ({ page }) =>
   await page.getByLabel('邮箱').fill('inspector+nb-002@northbean.example');
   await page.getByLabel('密码').fill(password);
   await page.getByTestId('login-button').click();
-  await expect(page.getByText('今日待巡')).toBeVisible();
+  await expect(page.getByRole('tab', { name: '今日待巡' })).toBeVisible();
   const today = await readToday(page);
   await expect(page.getByText('Northbean Coffee 2')).toBeVisible();
   await expect(page.getByText('状态：待补交')).toHaveCount(

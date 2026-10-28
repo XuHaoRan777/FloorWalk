@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- 工作单元状态：`blocked`
+- 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：无
-- 阻塞：AC-03 的 `e2e:mobile` 全套稳定复现选择器歧义；隔离用例通过，按范围不改 `tests/`。
-- 下一步：等待用户决定是否授权最小测试定位修复，或保持范围并暂缓验收归档。
+- 当前任务：T03 回修
+- 阻塞：无
+- 下一步：完成已授权的测试定位回修记录并 Promote、归档。
 
 Preflight：动 `apps/api/src`（`auth.ts` 是 hardline）和新增的 API 测试；不动 `apps/web`、`apps/mobile`、契约、`schema.ts`、迁移、`package.json`、锁文件、`scripts/`、`tests/`。全程用槽位 1，不占 3018～3020，同一槽位的套件串行跑。开工前记下 `git rev-parse HEAD`。
 
@@ -43,7 +43,7 @@ Preflight：动 `apps/api/src`（`auth.ts` 是 hardline）和新增的 API 测�
 | T02 | passed | `rg -n "createPool\\(|pool\\.end\\(" apps/api/src --glob "!**/*.test.ts" --glob "!**/*.e2e.test.ts"` | `apps/api/src` | AC-02：命中全部位于 `db/` 下，包含生命周期 provider、migrate、seed 和 client；非 `db/` 业务代码无命中。3018～3020、3110～3112 无监听。 |
 | T03 | passed | `FW_SLOT=1 node --env-file=apps/api/.env.development scripts/api-snapshot.mjs docs/work/FW-010-shared-db-pool/evidence/api-after.json`; `Get-FileHash ... -Algorithm SHA256` | `docs/work/FW-010-shared-db-pool/evidence/api-before.json`; `docs/work/FW-010-shared-db-pool/evidence/api-after.json` | 拆后快照 66 次请求；逐字节相同，SHA256 `F2C25A2CDC6BEF7752DFFB9E296055E3629EA9BD9F2577E216E7406AE325FDCB`。 |
 | T03 | passed | `FW_SLOT=1; NO_PROXY=127.0.0.1,localhost; no_proxy=127.0.0.1,localhost pnpm exec playwright test --config=playwright.web.config.ts` | `tests/web/console.spec.ts` | 拆后 Web e2e 7/7。 |
-| T03 | failed | `FW_SLOT=1 pnpm e2e:mobile`; `FW_SLOT=1 pnpm exec playwright test --config=playwright.mobile.config.ts -g "NB-002 打回单显示主管意见并可重新提交"` | `tests/mobile/mobile-inspection.spec.ts` | 全套两次 8/9：登录后 `getByText('今日待巡')` 严格模式命中页面标题与 tab 两项；隔离用例 1/1。属用户明确排除的 `tests/` 范围问题，未修改断言，AC-03 留待处理。 |
+| T03 | passed | `FW_SLOT=1 pnpm exec playwright test --config=playwright.mobile.config.ts -g "NB-002 打回单显示主管意见并可重新提交"`; `FW_SLOT=1 pnpm e2e:mobile` | `tests/mobile/mobile-inspection.spec.ts` | 原定位曾在整套运行中两次产生标题/tab 歧义；用户扩展范围后改为精确的 tab role/name 定位，产品断言未放宽。回修后隔离用例 1/1、全套 9/9。 |
 | T03 | passed | `FW_SLOT=1 pnpm e2e:cors`; `FW_SLOT=1 pnpm e2e:demo`; `FW_SLOT=1; NO_PROXY=127.0.0.1,localhost; no_proxy=127.0.0.1,localhost pnpm e2e:demo-ui` | `tests/cors.spec.ts`; `scripts/demo-chain.mjs`; `tests/demo/inspection-chain.spec.ts` | CORS 3/3；演示链退出码 0；demo-ui 1/1。 |
 | T04 | passed | `pnpm typecheck`; `pnpm lint`; `pnpm format:check`; `pnpm build`; `FW_SLOT=1 pnpm --filter @apps/api test`; `FW_SLOT=1 pnpm e2e` | workspace；`apps/api/src/contract.e2e.test.ts`; `tests/e2e/slot-facility.spec.ts` | 类型、lint、格式、构建通过；API 30/30；槽位设施 1/1。Web/CORS/demo/demo-ui 与 mobile 结果见 T03；mobile 全套仍有已记录的单条选择器歧义。 |
 | T04 | passed | 独立 Subagent：审查 `3e5c9633efab0e9462a4b7465a012179db8b161f..37f61c84f5fb51e6dd38eb8918fa2b58ad1d864a`，按 `docs/howto/final-review.md` 七失败域检查 | FW-010 完整差异 | 独立 Subagent；无代码 finding。七域结论及 AC-03 遗留风险见审查报告；审查者核对 `git diff --check` 通过。 |
@@ -56,6 +56,7 @@ Preflight：动 `apps/api/src`（`auth.ts` 是 hardline）和新增的 API 测�
 
 | 日期 | 反馈 | 改动 | 提交 |
 | ---- | ---- | ---- | ---- |
+| 2026-10-28 | “扩展，继续” | 将 NB-002 登录成功断言改为定位 `tab[name="今日待巡"]`，保留其余巡检断言 | 待提交 |
 
 ## 决策与偏差
 
@@ -65,7 +66,5 @@ Preflight：动 `apps/api/src`（`auth.ts` 是 hardline）和新增的 API 测�
 - 2026-10-28 连接池用 Nest provider 随应用实例创建与关闭，不用模块级单例：API 测试在同一进程里多次 `createNestApplication`，单例会在实例之间泄漏连接。
 - 2026-10-28 范围外问题：`e2e:mobile` 的 NB-002 用例整套运行时对 `今日待巡` 用 `getByText` 命中标题与 tab 两个元素，隔离运行通过；按本单元边界不改 `tests/`，记入 AC-03 失败证据继续其余回归。
 - 2026-10-28 串行基线人工触点：开对话 ×1；其余人工触点 0。
-- 卡在哪一步：T03 的 AC-03 `e2e:mobile` 全套两次在同一严格定位断言失败，导致 AC-03 未满足，不能 Promote 或归档。
-- 要用户定什么：是否授权对排除范围内的 `tests/mobile/mobile-inspection.spec.ts` 做最小选择器消歧并重跑 mobile 套件。
-- 可选项和倾向：维持“不改 tests”并让 FW-010 保持 blocked，待测试范围获批后续办（倾向，遵守当前边界）；或明确扩展范围，授权只消歧该测试定位并重跑 mobile 套件。
+- 2026-10-28 用户扩展测试范围，授权最小化修正 NB-002 用例定位；修复后 `e2e:mobile` 全套通过。
 - 串行基线：按 [试行记录](../../parallel-trial.md)「值不值」的口径分类记人工触点：开对话、批审批、答停下、传话（含用户回到 Claude 会话转述进度）、人工验收、排障，每次在这里加一行；归档时汇总进试行记录表，和 FW-008、FW-009 那两行按类别对照。
