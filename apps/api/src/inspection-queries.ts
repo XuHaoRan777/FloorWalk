@@ -83,7 +83,7 @@ export async function loadInspectionDetail(
   inspection: Record<string, unknown>,
 ) {
   const site = await pool.query(
-    'SELECT id, code, name, created_at AS "createdAt" FROM floorwalk.sites WHERE id = $1',
+    'SELECT id, code, name, deactivated_at IS NULL AS active, created_at AS "createdAt" FROM floorwalk.sites WHERE id = $1',
     [inspection.siteId],
   );
   if (!site.rows[0])

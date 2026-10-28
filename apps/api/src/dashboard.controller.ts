@@ -18,7 +18,8 @@ export class DashboardController {
   async dashboard(@Req() request: AuthedRequest) {
     assertRole(request.user, ...apiRoutes.dashboardSites.roles);
     const rows = await this.pool.query(
-      `SELECT s.id, s.code, s.name, s.created_at AS "createdAt", i.score AS "latestScore", i.status AS "latestStatus"
+      `SELECT s.id, s.code, s.name, s.deactivated_at IS NULL AS active,
+          s.created_at AS "createdAt", i.score AS "latestScore", i.status AS "latestStatus"
          FROM floorwalk.sites s
          LEFT JOIN LATERAL (
            SELECT score, status FROM floorwalk.inspections
@@ -32,6 +33,7 @@ export class DashboardController {
           id: row.id,
           code: row.code,
           name: row.name,
+          active: row.active,
           createdAt: iso(row.createdAt),
         },
         latestScore: row.latestScore,

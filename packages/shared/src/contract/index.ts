@@ -220,17 +220,29 @@ export const createTemplateRequestSchema = z.object({
   ).min(1),
 });
 
-export const updateTemplateRequestSchema = z.object({
-  name: z.string().trim().min(1),
-  items: z.array(
-    z.object({
-      position: z.number().int().positive(),
-      title: z.string().trim().min(1),
-      photoRequired: z.boolean(),
-      critical: z.boolean(),
-    }),
-  ).min(1),
-});
+export const updateTemplateRequestSchema = z
+  .object({
+    name: z.string().trim().min(1),
+    items: z
+      .array(
+        z.object({
+          position: z.number().int().positive(),
+          title: z.string().trim().min(1),
+          photoRequired: z.boolean(),
+          critical: z.boolean(),
+        }),
+      )
+      .min(1),
+  })
+  .superRefine((value, context) => {
+    if (value.items.some((item, index) => item.position !== index + 1)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['items'],
+        message: '检查项位置必须从 1 开始连续排列。',
+      });
+    }
+  });
 
 export const adminTemplatesResponseSchema = z.array(adminTemplateSchema);
 export const templateResponseSchema = adminTemplateSchema;

@@ -12,16 +12,21 @@ import { runMigrations } from './db/migrate.js';
 import { seedDatabase } from './db/seed.js';
 import {
   apiRoutes,
+  adminSitesResponseSchema,
+  adminTemplatesResponseSchema,
   dashboardSitesResponseSchema,
   evidenceSchema,
   inspectionDetailSchema,
   inspectionSchema,
+  inspectorRecordsResponseSchema,
   loginResponseSchema,
   reviewQueueResponseSchema,
   reviewResponseSchema,
+  siteResponseSchema,
   signedEvidenceResponseSchema,
   submitInspectionResponseSchema,
   todayResponseSchema,
+  templateResponseSchema,
   updateInspectionItemResponseSchema,
   userSchema,
   errorResponseSchema,
@@ -142,7 +147,7 @@ describe('inspection contract API', () => {
   });
 
   it('publishes the complete route table under /api', () => {
-    expect(Object.keys(apiRoutes)).toHaveLength(13);
+    expect(Object.keys(apiRoutes)).toHaveLength(24);
     for (const route of Object.values(apiRoutes)) {
       expect(route.path.startsWith('/api/')).toBe(true);
       expect(route.responseSchema).toBeDefined();
@@ -320,6 +325,116 @@ describe('inspection contract API', () => {
           },
         },
       ],
+      [
+        'createInspectionMessage',
+        {
+          hq: async () => {
+            const response = await request(app.getHttpServer())
+              .post(`/api/inspections/${inspectionId}/messages`)
+              .set('Cookie', hqCookie)
+              .field('text', '越权测试消息');
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'listInspectorInspections',
+        {
+          supervisor: async () => {
+            const response = await request(app.getHttpServer())
+              .get('/api/inspector/inspections')
+              .set('Cookie', supervisorCookie);
+            return { status: response.status, body: response.body };
+          },
+          hq: async () => {
+            const response = await request(app.getHttpServer())
+              .get('/api/inspector/inspections')
+              .set('Cookie', hqCookie);
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'listAdminSites',
+        {
+          inspector: async () => {
+            const response = await request(app.getHttpServer())
+              .get('/api/admin/sites')
+              .set('Cookie', inspectorCookie);
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'createAdminSite',
+        {
+          inspector: async () => {
+            const response = await request(app.getHttpServer())
+              .post('/api/admin/sites')
+              .set('Cookie', inspectorCookie)
+              .send({ code: 'FW-011-TEST', name: '测试门店' });
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'updateAdminSite',
+        {
+          inspector: async () => {
+            const response = await request(app.getHttpServer())
+              .patch(`/api/admin/sites/${inspectionId}`)
+              .set('Cookie', inspectorCookie)
+              .send({ active: false });
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'listAdminTemplates',
+        {
+          inspector: async () => {
+            const response = await request(app.getHttpServer())
+              .get('/api/admin/templates')
+              .set('Cookie', inspectorCookie);
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'createAdminTemplate',
+        {
+          inspector: async () => {
+            const response = await request(app.getHttpServer())
+              .post('/api/admin/templates')
+              .set('Cookie', inspectorCookie)
+              .send({ name: '测试模板', items: [{ title: '测试项', photoRequired: false, critical: false }] });
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'updateAdminTemplate',
+        {
+          inspector: async () => {
+            const response = await request(app.getHttpServer())
+              .put(`/api/admin/templates/${templateId}`)
+              .set('Cookie', inspectorCookie)
+              .send({ name: '测试模板', items: [{ position: 1, title: '测试项', photoRequired: false, critical: false }] });
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'setCurrentAdminTemplate',
+        {
+          inspector: async () => {
+            const response = await request(app.getHttpServer())
+              .post(`/api/admin/templates/${templateId}/current`)
+              .set('Cookie', inspectorCookie);
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
     ]);
     for (const [routeKey, route] of Object.entries(apiRoutes)) {
       if (route.roles.length === 0) continue;
@@ -334,6 +449,106 @@ describe('inspection contract API', () => {
       }
     }
   }, 60000);
+
+  it('serves the new records, site, and template route schemas', async () => {
+    const records = await request(app.getHttpServer())
+      .get('/api/inspector/inspections?limit=10')
+      .set('Cookie', inspectorCookie)
+      .expect(200);
+    const recordPage = inspectorRecordsResponseSchema.parse(records.body);
+    expect(recordPage.items.length).toBeGreaterThan(0);
+    expect(recordPage.items.every((item) => item.id)).toBe(true);
+
+    const sites = await request(app.getHttpServer())
+      .get('/api/admin/sites')
+      .set('Cookie', supervisorCookie)
+      .expect(200);
+    expect(adminSitesResponseSchema.parse(sites.body)).toHaveLength(12);
+
+    const createdSite = await request(app.getHttpServer())
+      .post('/api/admin/sites')
+      .set('Cookie', supervisorCookie)
+      .send({ code: 'FW-011-TEMP', name: '临时门店' })
+      .expect(201);
+    expect(createdSite.body.active).toBe(true);
+
+    const templates = await request(app.getHttpServer())
+      .get('/api/admin/templates')
+      .set('Cookie', supervisorCookie)
+      .expect(200);
+    expect(adminTemplatesResponseSchema.parse(templates.body)).toHaveLength(1);
+
+    const createdTemplate = await request(app.getHttpServer())
+      .post('/api/admin/templates')
+      .set('Cookie', supervisorCookie)
+      .send({
+        name: 'FW-011 临时模板',
+        items: [{ title: '测试项', photoRequired: false, critical: false }],
+      })
+      .expect(201);
+    templateResponseSchema.parse(createdTemplate.body);
+    expect(createdTemplate.body.isCurrent).toBe(false);
+
+    const updatedSite = await request(app.getHttpServer())
+      .patch(`/api/admin/sites/${sites.body[0].id}`)
+      .set('Cookie', supervisorCookie)
+      .send({ active: false })
+      .expect(200);
+    siteResponseSchema.parse(updatedSite.body);
+
+    const updatedTemplate = await request(app.getHttpServer())
+      .put(`/api/admin/templates/${templateId}`)
+      .set('Cookie', supervisorCookie)
+      .send({
+        name: '开店检查更新',
+        items: [
+          { position: 1, title: '测试项', photoRequired: false, critical: false },
+        ],
+      })
+      .expect(200);
+    templateResponseSchema.parse(updatedTemplate.body);
+
+    const currentTemplate = await request(app.getHttpServer())
+      .post(`/api/admin/templates/${templateId}/current`)
+      .set('Cookie', supervisorCookie)
+      .expect(200);
+    templateResponseSchema.parse(currentTemplate.body);
+    expect(currentTemplate.body.isCurrent).toBe(true);
+
+    for (const path of ['/api/admin/sites', '/api/admin/templates'])
+      await request(app.getHttpServer())
+        .get(path)
+        .set('Cookie', inspectorCookie)
+        .expect(403);
+    await request(app.getHttpServer())
+      .post('/api/admin/sites')
+      .set('Cookie', inspectorCookie)
+      .send({ code: 'DENIED', name: '拒绝' })
+      .expect(403);
+    await request(app.getHttpServer())
+      .patch(`/api/admin/sites/${sites.body[0].id}`)
+      .set('Cookie', inspectorCookie)
+      .send({ active: false })
+      .expect(403);
+    await request(app.getHttpServer())
+      .post('/api/admin/templates')
+      .set('Cookie', inspectorCookie)
+      .send({ name: '拒绝', items: [{ title: '项', photoRequired: false, critical: false }] })
+      .expect(403);
+    await request(app.getHttpServer())
+      .put(`/api/admin/templates/${templateId}`)
+      .set('Cookie', inspectorCookie)
+      .send({ name: '拒绝', items: [{ position: 1, title: '项', photoRequired: false, critical: false }] })
+      .expect(403);
+    await request(app.getHttpServer())
+      .post(`/api/admin/templates/${templateId}/current`)
+      .set('Cookie', inspectorCookie)
+      .expect(403);
+    await request(app.getHttpServer())
+      .get('/api/inspector/inspections')
+      .set('Cookie', supervisorCookie)
+      .expect(403);
+  });
 
   it('keeps API connections within the default pool limit under concurrent requests', async () => {
     const monitorPool = createPool();

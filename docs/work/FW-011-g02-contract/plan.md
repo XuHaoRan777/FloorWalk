@@ -6,9 +6,9 @@
 
 - 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：T02 门店、模板、记录页骨架接口与三处现有接口的新字段
+- 当前任务：T03 聊天接口完整实现（含 `before` 分页）
 - 阻塞：无
-- 下一步：完成 T01 的表、迁移、种子和契约代码。
+- 下一步：完成聊天读写、图片签名和游标分页接口。
 
 Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、`apps/api/drizzle/`（均为 hardline）、`apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`components/`、`lib/`）、`tests/`、`scripts/demo-chain.mjs`；不动 `package.json`、锁文件。全程用槽位 1，三道门的并发隔离用 1～3。T06 动 Mobile 前先读 `~/.agents/skills/expo-overview`，按分流读 `expo-router` 与 `expo-data-fetching`，查 SDK 57 文档，在证据里记一行。
 
@@ -17,8 +17,8 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、
 | ID  | 任务                                             | 状态      | 交付的 AC 与证据                                                                    |
 | --- | ------------------------------------------------ | --------- | ----------------------------------------------------------------------------------- |
 | T01 | 表、迁移、种子；契约 schema、类型与路由表        | `done` | AC-02；AC-01 的契约代码部分；机器门（迁移在空库与槽位库跑通、类型检查、契约包构建） |
-| T02 | 门店、模板、记录页骨架接口与三处现有接口的新字段 | `in_progress` | AC-03；契约 e2e 中这几条路由的放行与拒绝                                            |
-| T03 | 聊天接口完整实现（含 `before` 分页）             | `pending` | AC-04、AC-11；契约 e2e 中聊天路由                                                   |
+| T02 | 门店、模板、记录页骨架接口与三处现有接口的新字段 | `done` | AC-03；契约 e2e 中这几条路由的放行与拒绝                                            |
+| T03 | 聊天接口完整实现（含 `before` 分页）             | `in_progress` | AC-04、AC-11；契约 e2e 中聊天路由                                                   |
 | T04 | API 演示链加聊天与记录页两步                     | `pending` | AC-07（聊天两步绿）                                                                 |
 | T05 | 两端注册行、分区、Tab、空页与简陋 `ChatPanel`    | `pending` | AC-05、AC-06；Web e2e、`e2e:mobile`                                                 |
 | T06 | 跨端最薄链路（模拟器）                           | `pending` | AC-08                                                                               |
@@ -37,6 +37,7 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、
 | T01 / AC-01 | passed | `$env:FW_SLOT='1'; pnpm --filter @libs/shared typecheck; pnpm --filter @libs/shared build; pnpm --filter @apps/api typecheck` | `packages/shared/src/contract/index.ts`, `apps/api/src/db/schema.ts` | 契约路由、schema 和结构声明通过检查；首次类型检查发现路由联合类型缺少 spec 要求的 `PUT`，已修正后通过。 |
 | T01 / AC-02 | passed | `$env:FW_SLOT='1'; pnpm --filter @apps/api test -- src/db/seed.test.ts; pnpm e2e -- --grep "slot resources are isolated"` | `apps/api/drizzle/0002_g02_contract.sql`, `apps/api/src/db/seed.test.ts` | 现有槽位迁移/种子 4 项通过；空 schema 重建迁移及种子通过；当前模板恰好 1 个，NB-002 打回单有主管文字与店员 JPEG 消息且文件存在。初始迁移已含 template_items 唯一约束，新迁移不重复添加；旧 Drizzle 快照此前未登记，当前快照已补正。 |
 | T01 / 机器门 | passed | `git diff --check` | `apps/api/drizzle/meta/0002_snapshot.json` | 无空白错误；不新增依赖。 |
+| T02 / AC-03 | passed | `$env:FW_SLOT='1'; pnpm --filter @libs/shared build; pnpm --filter @apps/api typecheck; pnpm --filter @apps/api test -- src/contract.e2e.test.ts -t "serves the new records"; git diff --check` | `apps/api/src/admin.controller.ts`, `apps/api/src/records.controller.ts`, `apps/api/src/contract.e2e.test.ts` | 门店/模板/记录路由调用、schema 与放行/拒绝角色通过；today、建单、看板补 active/current 契约。首次 e2e 因设当前模板的 POST 默认 201 失败，按契约固定为 200 后通过。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
