@@ -14,7 +14,9 @@ export const sendChatMessage = async (
   if (input.text) form.append('text', input.text);
   if (input.imageUri) {
     if (Platform.OS === 'web') {
-      const blob = await fetch(input.imageUri).then((response) => response.blob());
+      const blob = await fetch(input.imageUri).then((response) =>
+        response.blob(),
+      );
       form.append('file', blob, input.fileName ?? 'chat-image.jpg');
     } else {
       form.append(

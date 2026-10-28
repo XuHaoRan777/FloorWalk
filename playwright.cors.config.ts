@@ -42,9 +42,10 @@ export default defineConfig({
   testDir: './tests',
   testMatch: 'cors.spec.ts',
   workers: 1,
+  outputDir: `./tests/web-results/cors-slot-${slot}`,
   webServer: [
     {
-      command: 'pnpm --filter @apps/api dev',
+      command: 'node scripts/e2e-api.mjs',
       url: `http://127.0.0.1:${apiPort}/health`,
       env: slotEnvironment,
       reuseExistingServer: false,
@@ -62,7 +63,7 @@ export default defineConfig({
       timeout: 120000,
     },
     {
-      command: `pnpm --filter @apps/mobile exec expo start --web --port ${metroPort}`,
+      command: `pnpm --filter @apps/mobile exec expo start --web --max-workers 1 --port ${metroPort}`,
       url: `http://127.0.0.1:${metroPort}/status`,
       env: {
         ...process.env,

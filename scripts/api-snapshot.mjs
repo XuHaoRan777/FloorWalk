@@ -219,9 +219,70 @@ try {
   if (!ready) throw new Error('槽位 API 启动超时。');
   for (const role of userRoles) await login(role);
   const today = await call('setup:today', apiRoutes.today.path, 'inspector');
+  const sites = await call(
+    'seed:sites',
+    apiRoutes.listAdminSites.path,
+    'supervisor',
+  );
+  const templates = await call(
+    'seed:templates',
+    apiRoutes.listAdminTemplates.path,
+    'hq',
+  );
+  if (sites.length !== 12 || sites.some((site) => !site.active))
+    throw new Error('种子应有 12 家启用门店。');
+  if (
+    templates.filter((template) => template.isCurrent).length !== 1 ||
+    !today.site.active ||
+    today.template.id !== templates.find((template) => template.isCurrent).id
+  )
+    throw new Error('种子当前模板或 today 字段不符合契约。');
+  await login('inspector+nb-002');
+  const seededRecords = await call(
+    'seed:records',
+    apiRoutes.listInspectorInspections.path,
+    'inspector+nb-002',
+  );
+  const seededRework = seededRecords.items.find(
+    (item) => item.status === 'rework',
+  );
+  if (!seededRework) throw new Error('种子 NB-002 缺打回单。');
+  const seededChat = await call(
+    'seed:chat',
+    `/api/inspections/${seededRework.id}/messages`,
+    'inspector+nb-002',
+  );
+  apiRoutes.listInspectionMessages.responseSchema.parse(seededChat);
+  if (
+    seededChat.messages.length !== 2 ||
+    !seededChat.messages.some(
+      (message) => message.role === 'supervisor' && message.body,
+    ) ||
+    !seededChat.messages.some(
+      (message) => message.role === 'inspector' && message.imageUrl,
+    )
+  )
+    throw new Error('NB-002 种子聊天应为主管文字与店员图片。');
+  const seedImage = seededChat.messages.find((message) => message.imageUrl);
+  const signed = new URL(seedImage.imageUrl);
+  const image = await fetch(`${baseUrl}${signed.pathname}${signed.search}`);
+  const imageBytes = new Uint8Array(await image.arrayBuffer());
+  if (
+    !image.ok ||
+    image.headers.get('content-type') !== 'image/jpeg' ||
+    imageBytes[0] !== 0xff ||
+    imageBytes[1] !== 0xd8
+  )
+    throw new Error('种子聊天图片必须能通过签名读取真实 JPEG。');
+  records.push({
+    label: 'seed:image',
+    status: image.status,
+    body: { mime: 'image/jpeg', bytes: imageBytes.length },
+  });
   let detail;
   let evidence;
   let inspection;
+  let chatMessage;
   for (const [key, route] of Object.entries(apiRoutes)) {
     if (key === 'createSession' || key === 'deleteSession') continue;
     if (key === 'submitInspection') {
@@ -248,7 +309,17 @@ try {
       const pathname = route.path
         .replace(
           ':id',
-          key === 'getEvidence' ? evidence.id : (inspection?.id ?? ''),
+          key === 'getEvidence'
+            ? evidence.id
+            : key === 'getMessageImageUrl'
+              ? chatMessage.id
+              : key === 'updateAdminSite'
+                ? sites[0].id
+                : ['updateAdminTemplate', 'setCurrentAdminTemplate'].includes(
+                      key,
+                    )
+                  ? templates[0].id
+                  : (inspection?.id ?? ''),
         )
         .replace(':itemId', detail?.items[0].id ?? '');
       const bodies = {
@@ -256,6 +327,26 @@ try {
         updateInspectionItem: { result: 'pass', note: 'snapshot-note' },
         addEvidence: photo(),
         reviewInspection: { action: 'start' },
+        createInspectionMessage: photo(),
+        createAdminSite: { code: 'SNAPSHOT', name: 'Snapshot site' },
+        updateAdminSite: { name: 'Snapshot renamed', active: false },
+        createAdminTemplate: {
+          name: 'Snapshot template',
+          items: [
+            { title: 'Snapshot item', photoRequired: false, critical: false },
+          ],
+        },
+        updateAdminTemplate: {
+          name: 'Snapshot template',
+          items: [
+            {
+              position: 1,
+              title: 'Snapshot item',
+              photoRequired: false,
+              critical: false,
+            },
+          ],
+        },
       };
       const allowed = route.roles.includes(role);
       const result = await call(
@@ -271,6 +362,7 @@ try {
         if (key === 'createInspection') inspection = result;
         if (key === 'getInspection' && !detail) detail = result;
         if (key === 'addEvidence') evidence = result;
+        if (key === 'createInspectionMessage') chatMessage = result;
       }
     }
   }

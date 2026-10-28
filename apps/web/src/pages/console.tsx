@@ -167,7 +167,10 @@ export function ConsolePage() {
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       isActive={section === 'sites'}
-                      onClick={() => { setSection('sites'); setSelected(null); }}
+                      onClick={() => {
+                        setSection('sites');
+                        setSelected(null);
+                      }}
                     >
                       <Store aria-hidden="true" />
                       <span>门店</span>
@@ -176,7 +179,10 @@ export function ConsolePage() {
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       isActive={section === 'templates'}
-                      onClick={() => { setSection('templates'); setSelected(null); }}
+                      onClick={() => {
+                        setSection('templates');
+                        setSelected(null);
+                      }}
                     >
                       <ClipboardList aria-hidden="true" />
                       <span>模板</span>

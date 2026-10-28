@@ -47,7 +47,10 @@ export function ChatPanel({
       const message = await api.sendChatMessage(inspectionId, {
         ...(text.trim() ? { text: text.trim() } : {}),
         ...(image
-          ? { imageUri: image.uri, fileName: image.fileName ?? 'chat-image.jpg' }
+          ? {
+              imageUri: image.uri,
+              fileName: image.fileName ?? 'chat-image.jpg',
+            }
           : {}),
       });
       setMessages((current) => [...current, message]);
@@ -66,7 +69,8 @@ export function ChatPanel({
       {messages.map((message) => (
         <View key={message.id} style={styles.chatMessage}>
           <Text style={styles.label}>
-            {message.displayName} · {new Date(message.createdAt).toLocaleString()}
+            {message.displayName} ·{' '}
+            {new Date(message.createdAt).toLocaleString()}
           </Text>
           {message.body && <Text style={styles.value}>{message.body}</Text>}
           {message.imageUrl && (
@@ -92,8 +96,14 @@ export function ChatPanel({
             style={styles.noteInput}
             value={text}
           />
-          {image && <Text style={styles.muted}>{image.fileName ?? '已选择图片'}</Text>}
-          <PrimaryButton disabled={busy} onPress={() => void chooseImage()} variant="secondary">
+          {image && (
+            <Text style={styles.muted}>{image.fileName ?? '已选择图片'}</Text>
+          )}
+          <PrimaryButton
+            disabled={busy}
+            onPress={() => void chooseImage()}
+            variant="secondary"
+          >
             选择图片
           </PrimaryButton>
           <PrimaryButton

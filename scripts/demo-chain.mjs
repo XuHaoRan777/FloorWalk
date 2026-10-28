@@ -56,11 +56,10 @@ function stopApi() {
   }
 }
 
-runPnpm(['--filter', '@libs/shared', 'build']);
 runPnpm(['--filter', '@apps/api', 'db:migrate']);
 runPnpm(['--filter', '@apps/api', 'db:seed']);
 
-const api = spawn(command, ['--filter', '@apps/api', 'dev'], {
+const api = spawn(process.execPath, ['scripts/e2e-api.mjs'], {
   cwd: process.cwd(),
   env,
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -222,9 +221,64 @@ try {
   const nb002Records = await call('/api/inspector/inspections?limit=10', {
     headers: authHeaders('inspector+nb-002'),
   });
-  const nb002Rework = nb002Records.items.find((item) => item.status === 'rework');
-  if (!nb002Rework)
-    throw new Error('NB-002 第一页没有打回巡检单。');
+  const nb002Rework = nb002Records.items.find(
+    (item) => item.status === 'rework',
+  );
+  if (!nb002Rework) throw new Error('NB-002 第一页没有打回巡检单。');
+  const nb002Path = `/api/inspections/${nb002Rework.id}`;
+  const nb002Detail = await call(nb002Path, {
+    headers: authHeaders('inspector+nb-002'),
+  });
+  for (const item of nb002Detail.items.filter(
+    (item) => item.result === 'fail',
+  )) {
+    await call(`${nb002Path}/items/${item.id}`, {
+      method: 'PATCH',
+      headers: {
+        ...authHeaders('inspector+nb-002'),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ result: 'pass' }),
+    });
+    const photo = new FormData();
+    photo.append(
+      'file',
+      new Blob(['recheck'], { type: 'image/jpeg' }),
+      'recheck.jpg',
+    );
+    await call(
+      `${nb002Path}/items/${item.id}/evidence`,
+      {
+        method: 'POST',
+        headers: authHeaders('inspector+nb-002'),
+        body: photo,
+      },
+      201,
+    );
+  }
+  await call(
+    `${nb002Path}/submit`,
+    {
+      headers: authHeaders('inspector+nb-002'),
+      method: 'POST',
+    },
+    201,
+  );
+  await call(
+    `${nb002Path}/review`,
+    jsonOptions('supervisor', { action: 'start' }),
+    201,
+  );
+  await call(
+    `${nb002Path}/review`,
+    jsonOptions('supervisor', {
+      action: 'rework',
+      reworkItemIds: [
+        nb002Detail.items.find((item) => item.result === 'fail').id,
+      ],
+    }),
+    201,
+  );
   const nb002ChatPath = `/api/inspections/${nb002Rework.id}/messages`;
   const seedConversation = await call(nb002ChatPath, {
     headers: authHeaders('supervisor'),
@@ -243,7 +297,9 @@ try {
     },
     201,
   );
-  const seedImage = seedConversation.messages.find((message) => message.imageUrl);
+  const seedImage = seedConversation.messages.find(
+    (message) => message.imageUrl,
+  );
   if (!seedImage) throw new Error('NB-002 种子聊天缺少图片。');
   const signedImageUrl = new URL(seedImage.imageUrl);
   const photoResponse = await fetch(

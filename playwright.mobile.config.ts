@@ -47,6 +47,7 @@ const apiEnv = {
   NODE_ENV: 'development',
 };
 const webEnv = {
+  FW_SLOT: String(slot),
   NODE_ENV: inheritedEnv.NODE_ENV ?? 'development',
   EXPO_PUBLIC_API_BASE_URL: `http://127.0.0.1:${apiPort}/api`,
   RCT_METRO_PORT: String(metroPort),
@@ -62,17 +63,18 @@ export default defineConfig({
   testMatch: '*.spec.ts',
   globalSetup: './tests/mobile/global-setup.ts',
   timeout: 120_000,
+  outputDir: `./tests/web-results/mobile-slot-${slot}`,
   use: { baseURL: metroUrl },
   webServer: [
     {
-      command: 'pnpm --filter @apps/api exec nest start',
+      command: 'node scripts/e2e-api.mjs',
       env: apiEnv,
       url: `http://127.0.0.1:${apiPort}/health`,
       reuseExistingServer: false,
       timeout: 120000,
     },
     {
-      command: `pnpm --filter @apps/mobile exec expo start --web --clear --port ${metroPort}`,
+      command: `pnpm --filter @apps/mobile exec expo start --web --clear --max-workers 1 --port ${metroPort}`,
       url: `${metroUrl}/status`,
       env: webEnv,
       reuseExistingServer: false,

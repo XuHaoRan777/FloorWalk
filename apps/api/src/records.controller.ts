@@ -70,7 +70,12 @@ export class RecordsController {
        WHERE site_id = $1
          AND ($2::timestamptz IS NULL OR (created_at, id) < ($2::timestamptz, $3::uuid))
        ORDER BY created_at DESC, id DESC LIMIT $4`,
-      [request.user.siteId, boundary?.createdAt ?? null, boundary?.id ?? null, limit + 1],
+      [
+        request.user.siteId,
+        boundary?.createdAt ?? null,
+        boundary?.id ?? null,
+        limit + 1,
+      ],
     );
     const hasMore = rows.rows.length > limit;
     const items = rows.rows.slice(0, limit).map((row) => ({

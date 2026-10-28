@@ -41,7 +41,7 @@ export default defineConfig({
   webServer: [
     {
       command:
-        'pnpm --filter @libs/shared build && pnpm --filter @apps/api build && pnpm --filter @apps/api db:migrate && pnpm --filter @apps/api db:seed && pnpm --filter @apps/api start',
+        'pnpm --filter @apps/api db:migrate && pnpm --filter @apps/api db:seed && node scripts/e2e-api.mjs',
       cwd: projectRoot,
       url: `${apiUrl}/health`,
       timeout: 120_000,

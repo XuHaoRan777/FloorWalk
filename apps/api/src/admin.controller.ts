@@ -195,7 +195,10 @@ export class AdminController {
     @Req() request: AuthedRequest,
   ) {
     assertRole(request.user, ...apiRoutes.setCurrentAdminTemplate.roles);
-    return templateResponseSchema.parse({ ...(await this.getTemplate(id)), isCurrent: true });
+    return templateResponseSchema.parse({
+      ...(await this.getTemplate(id)),
+      isCurrent: true,
+    });
   }
 
   private async getTemplate(id: string) {

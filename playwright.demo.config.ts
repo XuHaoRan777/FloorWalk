@@ -60,8 +60,7 @@ export default defineConfig({
   use: { baseURL: mobileUrl, trace: 'retain-on-failure' },
   webServer: [
     {
-      command:
-        'pnpm --filter @libs/shared build && pnpm --filter @apps/api dev',
+      command: 'node scripts/e2e-api.mjs',
       cwd: projectRoot,
       env: apiEnv,
       url: `${apiUrl}/health`,
@@ -81,7 +80,7 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: `pnpm --filter @apps/mobile exec expo start --web --clear --port ${metroPort}`,
+      command: `pnpm --filter @apps/mobile exec expo start --web --clear --max-workers 1 --port ${metroPort}`,
       cwd: projectRoot,
       env: {
         ...inheritedEnv,

@@ -59,7 +59,9 @@ export function ChatPanel({
             <p className="font-medium">
               {message.displayName} · {formatTime(message.createdAt)}
             </p>
-            {message.body && <p className="mt-1 whitespace-pre-wrap">{message.body}</p>}
+            {message.body && (
+              <p className="mt-1 whitespace-pre-wrap">{message.body}</p>
+            )}
             {message.imageUrl && (
               <img
                 className="mt-2 max-h-56 max-w-full object-contain"
@@ -88,7 +90,10 @@ export function ChatPanel({
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
               type="file"
             />
-            <Button disabled={busy || (!text.trim() && !file)} onClick={() => void send()}>
+            <Button
+              disabled={busy || (!text.trim() && !file)}
+              onClick={() => void send()}
+            >
               发送
             </Button>
           </div>

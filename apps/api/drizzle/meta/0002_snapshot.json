@@ -94,12 +94,8 @@
           "tableFrom": "chat_messages",
           "tableTo": "inspections",
           "schemaTo": "floorwalk",
-          "columnsFrom": [
-            "inspection_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["inspection_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -108,12 +104,8 @@
           "tableFrom": "chat_messages",
           "tableTo": "users",
           "schemaTo": "floorwalk",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -123,9 +115,7 @@
         "chat_messages_seq_unique": {
           "name": "chat_messages_seq_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "seq"
-          ]
+          "columns": ["seq"]
         }
       },
       "policies": {},
@@ -195,12 +185,8 @@
           "tableFrom": "evidence",
           "tableTo": "inspection_items",
           "schemaTo": "floorwalk",
-          "columnsFrom": [
-            "inspection_item_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["inspection_item_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -280,12 +266,8 @@
           "tableFrom": "inspection_items",
           "tableTo": "inspections",
           "schemaTo": "floorwalk",
-          "columnsFrom": [
-            "inspection_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["inspection_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -365,12 +347,8 @@
           "tableFrom": "inspections",
           "tableTo": "sites",
           "schemaTo": "floorwalk",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["site_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -379,12 +357,8 @@
           "tableFrom": "inspections",
           "tableTo": "templates",
           "schemaTo": "floorwalk",
-          "columnsFrom": [
-            "template_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["template_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -393,12 +367,8 @@
           "tableFrom": "inspections",
           "tableTo": "users",
           "schemaTo": "floorwalk",
-          "columnsFrom": [
-            "inspector_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["inspector_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -465,12 +435,8 @@
           "tableFrom": "reviews",
           "tableTo": "inspections",
           "schemaTo": "floorwalk",
-          "columnsFrom": [
-            "inspection_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["inspection_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -479,12 +445,8 @@
           "tableFrom": "reviews",
           "tableTo": "users",
           "schemaTo": "floorwalk",
-          "columnsFrom": [
-            "reviewer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reviewer_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -561,12 +523,8 @@
           "tableFrom": "sessions",
           "tableTo": "users",
           "schemaTo": "floorwalk",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -576,9 +534,7 @@
         "sessions_token_hash_unique": {
           "name": "sessions_token_hash_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token_hash"
-          ]
+          "columns": ["token_hash"]
         }
       },
       "policies": {},
@@ -629,9 +585,7 @@
         "sites_code_unique": {
           "name": "sites_code_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "code"
-          ]
+          "columns": ["code"]
         }
       },
       "policies": {},
@@ -696,12 +650,8 @@
           "tableFrom": "template_items",
           "tableTo": "templates",
           "schemaTo": "floorwalk",
-          "columnsFrom": [
-            "template_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["template_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -711,10 +661,7 @@
         "template_items_template_position_unique": {
           "name": "template_items_template_position_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "template_id",
-            "position"
-          ]
+          "columns": ["template_id", "position"]
         }
       },
       "policies": {},
@@ -777,9 +724,7 @@
         "templates_name_unique": {
           "name": "templates_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
+          "columns": ["name"]
         }
       },
       "policies": {},
@@ -842,12 +787,8 @@
           "tableFrom": "users",
           "tableTo": "sites",
           "schemaTo": "floorwalk",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["site_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -857,9 +798,7 @@
         "users_email_unique": {
           "name": "users_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
