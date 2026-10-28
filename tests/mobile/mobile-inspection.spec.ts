@@ -223,7 +223,8 @@ test('FW-008 AC-03 Tabs 与详情切换会更新 URL，详情返回今日待巡'
   await page.goto('/');
   await page.getByTestId('login-button').click();
   await expect(page).toHaveURL('/today');
-  await expect(page.getByRole('tab')).toHaveCount(2);
+  await expect(page.getByRole('tab')).toHaveCount(3);
+  await expect(page.getByRole('tab', { name: '记录' })).toBeVisible();
   await page.getByLabel('我的').click();
   await expect(page).toHaveURL('/profile');
   await page.getByLabel('今日待巡', { exact: true }).click();
@@ -233,5 +234,5 @@ test('FW-008 AC-03 Tabs 与详情切换会更新 URL，详情返回今日待巡'
   await expect(page.getByRole('tab')).toHaveCount(0);
   await page.getByLabel('返回今日待巡').click();
   await expect(page).toHaveURL('/today');
-  await expect(page.getByRole('tab')).toHaveCount(2);
+  await expect(page.getByRole('tab')).toHaveCount(3);
 });

@@ -20,8 +20,8 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、
 | T02 | 门店、模板、记录页骨架接口与三处现有接口的新字段 | `done` | AC-03；契约 e2e 中这几条路由的放行与拒绝                                            |
 | T03 | 聊天接口完整实现（含 `before` 分页）             | `done` | AC-04、AC-11；契约 e2e 中聊天路由                                                   |
 | T04 | API 演示链加聊天与记录页两步                     | `done` | AC-07（聊天两步绿）                                                                 |
-| T05 | 两端注册行、分区、Tab、空页与简陋 `ChatPanel`    | `in_progress` | AC-05、AC-06；Web e2e、`e2e:mobile`                                                 |
-| T06 | 跨端最薄链路（模拟器）                           | `pending` | AC-08                                                                               |
+| T05 | 两端注册行、分区、Tab、空页与简陋 `ChatPanel`    | `done` | AC-05、AC-06；Web e2e、`e2e:mobile`                                                 |
+| T06 | 跨端最薄链路（模拟器）                           | `in_progress` | AC-08                                                                               |
 | T07 | 三道开组门与 master 全量门禁                     | `pending` | AC-09、AC-10                                                                        |
 | T08 | 最终代码审查（独立 Subagent）                    | `pending` | 审查记录                                                                            |
 
@@ -42,6 +42,8 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、
 | T03 / AC-11 | passed | `$env:FW_SLOT='1'; pnpm --filter @apps/api test -- src/contract.e2e.test.ts` | `apps/api/src/chat.controller.ts`, `packages/shared/src/contract/index.ts` | 无游标最近 50 条、before 更早页、after 新消息、游标互斥 400 均有断言；`seq` 以十进制字符串承载 bigint。 |
 | T03 / 机器门 | passed | `$env:FW_SLOT='1'; pnpm --filter @libs/shared build; pnpm --filter @apps/api typecheck; pnpm --filter @apps/api lint; git diff --check` | `apps/api/src/chat.controller.ts` | 全部通过；完整 API 契约 e2e 共 8 项通过。 |
 | T04 / AC-07 | passed | `$env:FW_SLOT='1'; pnpm e2e:demo` | `scripts/demo-chain.mjs` | 槽位 1 完整 API 演示链退出码 0；日志确认 NB-002 主管文字、店员图片往返两条新消息，店员记录第一页含打回单。演示 API 已停止，3110 无监听。首次运行的图片读取指向配置主机导致拒绝连接，脚本改用本地槽位 API 的签名路径后通过。 |
+| T05 / Mobile 阅读前置 | passed | `Get-Content expo-overview, expo-router, expo-data-fetching, ui-skills-root, expo-ui, expo-native-ui; Invoke-WebRequest Expo SDK v57 imagepicker docs` | `C:/Users/29019/.agents/skills/expo-overview/SKILL.md`, `C:/Users/29019/.agents/skills/expo-router/SKILL.md`, `C:/Users/29019/.agents/skills/expo-data-fetching/SKILL.md` | 已按总览分流读取 Router 与数据获取；UI 工作规则及 expo-ui/native-ui 已读；核对 Expo SDK `57.0.31`、Router `57.0.29`、ImagePicker `57.0.20` 与 SDK 57 官方 ImagePicker 文档，继续沿用已有 RN 控件/原生 `expo-file-system File` 上传，不加依赖。 |
+| T05 / AC-05、AC-06 | passed | `$env:FW_SLOT='1'; pnpm --filter @libs/shared build; pnpm --filter @apps/web typecheck; pnpm --filter @apps/mobile typecheck; pnpm --filter @apps/web lint; pnpm --filter @apps/mobile lint; NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm exec playwright test --config playwright.web.config.ts; $env:FW_SLOT='1'; pnpm e2e:mobile; git diff --check` | `apps/web/src/pages/console.tsx`, `apps/web/src/components/console/chat-panel.tsx`, `apps/mobile/app/(authenticated)/(tabs)/records.tsx`, `apps/mobile/components/mobile/chat-panel.tsx`, `tests/web/console.spec.ts`, `tests/mobile/mobile-inspection.spec.ts` | 类型、lint 与 diff 检查通过；Web 7/7、Mobile 9/9。Mobile 测试曾因既有 Tab 数量断言仍为 2 而失败，断言更新为 3 并验证「记录」标签后全套通过；未放宽行为断言。Web 侧覆盖主管/总部管理入口、店员无入口和主管聊天输入。Web/Mobile e2e 串行使用槽位 1；结束后 3110–3112 无监听进程。不加依赖。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 

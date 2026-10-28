@@ -41,6 +41,13 @@ test('AC-01 登录、刷新保持会话、退出和三角色分流', async ({ pa
 
   await login(page, 'supervisor@northbean.example');
   await expect(page.getByRole('heading', { name: /审核队列/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: '门店' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '模板' })).toBeVisible();
+  await page.getByRole('button', { name: '门店' }).click();
+  await expect(page.getByRole('heading', { name: '门店' })).toBeVisible();
+  await page.getByRole('button', { name: '模板' }).click();
+  await expect(page.getByRole('heading', { name: '模板' })).toBeVisible();
+  await page.getByRole('button', { name: '审核队列' }).click();
   await page.reload();
   await expect(page.getByRole('heading', { name: /审核队列/ })).toBeVisible();
   await page.getByRole('button', { name: '退出登录' }).click();
@@ -48,6 +55,8 @@ test('AC-01 登录、刷新保持会话、退出和三角色分流', async ({ pa
 
   await login(page, 'hq@northbean.example');
   await expect(page.getByRole('heading', { name: /总部看板/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: '门店' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '模板' })).toBeVisible();
   await page.getByRole('button', { name: '退出登录' }).click();
 
   await login(page, 'inspector@northbean.example');
@@ -55,6 +64,8 @@ test('AC-01 登录、刷新保持会话、退出和三角色分流', async ({ pa
   await expect(
     page.getByRole('heading', { name: /审核队列|总部看板/ }),
   ).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '门店' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '模板' })).toHaveCount(0);
 });
 
 test('AC-02 审核队列与 API 返回保持一致', async ({ page, request }) => {
@@ -97,6 +108,8 @@ test('AC-03 详情展示检查项、照片和按时间排列的审核历史', as
 
   await login(page, 'supervisor@northbean.example');
   await page.getByText(submitted.site.name, { exact: true }).click();
+  await expect(page.getByRole('heading', { name: '巡检聊天' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '聊天内容' })).toBeVisible();
   for (const item of submitted.items)
     await expect(page.getByText(item.title, { exact: true })).toBeVisible();
   if (submitted.items.some((item) => item.evidence.length > 0))

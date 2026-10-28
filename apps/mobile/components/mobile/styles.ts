@@ -133,4 +133,6 @@ export const styles = StyleSheet.create({
   required: { color: '#9a3412', fontSize: 12, fontWeight: '700' },
   highlightText: { color: '#b45309', fontSize: 13, fontWeight: '700' },
   actionRow: { flexDirection: 'row', gap: 8 },
+  chatMessage: { borderLeftColor: '#d6d3d1', borderLeftWidth: 2, gap: 4, paddingLeft: 10 },
+  chatImage: { backgroundColor: '#f5f5f4', height: 220, width: '100%' },
 });

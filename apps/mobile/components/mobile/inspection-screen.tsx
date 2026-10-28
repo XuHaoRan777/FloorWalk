@@ -6,6 +6,7 @@ import { api, ApiError, userFacingError } from '../../lib/api';
 import { ErrorBanner } from './error-banner';
 import { PrimaryButton } from './primary-button';
 import { styles } from './styles';
+import { ChatPanel } from './chat-panel';
 
 export function InspectionScreen({
   id,
@@ -275,6 +276,7 @@ export function InspectionScreen({
             ? '处理中…'
             : '提交巡检'}
       </PrimaryButton>
+      <ChatPanel inspectionId={detail.id} canSend />
     </ScrollView>
   );
 }

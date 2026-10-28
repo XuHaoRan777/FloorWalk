@@ -11,6 +11,7 @@ import { EvidenceImage } from './evidence-image';
 import { formatTime, getErrorMessage } from './helpers';
 import { actionLabel } from './labels';
 import { StatusPill } from './status-pill';
+import { ChatPanel } from './chat-panel';
 
 export function ReviewDetail({
   initialInspection,
@@ -90,6 +91,7 @@ export function ReviewDetail({
           </span>
         </div>
       </div>
+      <ChatPanel inspectionId={inspection.id} canSend={canReview} />
       <ErrorBanner message={error} />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <section className="space-y-3" aria-labelledby="items-heading">

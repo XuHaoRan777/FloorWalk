@@ -23,12 +23,18 @@ export { getInspection } from './api/inspection';
 export { getEvidenceUrl } from './api/evidence';
 export { getReviewQueue, reviewInspection } from './api/review';
 export { getDashboard } from './api/dashboard';
+export { getChatMessages, sendChatMessage } from './api/chat';
+export { getAdminSites, getAdminTemplates } from './api/admin';
+export { getInspectorRecords } from './api/records';
 
 import { login, deleteSession, getMe } from './api/auth';
 import { getInspection } from './api/inspection';
 import { getEvidenceUrl } from './api/evidence';
 import { getReviewQueue, reviewInspection } from './api/review';
 import { getDashboard } from './api/dashboard';
+import { getChatMessages, sendChatMessage } from './api/chat';
+import { getAdminSites, getAdminTemplates } from './api/admin';
+import { getInspectorRecords } from './api/records';
 
 export const api = {
   login,
@@ -39,4 +45,9 @@ export const api = {
   getReviewQueue,
   reviewInspection,
   getDashboard,
+  getChatMessages,
+  sendChatMessage,
+  getAdminSites,
+  getAdminTemplates,
+  getInspectorRecords,
 };

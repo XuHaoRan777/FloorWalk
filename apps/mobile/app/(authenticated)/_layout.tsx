@@ -9,6 +9,7 @@ export default function AuthenticatedLayout() {
       <Stack screenOptions={{ headerShown: false, contentStyle: styles.app }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="inspection/[id]" />
+        <Stack.Screen name="records/[id]" />
       </Stack>
     </TodayProvider>
   );

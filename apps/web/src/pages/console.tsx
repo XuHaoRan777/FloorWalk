@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
   ClipboardCheck,
+  Store,
+  ClipboardList,
   FileText,
   House,
   LayoutDashboard,
@@ -40,6 +42,7 @@ import { getErrorMessage } from '@/components/console/helpers';
 import { roleLabel } from '@/components/console/labels';
 import { QueueView } from '@/components/console/queue-view';
 import { ReviewDetail } from '@/components/console/review-detail';
+import { AdminEmptyPage } from '@/components/console/admin-empty-page';
 
 function useConsoleSession() {
   const navigate = useNavigate();
@@ -99,9 +102,11 @@ function useConsoleSession() {
   return { session, loading, error, setError, logout };
 }
 
+type ConsoleSection = 'queue' | 'dashboard' | 'sites' | 'templates';
+
 export function ConsolePage() {
   const { session, loading, error, setError, logout } = useConsoleSession();
-  const [section, setSection] = useState<'queue' | 'dashboard'>(() =>
+  const [section, setSection] = useState<ConsoleSection>(() =>
     readSession()?.user.role === 'hq' ? 'dashboard' : 'queue',
   );
   const [selected, setSelected] = useState<InspectionDetail | null>(null);
@@ -117,6 +122,7 @@ export function ConsolePage() {
   const { user } = session;
   const isHq = user.role === 'hq';
   const showDashboard = isHq && section === 'dashboard';
+  const canManage = user.role === 'supervisor' || isHq;
   return (
     <SidebarProvider>
       <Sidebar variant="inset">
@@ -156,6 +162,28 @@ export function ConsolePage() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
+              {canManage && (
+                <>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={section === 'sites'}
+                      onClick={() => { setSection('sites'); setSelected(null); }}
+                    >
+                      <Store aria-hidden="true" />
+                      <span>门店</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={section === 'templates'}
+                      onClick={() => { setSection('templates'); setSelected(null); }}
+                    >
+                      <ClipboardList aria-hidden="true" />
+                      <span>模板</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </>
+              )}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <Link to="/">
@@ -185,7 +213,11 @@ export function ConsolePage() {
         </Header>
         <Main id="main">
           <ErrorBanner message={error} />
-          {user.role === 'inspector' ? (
+          {canManage && section === 'sites' ? (
+            <AdminEmptyPage title="门店" />
+          ) : canManage && section === 'templates' ? (
+            <AdminEmptyPage title="模板" />
+          ) : user.role === 'inspector' ? (
             <div className="mx-auto max-w-xl rounded-md border bg-card p-8 text-center">
               <FileText
                 className="mx-auto size-10 text-muted-foreground"

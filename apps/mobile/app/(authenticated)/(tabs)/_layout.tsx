@@ -21,6 +21,10 @@ export default function TabLayout() {
           options={{ title: '今日待巡', tabBarAccessibilityLabel: '今日待巡' }}
         />
         <Tabs.Screen
+          name="records"
+          options={{ title: '记录', tabBarAccessibilityLabel: '记录' }}
+        />
+        <Tabs.Screen
           name="profile"
           options={{ title: '我的', tabBarAccessibilityLabel: '我的' }}
         />
