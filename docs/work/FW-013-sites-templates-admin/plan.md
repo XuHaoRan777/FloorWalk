@@ -6,9 +6,9 @@
 
 - 工作单元状态：`approved`
 - 归档状态：`active`
-- 当前任务：T02 模板管理 API 落库、事务与“不影响已有单”测试
+- 当前任务：T03 Web 门店页与模板页
 - 阻塞：无
-- 下一步：完成 T02 模板管理 API 落库、事务与“不影响已有单”测试。
+- 下一步：完成 T03 Web 门店页与模板页。
 - 并行组：g02，并行单元，槽位 2（并行 FW-012、FW-013、FW-014；集成 FW-015）
 
 Preflight：只改 spec「批准记录」的写入范围。`inspection.controller.ts` 里建单的停用 409 已由 FW-011 实现，本单元核对并补测试，不重写。T04 动 Mobile 前先读 `~/.agents/skills/expo-overview`，在证据里记一行。Mobile 首屏在三槽并发时偶发加载超时（FW-011 记录，根因未定），遇到先单独重跑一次。
@@ -18,8 +18,8 @@ Preflight：只改 spec「批准记录」的写入范围。`inspection.controlle
 | ID  | 任务                                        | 状态          | 交付的 AC 与证据                                                          |
 | --- | ------------------------------------------- | ------------- | ------------------------------------------------------------------------- |
 | T01 | 门店管理 API 落库与权限测试                 | `done`        | AC-01、AC-03（门店部分）；`apps/api/src/admin.test.ts`                    |
-| T02 | 模板管理 API 落库、事务与"不影响已有单"测试 | `in_progress` | AC-02、AC-03（模板部分）；`apps/api/src/admin.test.ts`                    |
-| T03 | Web 门店页与模板页                          | `pending`     | AC-04、AC-05、AC-07；`tests/web/admin.spec.ts`                            |
+| T02 | 模板管理 API 落库、事务与"不影响已有单"测试 | `done`        | AC-02、AC-03（模板部分）；`apps/api/src/admin.test.ts`                    |
+| T03 | Web 门店页与模板页                          | `in_progress` | AC-04、AC-05、AC-07；`tests/web/admin.spec.ts`                            |
 | T04 | 停用效果：Mobile 今日页、看板、主管审完     | `pending`     | AC-06；`tests/mobile/site-deactivated.spec.ts`、`tests/web/admin.spec.ts` |
 | T05 | 最终代码审查（独立 Subagent）               | `pending`     | 派审查前跑本槽位全部测试和全量门禁；审查记录                              |
 
@@ -29,9 +29,10 @@ Preflight：只改 spec「批准记录」的写入范围。`inspection.controlle
 
 ## 证据
 
-| 任务 | status | command                                                                                                                                                                                                                                                                                                                                     | artifact                                                         | 备注                                              |
-| ---- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------- |
-| T01  | passed | `FW_SLOT=2 pnpm --filter @apps/api test -- src/admin.test.ts`; `pnpm --filter @apps/api typecheck`; `pnpm exec eslint apps/api/src/admin.controller.ts apps/api/src/admin.test.ts`; `pnpm exec prettier --check apps/api/src/admin.controller.ts apps/api/src/admin.test.ts docs/work/FW-013-sites-templates-admin/plan.md docs/backlog.md` | `apps/api/src/admin.controller.ts`, `apps/api/src/admin.test.ts` | 3 项 API 测试通过；先构建 shared 后类型检查通过。 |
+| 任务 | status | command                                                                                                                                                                                                                                                                                                                                                         | artifact                                                         | 备注                                                      |
+| ---- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------- |
+| T01  | passed | `FW_SLOT=2 pnpm --filter @apps/api test -- src/admin.test.ts`; `pnpm --filter @apps/api typecheck`; `pnpm exec eslint apps/api/src/admin.controller.ts apps/api/src/admin.test.ts`; `pnpm exec prettier --check apps/api/src/admin.controller.ts apps/api/src/admin.test.ts docs/work/FW-013-sites-templates-admin/plan.md docs/backlog.md`                     | `apps/api/src/admin.controller.ts`, `apps/api/src/admin.test.ts` | 3 项 API 测试通过；先构建 shared 后类型检查通过。         |
+| T02  | passed | `FW_SLOT=2 pnpm --filter @apps/api test -- src/admin.test.ts`; `pnpm --filter @apps/api typecheck`; `pnpm exec eslint apps/api/src/admin.controller.ts apps/api/src/admin.test.ts`; `pnpm exec prettier --check apps/api/src/admin.controller.ts apps/api/src/admin.test.ts docs/work/FW-013-sites-templates-admin/plan.md docs/backlog.md`; `git diff --check` | `apps/api/src/admin.controller.ts`, `apps/api/src/admin.test.ts` | 6 项 API 测试通过；旧巡检快照保持不变，重复名称更新回滚。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 

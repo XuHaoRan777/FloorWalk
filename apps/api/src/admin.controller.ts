@@ -27,7 +27,7 @@ import {
   updateSiteRequestSchema,
   updateTemplateRequestSchema,
 } from '@libs/shared';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { AuthGuard } from './auth.js';
 import { DATABASE_POOL } from './db/pool.provider.js';
 import { assertRole, iso, type AuthedRequest } from './inspection-queries.js';
@@ -140,30 +140,30 @@ export class AdminController {
   async createTemplate(@Body() body: unknown, @Req() request: AuthedRequest) {
     assertRole(request.user, ...apiRoutes.createAdminTemplate.roles);
     const input = createTemplateRequestSchema.parse(body);
-    const duplicate = await this.pool.query(
-      'SELECT 1 FROM floorwalk.templates WHERE name = $1',
-      [input.name],
-    );
-    if (duplicate.rowCount)
-      throw new ConflictException({
-        code: 'INVALID_STATE',
-        message: '模板名称已存在。',
-      });
     const id = randomUUID();
-    const createdAt = new Date().toISOString();
-    return templateResponseSchema.parse({
-      id,
-      name: input.name,
-      isCurrent: false,
-      createdAt,
-      items: input.items.map((item, index) => ({
-        id: randomUUID(),
-        templateId: id,
-        position: index + 1,
-        ...item,
-        createdAt,
-      })),
-    });
+    const client = await this.pool.connect();
+    let committed = false;
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'INSERT INTO floorwalk.templates (id, name) VALUES ($1, $2)',
+        [id, input.name],
+      );
+      await this.insertTemplateItems(client, id, input.items);
+      await client.query('COMMIT');
+      committed = true;
+    } catch (error) {
+      if (!committed) await client.query('ROLLBACK');
+      if (isUniqueViolation(error))
+        throw new ConflictException({
+          code: 'INVALID_STATE',
+          message: '模板名称已存在。',
+        });
+      throw error;
+    } finally {
+      client.release();
+    }
+    return templateResponseSchema.parse(await this.getTemplate(id));
   }
 
   @UseGuards(AuthGuard)
@@ -175,27 +175,42 @@ export class AdminController {
   ) {
     assertRole(request.user, ...apiRoutes.updateAdminTemplate.roles);
     const input = updateTemplateRequestSchema.parse(body);
-    const existing = await this.getTemplate(id);
-    const duplicate = await this.pool.query(
-      'SELECT 1 FROM floorwalk.templates WHERE name = $1 AND id <> $2',
-      [input.name, id],
-    );
-    if (duplicate.rowCount)
-      throw new ConflictException({
-        code: 'INVALID_STATE',
-        message: '模板名称已存在。',
-      });
-    return templateResponseSchema.parse({
-      ...existing,
-      name: input.name,
-      items: input.items.map((item, index) => ({
-        ...existing.items[index],
-        id: existing.items[index]?.id ?? randomUUID(),
-        templateId: id,
-        ...item,
-        createdAt: existing.items[index]?.createdAt ?? new Date().toISOString(),
-      })),
-    });
+    const client = await this.pool.connect();
+    let committed = false;
+    try {
+      await client.query('BEGIN');
+      const existing = await client.query(
+        'SELECT id FROM floorwalk.templates WHERE id = $1 FOR UPDATE',
+        [id],
+      );
+      if (!existing.rowCount)
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '模板不存在。',
+        });
+      await client.query(
+        'UPDATE floorwalk.templates SET name = $2 WHERE id = $1',
+        [id, input.name],
+      );
+      await client.query(
+        'DELETE FROM floorwalk.template_items WHERE template_id = $1',
+        [id],
+      );
+      await this.insertTemplateItems(client, id, input.items);
+      await client.query('COMMIT');
+      committed = true;
+    } catch (error) {
+      if (!committed) await client.query('ROLLBACK');
+      if (isUniqueViolation(error))
+        throw new ConflictException({
+          code: 'INVALID_STATE',
+          message: '模板名称已存在。',
+        });
+      throw error;
+    } finally {
+      client.release();
+    }
+    return templateResponseSchema.parse(await this.getTemplate(id));
   }
 
   @UseGuards(AuthGuard)
@@ -206,10 +221,57 @@ export class AdminController {
     @Req() request: AuthedRequest,
   ) {
     assertRole(request.user, ...apiRoutes.setCurrentAdminTemplate.roles);
-    return templateResponseSchema.parse({
-      ...(await this.getTemplate(id)),
-      isCurrent: true,
-    });
+    const client = await this.pool.connect();
+    let committed = false;
+    try {
+      await client.query('BEGIN');
+      const templates = await client.query(
+        'SELECT id FROM floorwalk.templates ORDER BY id FOR UPDATE',
+      );
+      if (!templates.rows.some((template) => template.id === id))
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '模板不存在。',
+        });
+      await client.query('UPDATE floorwalk.templates SET is_current = false');
+      await client.query(
+        'UPDATE floorwalk.templates SET is_current = true WHERE id = $1',
+        [id],
+      );
+      await client.query('COMMIT');
+      committed = true;
+    } catch (error) {
+      if (!committed) await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    return templateResponseSchema.parse(await this.getTemplate(id));
+  }
+
+  private async insertTemplateItems(
+    client: PoolClient,
+    templateId: string,
+    items: Array<{
+      position?: number;
+      title: string;
+      photoRequired: boolean;
+      critical: boolean;
+    }>,
+  ) {
+    for (const [index, item] of items.entries())
+      await client.query(
+        `INSERT INTO floorwalk.template_items
+           (template_id, position, title, photo_required, critical)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          templateId,
+          item.position ?? index + 1,
+          item.title,
+          item.photoRequired,
+          item.critical,
+        ],
+      );
   }
 
   private async getTemplate(id: string) {
