@@ -11,7 +11,21 @@ if (!Number.isInteger(slot) || slot < 1 || slot > 3)
 
 const apiPort = 3100 + slot * 10;
 const webPort = apiPort + 1;
+const apiUrl = `http://127.0.0.1:${apiPort}`;
+const webUrl = `http://127.0.0.1:${webPort}`;
 const projectRoot = process.cwd();
+
+const noProxy = [
+  process.env.NO_PROXY,
+  process.env.no_proxy,
+  '127.0.0.1',
+  'localhost',
+]
+  .filter(Boolean)
+  .join(',');
+process.env.NO_PROXY = noProxy;
+process.env.no_proxy = noProxy;
+
 const slotDatabaseUrl = new URL(process.env.DATABASE_URL ?? '');
 slotDatabaseUrl.pathname = `/floorwalk_e2e_${slot}`;
 const slotEnvironment = {
@@ -21,15 +35,14 @@ const slotEnvironment = {
   HOST: '127.0.0.1',
   DATABASE_URL: slotDatabaseUrl.toString(),
   STORAGE_DIR: `${projectRoot}/apps/api/.e2e/slot-${slot}/storage`,
+  API_PUBLIC_BASE_URL: apiUrl,
   NODE_ENV: 'development',
 };
-
-const apiUrl = `http://127.0.0.1:${apiPort}`;
-const webUrl = `http://127.0.0.1:${webPort}`;
 
 export default defineConfig({
   testDir: './tests/web',
   testMatch: '**/*.spec.ts',
+  workers: 1,
   timeout: 120_000,
   expect: { timeout: 10_000 },
   outputDir: `./tests/web-results/slot-${slot}`,

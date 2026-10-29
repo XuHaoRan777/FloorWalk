@@ -26,7 +26,7 @@
 | FW-012 | [巡检单聊天](work/FW-012-chat/spec.md)                      | verified | FW-011                 | g02 槽位 1               |
 | FW-013 | [门店与模板管理](work/FW-013-sites-templates-admin/spec.md) | verified | FW-011                 | g02 槽位 2               |
 | FW-014 | [Mobile 记录页](work/FW-014-mobile-records/spec.md)         | verified | FW-011                 | g02 槽位 3               |
-| FW-015 | [并行组 g02 集成](work/FW-015-g02-integration/spec.md)      | in_progress | FW-012、FW-013、FW-014 | T01 合并完成，下一步 T02 |
+| FW-015 | [并行组 g02 集成](work/FW-015-g02-integration/spec.md) | blocked | FW-012、FW-013、FW-014 | T05 原生 Metro 启动被策略拒绝 |
 
 ## 待开单元（未批准，按建议顺序）
 

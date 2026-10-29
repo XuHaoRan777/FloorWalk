@@ -426,13 +426,7 @@ test('chat history, polling, visibility, sending, images, and HQ read-only', asy
         contentType: 'application/json',
         body: '{"message":"照片链接无效或已过期。"}',
       });
-    } else {
-      const url = new URL(route.request().url());
-      // Temporary slot workaround until FW-015 sets API_PUBLIC_BASE_URL in the web test config.
-      await route.continue({
-        url: `${apiBase}${url.pathname}${url.search}`,
-      });
-    }
+    } else await route.continue();
   });
   await page.getByLabel('选择聊天图片').setInputFiles({
     name: 'chat.png',

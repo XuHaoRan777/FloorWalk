@@ -61,6 +61,7 @@ const webEnv = {
 export default defineConfig({
   testDir: './tests/mobile',
   testMatch: '*.spec.ts',
+  workers: 1,
   globalSetup: './tests/mobile/global-setup.ts',
   timeout: 120_000,
   outputDir: `./tests/web-results/mobile-slot-${slot}`,

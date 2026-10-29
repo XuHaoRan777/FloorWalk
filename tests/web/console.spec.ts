@@ -112,8 +112,19 @@ test('AC-03 详情展示检查项、照片和按时间排列的审核历史', as
   await expect(page.getByRole('textbox', { name: '聊天内容' })).toBeVisible();
   for (const item of submitted.items)
     await expect(page.getByText(item.title, { exact: true })).toBeVisible();
-  if (submitted.items.some((item) => item.evidence.length > 0))
-    expect(await page.locator('img').count()).toBeGreaterThan(0);
+  if (submitted.items.some((item) => item.evidence.length > 0)) {
+    const images = page.locator('img');
+    await expect(images.first()).toBeVisible();
+    await expect
+      .poll(() =>
+        images.evaluateAll((elements) =>
+          elements.some(
+            (element) => (element as HTMLImageElement).naturalWidth > 0,
+          ),
+        ),
+      )
+      .toBe(true);
+  }
   await expect(page.getByText(/审核历史/)).toBeVisible();
   await expect(page.getByText(/开始审核/)).toBeVisible();
 });
