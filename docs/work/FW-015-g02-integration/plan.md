@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- 工作单元状态：`blocked`
+- 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：T05 模拟器原生回归
-- 阻塞：原生 Metro 启动命令被执行策略拒绝（`blocked by policy`），AC-05 尚未取证。
-- 下一步：恢复获准的原生 Metro 启动途径后，在本对话继续 T05，再执行 T06/T07；不以 Expo Web 代替原生证据。
+- 当前任务：T06 交付与归档
+- 阻塞：无；用户已启动槽位 1 Metro，Agent 不启动、停止或重启它。
+- 下一步：按 FW-012、FW-013、FW-014 顺序 Promote 与归档，再完成 T07。
 - 并行组：g02，集成单元（并行 FW-012、FW-013、FW-014）
 
 Preflight：在主目录 master 上做。第一步核对 `git tag --list "g02/done/*"` 三个齐全、`g02/close` 已打。T05 动 Mobile 前先读 `~/.agents/skills/expo-overview`，在证据里记一行。
@@ -21,8 +21,8 @@ Preflight：在主目录 master 上做。第一步核对 `git tag --list "g02/do
 | T02 | 全量门禁                                                                                                   | `done` | AC-02                                                |
 | T03 | 演示链与各端界面 e2e，全部连真接口；先修 Web e2e 的 `API_PUBLIC_BASE_URL` 并删掉 FW-012 的 `/storage` 改写 | `done` | AC-03、AC-07                                         |
 | T04 | 跨端界面演示链扩展                                                                                         | `done` | AC-04                                                |
-| T05 | 模拟器原生回归                                                                                             | `blocked` | AC-05                                                |
-| T06 | 交付与归档：按顺序归档 FW-012～014，Promote                                                                | `pending` | AC-06（并行单元部分）                                |
+| T05 | 模拟器原生回归                                                                                             | `done` | AC-05                                            |
+| T06 | 交付与归档：按顺序归档 FW-012～014，Promote                                                                | `in_progress` | AC-06（并行单元部分）                                |
 | T07 | 最终代码审查：只审本单元自己的改动（冲突解法、T04、第 7 节记在本单元的修复）；审完写试行记录，归档本单元   | `pending` | 全量门禁一次，再派独立 Subagent；AC-06（本单元部分） |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
@@ -40,7 +40,7 @@ Preflight：在主目录 master 上做。第一步核对 `git tag --list "g02/do
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
 | T04 / AC-04 | passed | `$env:FW_SLOT='1'; pnpm e2e:demo-ui` | `tests/demo/inspection-chain.spec.ts` | 最终版 1/1（31.4s）：三角色独立 newContext；88 分提交、打回、详情打开后轮询看到主管原因（5 秒）、图文回复且主管轮询看到（5 秒）、图片自然宽度大于 0、补拍 100 分并通过、记录首行 ID 与本次单一致且只读、有聊天、总部停用无未审单的 NB-001 后看板标已停用。恢复启用；afterEach 事务删除本次巡检/检查项/照片/审核/聊天行，再删除对应照片文件；测试服务已退出。 |
-| T05 / AC-05 | blocked | `emulator -avd Medium_Phone_API_37.0 -no-window`; `adb ...`; `pnpm --filter @apps/mobile exec expo start --lan --clear --port 3112` | `apps/mobile/package.json` | 已读 expo-overview 与 launch-without-dev-menu；SDK 57.0.31，AVD Android 17 启动成功，Expo Go 已安装。原生 Metro 两次启动被执行策略拒绝（blocked by policy），未进行登录/上传/聊天/记录/冷启动或 logcat 验收，不声称 AC-05 通过。任务启动的 API、AVD、5038 ADB 服务及 reverse 映射已清理；已有 5037 ADB 未动。 |
+| T05 / AC-05 | passed | `adb -P 5038 -s 127.0.0.1:5555 reverse / push / uiautomator dump / input tap / logcat`; Web Chromium 主管核验 | `apps/mobile/`; `apps/web/src/components/console/review-detail.tsx` | 用户在自己终端启动槽位 1 Metro（exp://127.0.0.1:3112），Agent 未启动/停止/重启。Expo Go Android 17：登录→两项系统相册选图上传→提交页面显示 submitted、88；巡检页发送 FW015-native-chaty 图文，Web 主管详情显示 88、消息与聊天/两张现场图均 complete 且 naturalWidth=1。记录首行 d32b4ff5-5cd7-4958-ab1a-a19bd64832c5，详情有结果/备注/照片/审核历史/聊天，无巡检编辑控件；force-stop Expo Go 后重新打开原地址，直接显示已登录的 Northbean Coffee 1 今日待巡。logcat ReactNativeJS:E、AndroidRuntime:E 无输出；信息级首次 /me 401 是登录前探测。事务清理本次巡检、消息、审核、照片、检查项及 3 个存储文件；删除模拟器测试图，移除 3110/3112 reverse，停止本轮 API/Web/模拟器/5038 ADB；最终只有用户 Metro PID 7848 监听 3112，已通知用户自行停止。此前策略拒绝原文保留在下文。 |
 
 ## 回修
 
@@ -50,6 +50,8 @@ Preflight：在主目录 master 上做。第一步核对 `git tag --list "g02/do
 | ---- | ---- | ---- | ---- |
 
 ## 决策与偏差
+
+- 用户 2026-10-29 在自己终端启动 Metro，以解开执行策略拒绝（人工触点：排障 1）。Metro 由用户管理；Agent 不启动、停止或重启，要重启时停下告诉用户。
 
 <!-- 只记会影响后续的：用户决策、放弃的方案、发现的范围外问题。每条一行。归档时把仍然重要的升入 adr/、specs/ 或 pitfalls.md。 -->
 
