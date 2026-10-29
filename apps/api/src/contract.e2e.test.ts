@@ -615,6 +615,72 @@ describe('inspection contract API', () => {
       .expect(403);
   });
 
+  it('paginates records with sub-millisecond timestamp precision', async () => {
+    const pool = createPool();
+    let recordIds: string[] = [];
+    try {
+      const inserted = await pool.query<{ id: string }>(
+        `INSERT INTO floorwalk.inspections
+           (site_id, template_id, inspector_id, created_at)
+         SELECT site.id, $1, inspector.id, $2::timestamptz
+         FROM floorwalk.sites site
+         CROSS JOIN floorwalk.users inspector
+         CROSS JOIN generate_series(1, 3)
+         WHERE site.code = 'NB-001'
+           AND inspector.email = 'inspector@northbean.example'
+         RETURNING id`,
+        [templateId, '2099-10-29T12:00:00.123456Z'],
+      );
+      recordIds = inserted.rows.map((row) => row.id);
+
+      const first = inspectorRecordsResponseSchema.parse(
+        (
+          await request(app.getHttpServer())
+            .get('/api/inspector/inspections?limit=2')
+            .set('Cookie', inspectorCookie)
+            .expect(200)
+        ).body,
+      );
+      expect(first.items).toHaveLength(2);
+      expect(first.items.every((item) => recordIds.includes(item.id))).toBe(
+        true,
+      );
+      expect(first.nextCursor).toBeTruthy();
+
+      const second = inspectorRecordsResponseSchema.parse(
+        (
+          await request(app.getHttpServer())
+            .get(
+              `/api/inspector/inspections?limit=2&cursor=${encodeURIComponent(first.nextCursor!)}`,
+            )
+            .set('Cookie', inspectorCookie)
+            .expect(200)
+        ).body,
+      );
+      const remainingRecordIds = recordIds.filter(
+        (id) => !first.items.some((item) => item.id === id),
+      );
+      expect(remainingRecordIds).toHaveLength(1);
+      expect(
+        remainingRecordIds.every((id) =>
+          second.items.some((item) => item.id === id),
+        ),
+      ).toBe(true);
+      expect(
+        second.items.every(
+          (item) => !first.items.some((firstItem) => firstItem.id === item.id),
+        ),
+      ).toBe(true);
+    } finally {
+      if (recordIds.length)
+        await pool.query(
+          'DELETE FROM floorwalk.inspections WHERE id = ANY($1::uuid[])',
+          [recordIds],
+        );
+      await pool.end();
+    }
+  });
+
   it('supports chat text, images, access checks, and before/after pagination', async () => {
     const seeded = await request(app.getHttpServer())
       .get(`/api/inspections/${chatInspectionId}/messages`)

@@ -65,6 +65,7 @@ export class RecordsController {
 
     const rows = await this.pool.query(
       `SELECT id, status, score, created_at AS "createdAt",
+          to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorCreatedAt",
           submitted_at AS "submittedAt", decided_at AS "decidedAt"
        FROM floorwalk.inspections
        WHERE site_id = $1
@@ -79,18 +80,23 @@ export class RecordsController {
     );
     const hasMore = rows.rows.length > limit;
     const items = rows.rows.slice(0, limit).map((row) => ({
-      ...row,
+      id: row.id,
+      status: row.status,
+      score: row.score,
       createdAt: iso(row.createdAt),
       submittedAt: iso(row.submittedAt),
       decidedAt: iso(row.decidedAt),
     }));
-    const last = items.at(-1);
+    const last = rows.rows[limit - 1];
     return inspectorRecordsResponseSchema.parse({
       items,
       nextCursor:
         hasMore && last
           ? Buffer.from(
-              JSON.stringify({ createdAt: last.createdAt, id: last.id }),
+              JSON.stringify({
+                createdAt: last.cursorCreatedAt,
+                id: last.id,
+              }),
             ).toString('base64url')
           : null,
     });
