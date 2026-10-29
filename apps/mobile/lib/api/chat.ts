@@ -3,8 +3,20 @@ import { File } from 'expo-file-system';
 import { Platform } from 'react-native';
 import { request } from './request';
 
-export const chatMessages = (inspectionId: string) =>
-  request<ChatMessagesResponse>(`/inspections/${inspectionId}/messages`);
+export const chatMessages = (
+  inspectionId: string,
+  options: { after?: string; before?: string } = {},
+) => {
+  const query = new URLSearchParams(options).toString();
+  return request<ChatMessagesResponse>(
+    `/inspections/${inspectionId}/messages${query ? `?${query}` : ''}`,
+  );
+};
+
+export const chatImageUrl = (messageId: string) =>
+  request<{ url: string; expiresAt: string }>(
+    `/messages/${messageId}/image-url`,
+  );
 
 export const sendChatMessage = async (
   inspectionId: string,
