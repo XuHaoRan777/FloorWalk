@@ -1,4 +1,7 @@
-import type { InspectorRecordsResponse } from '@libs/shared';
+import type {
+  InspectorRecordsResponse,
+  SignedEvidenceResponse,
+} from '@libs/shared';
 import { request } from './request';
 
 export const inspectorRecords = (cursor?: string) => {
@@ -7,3 +10,6 @@ export const inspectorRecords = (cursor?: string) => {
     : '?limit=10';
   return request<InspectorRecordsResponse>(`/inspector/inspections${query}`);
 };
+
+export const evidenceUrl = (id: string) =>
+  request<SignedEvidenceResponse>(`/evidence/${id}`);

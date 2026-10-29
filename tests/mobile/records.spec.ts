@@ -208,6 +208,78 @@ test('记录列表按 API 分页显示，支持加载更多和刷新回到第一
   ).toEqual(firstPageIds);
 });
 
+test('记录详情只读显示检查项、照片和按时间排列的审核历史', async ({ page }) => {
+  await login(page);
+  const records = await readAllRecords(page);
+  let expected: {
+    id: string;
+    status: RecordItem['status'];
+    score: number | null;
+    items: Array<{
+      position: number;
+      title: string;
+      result: string;
+      note: string | null;
+      evidence: Array<{ id: string }>;
+    }>;
+    reviews: Array<{ id: string; action: string; comment: string | null }>;
+  } | null = null;
+
+  for (const record of records) {
+    const response = await page
+      .context()
+      .request.get(`${apiBase}/inspections/${record.id}`);
+    if (!response.ok()) continue;
+    const detail = (await response.json()) as NonNullable<typeof expected>;
+    if (
+      detail.items.some((item) => item.evidence.length) &&
+      detail.reviews.length
+    ) {
+      expected = detail;
+      break;
+    }
+  }
+  expect(expected).not.toBeNull();
+  if (!expected) throw new Error('种子记录缺少照片或审核历史。');
+
+  await page.getByLabel('记录').click();
+  await page.getByTestId(`record-row-${expected.id}`).click();
+  await expect(page.getByTestId('record-detail-summary')).toContainText(
+    statusLabels[expected.status],
+  );
+  await expect(page.getByTestId('record-detail-summary')).toContainText(
+    expected.score === null ? '分数：—' : `分数：${expected.score} 分`,
+  );
+
+  for (const item of expected.items) {
+    const row = page.getByTestId(`record-item-${item.position}`);
+    await expect(row).toContainText(item.title);
+    await expect(row).toContainText(
+      `结果：${item.result === 'pass' ? '合格' : item.result === 'fail' ? '不合格' : '未检查'}`,
+    );
+    await expect(row).toContainText(`备注：${item.note || '—'}`);
+    for (const evidence of item.evidence)
+      await expect(
+        page.getByTestId(`record-photo-${evidence.id}`),
+      ).toBeVisible();
+  }
+
+  const reviews = page.locator('[data-testid^="review-"]');
+  await expect(reviews).toHaveCount(expected.reviews.length);
+  const renderedReviewIds = await reviews.evaluateAll((elements) =>
+    elements.map((element) => element.getAttribute('data-testid')?.slice(7)),
+  );
+  expect(renderedReviewIds).toEqual(
+    expected.reviews.map((review) => review.id),
+  );
+  await expect(page.getByText('巡检聊天')).toBeVisible();
+  await expect(page.getByLabel('聊天内容')).toBeVisible();
+  await expect(page.getByRole('button', { name: '发送' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /合格|不合格|提交巡检/ }),
+  ).toHaveCount(0);
+});
+
 test('记录列表区分首次加载和空列表', async ({ page }) => {
   await login(page);
   let releaseResponse: (() => void) | undefined;
