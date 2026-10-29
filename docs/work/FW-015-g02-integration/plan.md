@@ -62,3 +62,25 @@ Preflight：在主目录 master 上做。第一步核对 `git tag --list "g02/do
 - 2026-10-29 用户明确批准扩围修改 playwright.mobile.config.ts 的 workers 为 1；默认 pnpm e2e:mobile 已重跑 16/16。
 - T05 执行策略拒绝原生 Metro 启动后，曾把槽位 API 临时监听改为 3018，未解决阻塞且不应作为绕过；已停止并恢复无任务监听进程。后续不换端口或包装命令规避拒绝，等可获准的启动途径。
 - T01 三个 merge commit 使用了 Git 默认消息，未含 FW-015（6eafbef、8317212、2979330）；在此明确归属 FW-015 T01，不重写已有合并历史。
+
+
+### T05 用户指定命令复试（2026-10-29）
+
+- 执行目录：`F:\project\FloorWalk\apps\mobile`。
+- 用户要求：原命令复试一次；若仍拒绝，保存完整原文并打 `g02/blocked/FW-015`，不换端口或包装方式。
+- 命令原文（status：`blocked`，AC-05 未取证）：
+
+```powershell
+$env:EXPO_PUBLIC_API_BASE_URL='http://127.0.0.1:3110/api'
+$env:RCT_METRO_PORT='3112'
+$env:REACT_NATIVE_PACKAGER_HOSTNAME='127.0.0.1'
+expo start --lan --android --port 3112
+```
+
+- 工具返回的拒绝提示完整原文：
+
+```text
+exec_command failed: CreateProcess { message: "Rejected(\"`\\\"C:\\\\\\\\Users\\\\\\\\29019\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command '$env:EXPO_PUBLIC_API_BASE_URL='\\\"'http://127.0.0.1:3110/api'\\n\\\"'$env:RCT_METRO_PORT='\\\"'3112'\\n\\\"'$env:REACT_NATIVE_PACKAGER_HOSTNAME='\\\"'127.0.0.1'\\nexpo start --lan --android --port 3112\\\"` rejected: blocked by policy\")" }
+```
+
+- 本次未启动任何进程；未改端口、未换包装方式重试。已有 5037 ADB 服务保持不变。阻塞记录提交后打 `g02/blocked/FW-015`。
