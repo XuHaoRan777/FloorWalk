@@ -268,6 +268,7 @@ test('chat history, polling, visibility, sending, images, and HQ read-only', asy
       });
     } else {
       const url = new URL(route.request().url());
+      // Temporary slot workaround until FW-015 sets API_PUBLIC_BASE_URL in the web test config.
       await route.continue({
         url: `${apiBase}${url.pathname}${url.search}`,
       });
@@ -314,7 +315,7 @@ test('chat history, polling, visibility, sending, images, and HQ read-only', asy
   await page.getByLabel('邮箱').fill('hq@northbean.example');
   await page.getByLabel('密码').fill(demoPassword);
   await page.getByRole('button', { name: '登录' }).click();
-  await page.getByRole('button', { name: '审核队列' }).click();
+  await page.locator('#main').getByRole('button', { name: '审核队列' }).click();
   await page.getByText(target.site.name, { exact: true }).click();
   await expect(page.getByRole('heading', { name: '巡检聊天' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: '聊天内容' })).toHaveCount(0);
