@@ -6,9 +6,9 @@
 
 - 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：T06 交付与归档
-- 阻塞：无；用户已启动槽位 1 Metro，Agent 不启动、停止或重启它。
-- 下一步：按 FW-012、FW-013、FW-014 顺序 Promote 与归档，再完成 T07。
+- 当前任务：T07 最终代码审查
+- 阻塞：无；用户自启 Metro 已由用户停止，最后一轮测试服务已退出。
+- 下一步：最后一轮机器门、独立审查、试行记录与本单元归档。
 - 并行组：g02，集成单元（并行 FW-012、FW-013、FW-014）
 
 Preflight：在主目录 master 上做。第一步核对 `git tag --list "g02/done/*"` 三个齐全、`g02/close` 已打。T05 动 Mobile 前先读 `~/.agents/skills/expo-overview`，在证据里记一行。
@@ -22,8 +22,8 @@ Preflight：在主目录 master 上做。第一步核对 `git tag --list "g02/do
 | T03 | 演示链与各端界面 e2e，全部连真接口；先修 Web e2e 的 `API_PUBLIC_BASE_URL` 并删掉 FW-012 的 `/storage` 改写 | `done` | AC-03、AC-07                                         |
 | T04 | 跨端界面演示链扩展                                                                                         | `done` | AC-04                                                |
 | T05 | 模拟器原生回归                                                                                             | `done` | AC-05                                            |
-| T06 | 交付与归档：按顺序归档 FW-012～014，Promote                                                                | `in_progress` | AC-06（并行单元部分）                                |
-| T07 | 最终代码审查：只审本单元自己的改动（冲突解法、T04、第 7 节记在本单元的修复）；审完写试行记录，归档本单元   | `pending` | 全量门禁一次，再派独立 Subagent；AC-06（本单元部分） |
+| T06 | 交付与归档：按顺序归档 FW-012～014，Promote                                                                | `done` | AC-06（并行单元部分）                                |
+| T07 | 最终代码审查：只审本单元自己的改动（冲突解法、T04、第 7 节记在本单元的修复）；审完写试行记录，归档本单元   | `in_progress` | 全量门禁一次，再派独立 Subagent；AC-06（本单元部分） |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
 方式 B 按用户可观察的切片切，不按数据、后端、前端分层切：每行写交付哪几条 AC，并在本任务内取得它们的证据；一条 AC 跨几个切片时记在完成它的那个任务。可以有一个先行任务只做数据结构与共享契约（表、迁移、共享类型，不含接口和页面），这一列写「无，机器门」。不设"Agent 验收""机器门汇总"这类只收集其他任务证据的任务；单元结束的全量套件和构建在「最终代码审查」任务里、派审查之前跑。
@@ -37,10 +37,12 @@ Preflight：在主目录 master 上做。第一步核对 `git tag --list "g02/do
 | T02 | passed | `pnpm typecheck`; `pnpm lint`; `pnpm format:check`; `pnpm build`; `$env:FW_SLOT='1'; pnpm --filter @apps/api test`; `pnpm e2e:slots`; `$env:FW_SLOT='1'; pnpm e2e:cors` | `pnpm typecheck`; `pnpm build`; Playwright reports | 全量门禁通过：API 44/44、三槽位隔离 3/3、CORS 3/3；测试服务已退出。 |
 | T03 | passed | `$env:FW_SLOT='1'; pnpm e2e:demo`; `$env:FW_SLOT='1'; pnpm exec playwright test --config=playwright.web.config.ts`; `$env:FW_SLOT='1'; pnpm e2e:mobile` | `tests/web-results/slot-1`; Playwright reports | API 演示链通过；Web 12/12、Mobile 16/16。Web 配置补槽位 `API_PUBLIC_BASE_URL`、NO_PROXY 并串行共享槽位测试；图片回源不再改写 `/storage`，断言 `naturalWidth > 0`。首轮发现服务探测走代理并误判 400、Web/Mobile 并发测试共享种子数据，已按根因修复并由全量重跑通过。 |
 
-<!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
-
 | T04 / AC-04 | passed | `$env:FW_SLOT='1'; pnpm e2e:demo-ui` | `tests/demo/inspection-chain.spec.ts` | 最终版 1/1（31.4s）：三角色独立 newContext；88 分提交、打回、详情打开后轮询看到主管原因（5 秒）、图文回复且主管轮询看到（5 秒）、图片自然宽度大于 0、补拍 100 分并通过、记录首行 ID 与本次单一致且只读、有聊天、总部停用无未审单的 NB-001 后看板标已停用。恢复启用；afterEach 事务删除本次巡检/检查项/照片/审核/聊天行，再删除对应照片文件；测试服务已退出。 |
 | T05 / AC-05 | passed | `adb -P 5038 -s 127.0.0.1:5555 reverse / push / uiautomator dump / input tap / logcat`; Web Chromium 主管核验 | `apps/mobile/`; `apps/web/src/components/console/review-detail.tsx` | 用户在自己终端启动槽位 1 Metro（exp://127.0.0.1:3112），Agent 未启动/停止/重启。Expo Go Android 17：登录→两项系统相册选图上传→提交页面显示 submitted、88；巡检页发送 FW015-native-chaty 图文，Web 主管详情显示 88、消息与聊天/两张现场图均 complete 且 naturalWidth=1。记录首行 d32b4ff5-5cd7-4958-ab1a-a19bd64832c5，详情有结果/备注/照片/审核历史/聊天，无巡检编辑控件；force-stop Expo Go 后重新打开原地址，直接显示已登录的 Northbean Coffee 1 今日待巡。logcat ReactNativeJS:E、AndroidRuntime:E 无输出；信息级首次 /me 401 是登录前探测。事务清理本次巡检、消息、审核、照片、检查项及 3 个存储文件；删除模拟器测试图，移除 3110/3112 reverse，停止本轮 API/Web/模拟器/5038 ADB；最终只有用户 Metro PID 7848 监听 3112，已通知用户自行停止。此前策略拒绝原文保留在下文。 |
+| T06 / AC-06（并行单元） | passed | `git log g02/start..g02/FW-012|013|014`; `python scripts/validate_docs.py --archive-gate` | `0475207`; `f3b9eab`; `a16aac3`; `docs/specs/` | 按 FW-012→FW-013→FW-014 顺序 Promote、提交并归档，三次 archive-gate 均 0 问题；分支提交全部带相应单元号，合并后没有并行单元级回修或硬线补审，无待人工项。 |
+| T07 机器门 | passed | `pnpm typecheck`; `pnpm lint`; `pnpm format:check`; `pnpm build`; `FW_SLOT=1 pnpm --filter @apps/api test`; `pnpm e2e:slots`; 槽位 1 `pnpm e2e:cors`、`pnpm e2e:demo`、Web 全套、`pnpm e2e:mobile`、`pnpm e2e:demo-ui`; `python -m unittest discover -s scripts/tests -t .` | `tests/`; `scripts/tests/` | 最后一轮全通过：API 44/44、槽位隔离 3/3、CORS 3/3、API 演示链通过、Web 12/12、Mobile 16/16、界面演示链 1/1（31.9s），类型/lint/格式/三端构建通过；收组 active-units-max 恢复 3，脚本 60/60。套件同槽串行，沿用各测试清理逻辑。 |
+
+| T07 独立审查 finding 修复 | passed | `pnpm typecheck`; `pnpm exec eslint tests/demo/inspection-chain.spec.ts`; `FW_SLOT=1 pnpm e2e:demo-ui` | `tests/demo/inspection-chain.spec.ts` | 独立审查首轮两项 P2：门店恢复断言含糊/标记清早、5秒起点偏晚且焦点补拉混入轮询。修为 PATCH 成功且 active=true、状态单元格精确启用后清标记，finally 校验恢复且嵌套 finally 关闭 contexts；两文档 CDP 保持 active，发送后接收 GET 与同一5秒截止时间验证，期间无焦点/可见性事件。定向演示链 1/1（30.4s），双向轮询实际 1929ms/1428ms（后者含图片解码）；不重跑全量。额外定向 lint 查出既有 storageKeys 无用初值，移除后通过。待原审查者限项复核。 |
 
 ## 回修
 
@@ -86,3 +88,5 @@ exec_command failed: CreateProcess { message: "Rejected(\"`\\\"C:\\\\\\\\Users\\
 ```
 
 - 本次未启动任何进程；未改端口、未换包装方式重试。已有 5037 ADB 服务保持不变。阻塞记录提交后打 `g02/blocked/FW-015`。
+
+- 2026-10-29 用户确认 Metro 已停止；T07 的仓库既有测试可按原槽位配置启动并自行清理其服务。

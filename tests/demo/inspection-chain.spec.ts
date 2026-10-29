@@ -17,6 +17,79 @@ function databaseUrlForSlot() {
   return url.toString();
 }
 
+async function keepChatActive(page: Page) {
+  const session = await page.context().newCDPSession(page);
+  await session.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+  await expect
+    .poll(() => page.evaluate(() => document.hasFocus() && !document.hidden))
+    .toBe(true);
+}
+
+async function sendAndObservePolling(
+  sender: Page,
+  receiver: Page,
+  inspectionId: string,
+  body: string,
+  observe: (deadline: number, messageId: string) => Promise<void>,
+) {
+  let sentAt = Infinity;
+  // Both documents remain active; no focus/visibility event can supply a refill.
+  const receiverEvents: string[] = [];
+  const recordEvent = () => receiverEvents.push('focus-or-visibility');
+  await receiver.exposeFunction('recordChatFocusEvent', recordEvent);
+  await receiver.evaluate(() => {
+    const record = () =>
+      (
+        window as unknown as { recordChatFocusEvent: () => void }
+      ).recordChatFocusEvent();
+    window.addEventListener('focus', record);
+    window.addEventListener('blur', record);
+    document.addEventListener('visibilitychange', record);
+  });
+  const delivered = receiver.waitForResponse(
+    async (response) => {
+      if (
+        new URL(response.url()).pathname !==
+          `/api/inspections/${inspectionId}/messages` ||
+        response.request().method() !== 'GET' ||
+        response.request().timing().startTime < sentAt ||
+        !response.ok()
+      )
+        return false;
+      const data = (await response.json()) as {
+        messages: Array<{ body: string | null }>;
+      };
+      return data.messages.some((message) => message.body === body);
+    },
+    { timeout: 5000 },
+  );
+  const sent = sender
+    .waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname ===
+          `/api/inspections/${inspectionId}/messages` &&
+        response.request().method() === 'POST',
+    )
+    .then(async (response) => {
+      sentAt = Date.now();
+      expect(response.status()).toBe(201);
+      return (await response.json()) as { id: string; imageUrl: string };
+    });
+  const [message] = await Promise.all([
+    sent,
+    delivered,
+    sender.getByRole('button', { name: '发送', exact: true }).click(),
+  ]);
+  await observe(sentAt + 5000, message.id);
+  expect(Date.now() - sentAt).toBeLessThanOrEqual(5000);
+  expect(receiverEvents).toEqual([]);
+  expect(
+    await receiver.evaluate(() => document.hasFocus() && !document.hidden),
+  ).toBe(true);
+  console.log(`chat polling delivery: ${Date.now() - sentAt}ms`);
+  return message;
+}
+
 test.afterEach(async () => {
   const inspectionId = createdInspectionId;
   createdInspectionId = undefined;
@@ -24,7 +97,7 @@ test.afterEach(async () => {
 
   const pool = createPool(databaseUrlForSlot());
   const client = await pool.connect();
-  let storageKeys: string[] = [];
+  let storageKeys: string[];
   try {
     await client.query('BEGIN');
     const stored = await client.query<{ storage_key: string }>(
@@ -86,6 +159,7 @@ test('店员、主管与总部通过真实界面完成 NB-001 巡检闭环', asy
   try {
     inspector = await inspectorContext.newPage();
     const page = inspector;
+    await keepChatActive(page);
     await page.goto(mobileUrl);
     await page.getByLabel('邮箱').fill('inspector@northbean.example');
     await page.getByLabel('密码').fill(password);
@@ -146,6 +220,7 @@ test('店员、主管与总部通过真实界面完成 NB-001 巡检闭环', asy
 
     supervisorContext = await browser.newContext();
     const supervisor = await supervisorContext.newPage();
+    await keepChatActive(supervisor);
     await supervisor.goto(webUrl);
     await supervisor.getByLabel('邮箱').fill('supervisor@northbean.example');
     await supervisor.getByLabel('密码').fill(password);
@@ -187,26 +262,17 @@ test('店员、主管与总部通过真实界面完成 NB-001 巡检闭环', asy
     await supervisor
       .getByRole('textbox', { name: '聊天内容' })
       .fill(supervisorReason);
-    const supervisorMessageResponse = supervisor.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname ===
-          `/api/inspections/${inspectionId}/messages` &&
-        response.request().method() === 'POST',
+    await sendAndObservePolling(
+      supervisor,
+      page,
+      inspectionId,
+      supervisorReason,
+      async (deadline) => {
+        await expect(
+          inspectorChat.getByText(supervisorReason, { exact: true }),
+        ).toBeVisible({ timeout: Math.max(1, deadline - Date.now()) });
+      },
     );
-    await supervisor.getByRole('button', { name: '发送' }).click();
-    expect((await supervisorMessageResponse).status()).toBe(201);
-    await expect(
-      supervisor
-        .getByRole('list', { name: '聊天消息' })
-        .getByText(supervisorReason, { exact: true }),
-    ).toBeVisible();
-
-    await page.bringToFront();
-    await expect(
-      inspectorChat.getByText(supervisorReason, { exact: true }),
-    ).toBeVisible({
-      timeout: 5000,
-    });
     const reply = '已补拍冷柜温度照片，请复核。';
     await page.getByRole('textbox', { name: '聊天内容' }).fill(reply);
     const imageBytes = Buffer.from(
@@ -227,20 +293,28 @@ test('店员、主管与总部通过真实界面完成 NB-001 巡检闭环', asy
       mimeType: 'image/png',
       buffer: imageBytes,
     });
-    const inspectorMessageResponse = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname ===
-          `/api/inspections/${inspectionId}/messages` &&
-        response.request().method() === 'POST',
+    const inspectorReplyMessageBody = await sendAndObservePolling(
+      page,
+      supervisor,
+      inspectionId,
+      reply,
+      async (deadline, messageId) => {
+        await expect(
+          supervisor
+            .getByRole('list', { name: '聊天消息' })
+            .getByText(reply, { exact: true }),
+        ).toBeVisible({ timeout: Math.max(1, deadline - Date.now()) });
+        await expect
+          .poll(
+            () =>
+              supervisor
+                .locator(`[data-message-id="${messageId}"] img`)
+                .evaluate((image) => (image as HTMLImageElement).naturalWidth),
+            { timeout: Math.max(1, deadline - Date.now()) },
+          )
+          .toBeGreaterThan(0);
+      },
     );
-    await page.getByRole('button', { name: '发送' }).click();
-    const inspectorMessageResponseBody = await inspectorMessageResponse;
-    expect(inspectorMessageResponseBody.status()).toBe(201);
-    const inspectorReplyMessageBody =
-      (await inspectorMessageResponseBody.json()) as {
-        id: string;
-        imageUrl: string;
-      };
     expect(new URL(inspectorReplyMessageBody.imageUrl).pathname).toContain(
       '/storage/',
     );
@@ -259,22 +333,6 @@ test('店员、主管与总部通过真实界面完成 NB-001 巡检闭环', asy
           ),
       )
       .toBe(true);
-    await supervisor.bringToFront();
-    await expect(
-      supervisor
-        .getByRole('list', { name: '聊天消息' })
-        .getByText(reply, { exact: true }),
-    ).toBeVisible({ timeout: 5000 });
-    const supervisorReplyImage = supervisor.locator(
-      `[data-message-id="${inspectorReplyMessageBody.id}"] img`,
-    );
-    await expect
-      .poll(() =>
-        supervisorReplyImage.evaluate(
-          (image) => (image as HTMLImageElement).naturalWidth,
-        ),
-      )
-      .toBeGreaterThan(0);
     coldItem = page.locator('[data-testid="inspection-item-3"]');
     await coldItem.getByRole('button', { name: '合格', exact: true }).click();
     const replacementChooserPromise = page.waitForEvent('filechooser');
@@ -347,15 +405,27 @@ test('店员、主管与总部通过真实界面完成 NB-001 巡检闭环', asy
     await expect(disabledDashboardRow).toContainText('已停用');
 
     await hq.getByRole('button', { name: '门店', exact: true }).click();
+    const reenabled = hq.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/api/admin/sites/${siteId}` &&
+        response.request().method() === 'PATCH',
+    );
     await hq
       .getByRole('row')
       .filter({ hasText: 'NB-001' })
       .getByRole('button', { name: '重新启用', exact: true })
       .click();
-    siteDisabled = false;
+    const reenabledResponse = await reenabled;
+    expect(reenabledResponse.ok()).toBe(true);
+    expect((await reenabledResponse.json()).active).toBe(true);
     await expect(
-      hq.getByRole('row').filter({ hasText: 'NB-001' }),
-    ).toContainText('启用');
+      hq
+        .getByRole('row')
+        .filter({ hasText: 'NB-001' })
+        .getByRole('cell')
+        .nth(2),
+    ).toHaveText('启用');
+    siteDisabled = false;
 
     await page.getByLabel('返回今日待巡').click();
     await page.getByRole('tab', { name: '记录', exact: true }).click();
@@ -383,14 +453,21 @@ test('店员、主管与总部通过真实界面完成 NB-001 巡检闭环', asy
         .getByLabel('聊天图片'),
     ).toBeVisible();
   } finally {
-    if (siteDisabled && siteId && hq)
-      await hq.request.patch(`${apiUrl}/api/admin/sites/${siteId}`, {
-        data: { active: true },
-      });
-    await Promise.all(
-      [inspectorContext, supervisorContext, hqContext]
-        .filter((context): context is BrowserContext => Boolean(context))
-        .map((context) => context.close()),
-    );
+    try {
+      if (siteDisabled && siteId && hq) {
+        const restored = await hq.request.patch(
+          `${apiUrl}/api/admin/sites/${siteId}`,
+          { data: { active: true } },
+        );
+        expect(restored.ok()).toBe(true);
+        expect((await restored.json()).active).toBe(true);
+      }
+    } finally {
+      await Promise.all(
+        [inspectorContext, supervisorContext, hqContext]
+          .filter((context): context is BrowserContext => Boolean(context))
+          .map((context) => context.close()),
+      );
+    }
   }
 });
