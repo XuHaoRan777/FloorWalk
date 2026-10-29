@@ -68,6 +68,20 @@ test('AC-06 停用门店隐藏新建入口，今日提示可见且历史接口�
 
     await page.getByLabel('记录').click();
     await expect(page.getByRole('heading', { name: '巡检记录' })).toBeVisible();
+    await page.goto(`/records/${records.items[0].id}`);
+    await expect(
+      page.getByRole('heading', { name: '巡检记录详情' }),
+    ).toBeVisible();
+
+    const reactivated = await request.patch(
+      `${apiBase}/admin/sites/${site.id}`,
+      { data: { active: true } },
+    );
+    expect(reactivated.ok()).toBeTruthy();
+    await page.goto('/');
+    await page.getByLabel('刷新今日任务').click();
+    await expect(page.getByTestId('start-inspection')).toBeVisible();
+    await expect(page.getByText('门店已停用', { exact: true })).toHaveCount(0);
   } finally {
     const active = await request.patch(`${apiBase}/admin/sites/${site.id}`, {
       data: { active: true },

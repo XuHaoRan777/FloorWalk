@@ -1,4 +1,4 @@
-import { afterAll, expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { createPool } from '../../apps/api/src/db/client.js';
 
 const configuredSlot = Number(process.env.FW_SLOT ?? 3);
@@ -6,6 +6,7 @@ const apiBase = `http://127.0.0.1:${3100 + configuredSlot * 10}/api`;
 const password = 'northbean-demo';
 const createdSiteIds: string[] = [];
 const createdTemplateIds: string[] = [];
+let initialCurrentTemplateId: string | undefined;
 
 async function login(page: Page, email = 'supervisor@northbean.example') {
   await page.goto('/');
@@ -20,6 +21,25 @@ test.afterAll(async () => {
   databaseUrl.pathname = `/floorwalk_e2e_${configuredSlot}`;
   const pool = createPool(databaseUrl.toString());
   try {
+    if (initialCurrentTemplateId) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          'UPDATE floorwalk.templates SET is_current = false WHERE is_current',
+        );
+        await client.query(
+          'UPDATE floorwalk.templates SET is_current = true WHERE id = $1',
+          [initialCurrentTemplateId],
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
     if (createdTemplateIds.length) {
       await pool.query(
         'DELETE FROM floorwalk.template_items WHERE template_id = ANY($1::uuid[])',
@@ -121,9 +141,14 @@ test('AC-05 模板检查项编辑、排序和设为当前匹配 API', async ({ p
   const initialResponse = await page.request.get(`${apiBase}/admin/templates`);
   expect(initialResponse.ok()).toBeTruthy();
   const initialTemplates = (await initialResponse.json()) as Array<{
+    id: string;
     name: string;
     isCurrent: boolean;
   }>;
+  initialCurrentTemplateId = initialTemplates.find(
+    (template) => template.isCurrent,
+  )?.id;
+  expect(initialCurrentTemplateId).toBeTruthy();
   for (const template of initialTemplates) {
     const row = page.getByRole('button', { name: new RegExp(template.name) });
     await expect(row).toBeVisible();
@@ -160,6 +185,13 @@ test('AC-05 模板检查项编辑、排序和设为当前匹配 API', async ({ p
 
   await page.getByLabel('模板名称').fill('界面模板修改');
   await page.getByLabel('检查项 1 标题').fill('已编辑第一项');
+  await page.getByRole('button', { name: '添加检查项' }).click();
+  await page.getByLabel('检查项 3 标题').fill('待移除项');
+  await page
+    .getByRole('listitem')
+    .filter({ has: page.getByLabel('检查项 3 标题') })
+    .getByRole('button', { name: '移除' })
+    .click();
   const updateResponse = page.waitForResponse(
     (response) =>
       response.url().includes(`/api/admin/templates/${created.id}`) &&

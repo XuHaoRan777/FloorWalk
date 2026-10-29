@@ -21,6 +21,7 @@ describe('admin API', () => {
   let inspectorCookie: string;
   let supervisorCookie: string;
   let hqCookie: string;
+  let initialCurrentTemplateId: string;
   const testCodePrefix = `FW013-${randomUUID()}`;
   const createdTemplateIds: string[] = [];
   const createdInspectionIds: string[] = [];
@@ -34,6 +35,15 @@ describe('admin API', () => {
     app = moduleRef.createNestApplication<NestExpressApplication>();
     app.useGlobalFilters(new HttpErrorFilter());
     await app.init();
+    const initialPool = createPool();
+    try {
+      const current = await initialPool.query<{ id: string }>(
+        'SELECT id FROM floorwalk.templates WHERE is_current',
+      );
+      initialCurrentTemplateId = current.rows[0].id;
+    } finally {
+      await initialPool.end();
+    }
 
     const login = async (email: string) => {
       const response = await request(app.getHttpServer())
@@ -75,6 +85,23 @@ describe('admin API', () => {
           'DELETE FROM floorwalk.inspections WHERE id = ANY($1::uuid[])',
           [createdInspectionIds],
         );
+      }
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          'UPDATE floorwalk.templates SET is_current = false WHERE is_current',
+        );
+        await client.query(
+          'UPDATE floorwalk.templates SET is_current = true WHERE id = $1',
+          [initialCurrentTemplateId],
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
       }
       if (createdTemplateIds.length) {
         await pool.query(
@@ -467,6 +494,56 @@ describe('admin API', () => {
       .post(`/api/admin/templates/${randomUUID()}/current`)
       .set('Cookie', hqCookie)
       .expect(404);
+  });
+
+  it('waits for an in-flight deactivation before deciding whether creation is allowed', async () => {
+    const pool = createPool();
+    const client = await pool.connect();
+    let pending: Promise<request.Response> | undefined;
+    try {
+      const site = await client.query<{ id: string }>(
+        "SELECT id FROM floorwalk.sites WHERE code = 'NB-001'",
+      );
+      await client.query('BEGIN');
+      await client.query(
+        'UPDATE floorwalk.sites SET deactivated_at = now() WHERE id = $1',
+        [site.rows[0].id],
+      );
+      const blocker = await client.query<{ pid: number }>(
+        'SELECT pg_backend_pid() AS pid',
+      );
+      pending = request(app.getHttpServer())
+        .post('/api/inspections')
+        .set('Cookie', inspectorCookie)
+        .send({ templateId: initialCurrentTemplateId })
+        .then((response) => {
+          if (response.status === 201)
+            createdInspectionIds.push(response.body.id);
+          return response;
+        });
+      await expect
+        .poll(async () => {
+          const waiting = await pool.query<{ count: string }>(
+            `SELECT count(*)::text AS count FROM pg_stat_activity
+           WHERE datname = current_database()
+             AND $1 = ANY(pg_blocking_pids(pid))
+             AND query LIKE '%FROM floorwalk.sites%FOR UPDATE%'`,
+            [blocker.rows[0].pid],
+          );
+          return Number(waiting.rows[0].count);
+        })
+        .toBe(1);
+      await client.query('COMMIT');
+      expect((await pending).status).toBe(409);
+    } finally {
+      await client.query('ROLLBACK');
+      await pending;
+      await client.query(
+        "UPDATE floorwalk.sites SET deactivated_at = NULL WHERE code = 'NB-001'",
+      );
+      client.release();
+      await pool.end();
+    }
   });
 
   it('blocks new inspections at a deactivated site while records and submitted reviews remain available', async () => {
