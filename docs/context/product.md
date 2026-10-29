@@ -7,7 +7,7 @@ FloorWalk 做连锁门店巡店：现场按模板拍照提交，主管审，总�
 | 角色 | 谁 | 主表面 |
 | --- | --- | --- |
 | Inspector | 店员 / 店长 | Mobile |
-| Supervisor | 区域主管 | Admin 审核队列 |
+| Supervisor | 区域主管 | Admin 审核队列 + 门店/模板配置 |
 | HQ | 总部运营 | Web 看板 + Admin 配置 |
 
 没有 C 端消费者账户，没有钱包。

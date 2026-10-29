@@ -5,11 +5,11 @@
 ## 当前状态
 
 - 工作单元状态：`verified`
-- 归档状态：`active`
-- 当前任务：T08 最终代码审查（独立 Subagent）
+- 归档状态：`archived`
+- 当前任务：完成
 - 并行组：g02，契约单元，槽位 1（并发隔离门使用 1～3）
 - 阻塞：无；用户于 2026-10-29 授权继续诊断三槽位 Mobile 冷启动与门禁执行流程。
-- 下一步：任务及独立最终审查已完成；按归档说明 Promote 权威规格，再处理归档门禁。用户要求 testlog-debt 等 FW-011 完成后再收。
+- 下一步：FW-011 实现、验证、独立审查、Promote 与归档门禁均完成。
 
 Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、`apps/api/drizzle/`（均为 hardline）、`apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`components/`、`lib/`）、`tests/`、`scripts/demo-chain.mjs`；不动 `package.json`、锁文件。全程用槽位 1，三道门的并发隔离用 1～3。T06 动 Mobile 前先读 `~/.agents/skills/expo-overview`，按分流读 `expo-router` 与 `expo-data-fetching`，查 SDK 57 文档，在证据里记一行。
 
@@ -60,7 +60,7 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、
 
 | 日期 | 反馈 | 改动 | 提交 |
 | ---- | ---- | ---- | ---- |
-| 2026-10-29 | 用户回复「继续」，授权恢复 T07 | 修正隔离门失败后的套件继续策略并重过全部门禁；完整 T07 证据见上 | 待提交 |
+| 2026-10-29 | 用户回复「继续」，授权恢复 T07 | 修正隔离门失败后的套件继续策略并重过全部门禁；完整 T07 证据见上 | `fa96173` |
 
 ## 决策与偏差
 
@@ -80,4 +80,8 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、
 - 2026-10-29 要用户定什么：本轮无待答产品/风险决策；此前用户授权继续，未要求用户运行 adb 或协助排障。用户要求 `testlog-debt` 待 FW-011 完成后再收。
 - 2026-10-29 决策：不放宽 `page.goto` 行为、测试断言或 120 秒超时；接受三槽完整门和根级机器门全绿作为 T07 完成证据。
 - 2026-10-29 T08 独立最终审查 finding：记录页 cursor 的 ISO `createdAt` 经 `pg` Date 解码只有毫秒精度，可能漏掉同毫秒的记录；按 T02 / AC-03 修复并由独立审查者定点复核通过。
-- 2026-10-29 独立文档债务：`python scripts/validate_docs.py` 报 `docs/testlog.md` 最早一行 3 天、上限 2 天（`testlog-debt`）；不属于 FW-011，不自行 Promote，待用户决定是否「收一下」。
+- 2026-10-29 独立文档债务：`python scripts/validate_docs.py` 报 `docs/testlog.md` 最早一行 3 天、上限 2 天（`testlog-debt`）；用户于 2026-10-29 指示「收一下」，按 `docs/howto/fix-promote.md` 收尾，提交 `d96e18b`。
+- 2026-10-29 用户授权继续排查三槽 Mobile 冷启动与门禁执行流程，并明确等 FW-011 完成后再收 `testlog-debt`；本轮无需用户运行 adb、人工验收或额外排障。
+- 2026-10-29 归档 Promote 已更新巡检契约、产品角色、Backlog 和时间戳分页陷阱；testlog 按用户指示收尾，提交 `d96e18b`。
+- 2026-10-29 归档时 evidence 递归清理命令曾被执行策略拒绝；继续会话时 `evidence/` 目录已不存在，未绕过策略删除。
+- 2026-10-29 用户触点：用户授权继续排查，并在 FW-011 完成后指示「收一下」；testlog 收尾提交 `d96e18b`。

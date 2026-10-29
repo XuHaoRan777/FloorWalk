@@ -26,6 +26,16 @@
 
 ## 陷阱清单
 
+### PostgreSQL 时间戳游标保留微秒
+
+- 触发条件：PostgreSQL `timestamptz` 用作分页排序键，API 先解码成 JavaScript `Date` 再把时间写进 cursor。
+- 现象：同一毫秒内的记录可能在后续页被跳过，因为 `Date` 仅保留毫秒精度。
+- 根因：PostgreSQL 时间戳支持微秒，而 JavaScript `Date` 精度为毫秒；截断后 cursor 比真实排序值更早或与多条记录相同。
+- 规避方式：生成 cursor 时在 SQL 侧将排序时间格式化为包含六位小数的 UTC 字符串；比较仍使用数据库时间戳，不经 `Date` 往返。
+- 验证方式：`FW-011` 契约 e2e 插入三条同一微秒记录，跨两页验证无遗漏和重复，并在 `finally` 中删除测试行。
+- 失效条件：驱动与 cursor 编码改为端到端保留 PostgreSQL 微秒精度，或分页排序键不再使用时间戳。
+- 首次记录：`FW-011`
+
 ### Expo 真机扫码与主题
 
 - 触发条件：Expo 57 在 Windows 以 localhost 模式启动，手机通过同一 Wi-Fi 的 Expo Go 扫码；或 gluestack Provider 同时用于原生与 react-native-web 0.21.2。
