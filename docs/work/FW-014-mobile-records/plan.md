@@ -6,21 +6,21 @@
 
 - 工作单元状态：`approved`
 - 归档状态：`active`
-- 当前任务：无
+- 当前任务：T02
 - 阻塞：无
-- 下一步：在 Codex 新建的工作树里从 T01 开始。
+- 下一步：实现记录列表、分页刷新和错误状态。
 - 并行组：g02，并行单元，槽位 3（并行 FW-012、FW-013、FW-014；集成 FW-015）
 
 Preflight：只改 spec「批准记录」的写入范围。`records.controller.ts` 已由 FW-011 实现游标分页（含毫秒精度修复），本单元核对并补测试，不重写。T02 动 Mobile 前先读 `~/.agents/skills/expo-overview`，按分流读 `expo-router` 与 `expo-data-fetching`，查 SDK 57 文档，在证据里记一行。Mobile 首屏在三槽并发时偶发加载超时（FW-011 记录，根因未定），遇到先单独重跑一次。
 
 ## 任务表
 
-| ID  | 任务                                           | 状态      | 交付的 AC 与证据                                         |
-| --- | ---------------------------------------------- | --------- | -------------------------------------------------------- |
-| T01 | 记录列表 API 的分页完整性与权限测试            | `pending` | AC-01、AC-04（API 部分）；`apps/api/src/records.test.ts` |
-| T02 | 「记录」Tab 列表：加载更多、下拉刷新、三种状态 | `pending` | AC-02、AC-05；`tests/mobile/records.spec.ts`             |
-| T03 | 只读详情页                                     | `pending` | AC-03、AC-04（界面部分）；`tests/mobile/records.spec.ts` |
-| T04 | 最终代码审查（独立 Subagent）                  | `pending` | 派审查前跑本槽位全部测试和全量门禁；审查记录             |
+| ID  | 任务                                           | 状态          | 交付的 AC 与证据                                         |
+| --- | ---------------------------------------------- | ------------- | -------------------------------------------------------- |
+| T01 | 记录列表 API 的分页完整性与权限测试            | `done`        | AC-01、AC-04（API 部分）；`apps/api/src/records.test.ts` |
+| T02 | 「记录」Tab 列表：加载更多、下拉刷新、三种状态 | `pending`     | AC-02、AC-05；`tests/mobile/records.spec.ts`             |
+| T03 | 只读详情页                                     | `pending`     | AC-03、AC-04（界面部分）；`tests/mobile/records.spec.ts` |
+| T04 | 最终代码审查（独立 Subagent）                  | `pending`     | 派审查前跑本槽位全部测试和全量门禁；审查记录             |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
 方式 B 按用户可观察的切片切，不按数据、后端、前端分层切：每行写交付哪几条 AC，并在本任务内取得它们的证据；一条 AC 跨几个切片时记在完成它的那个任务。可以有一个先行任务只做数据结构与共享契约（表、迁移、共享类型，不含接口和页面），这一列写「无，机器门」。不设"Agent 验收""机器门汇总"这类只收集其他任务证据的任务；单元结束的全量套件和构建在「最终代码审查」任务里、派审查之前跑。
@@ -28,8 +28,10 @@ Preflight：只改 spec「批准记录」的写入范围。`records.controller.t
 
 ## 证据
 
-| 任务 | status | command | artifact | 备注 |
-| ---- | ------ | ------- | -------- | ---- |
+| 任务                   | status | command                                                                 | artifact                                                                           | 备注                                                                                                                                                                                                   |
+| ---------------------- | ------ | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| T01 / AC-01、AC-04 API | passed | `FW_SLOT=3 pnpm --filter @apps/api test -- src/records.test.ts`         | `apps/api/src/records.test.ts`                                                     | 对照数据库本店全集翻完所有页；同毫秒稳定分页、同店另一店员、外店隔离、角色 403、超限与伪造游标 400 均通过。首跑因 shared dist 缺失未收集测试，构建 shared 后重跑通过。                                 |
+| T02 前置阅读           | passed | `read Expo skills and SDK 57 Router reference`                          | `apps/mobile/package.json`                                                         | expo-overview → expo-router、expo-data-fetching；Expo SDK 57.0.31 / Router 57.0.29，官方文档：`https://docs.expo.dev/versions/v57.0.0/sdk/router.md`。                                                 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
