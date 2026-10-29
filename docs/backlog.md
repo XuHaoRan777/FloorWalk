@@ -23,7 +23,6 @@
 
 | ID     | 工作单元                                                    | 状态     | 依赖                   | 下一步                   |
 | ------ | ----------------------------------------------------------- | -------- | ---------------------- | ------------------------ |
-| FW-015 | [并行组 g02 集成](work/FW-015-g02-integration/spec.md) | in_progress | FW-012、FW-013、FW-014 | T06 按序 Promote 与归档 |
 
 ## 待开单元（未批准，按建议顺序）
 
@@ -60,3 +59,4 @@
 | FW-012 | [巡检单聊天](work/FW-012-chat/spec.md) | 2026-10-29 | FW-015 T06 按序 Promote 与归档（见 git log），未推送 |
 | FW-013 | [门店与模板管理](work/FW-013-sites-templates-admin/spec.md) | 2026-10-29 | FW-015 T06 按序 Promote 与归档（见 git log），未推送 |
 | FW-014 | [Mobile 记录页](work/FW-014-mobile-records/spec.md) | 2026-10-29 | FW-015 T06 按序 Promote 与归档（见 git log），未推送 |
+| FW-015 | [并行组 g02 集成](work/FW-015-g02-integration/spec.md) | 2026-10-29 | 本地集成、原生回归、审查及归档提交（见 git log），未推送 |

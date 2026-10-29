@@ -14,7 +14,7 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 
 ## API 进程探针
 
-`GET /health` 返回 HTTP 200 和 `{"status":"ok"}`。登录校验当前用户，受保护请求读取数据库中的当前角色与门店绑定；巡检、审核队列、证据链接和看板业务见[巡检主链](inspection.md)。API 监听 `HOST`（缺省 `127.0.0.1`），启动日志输出 shared 项目名及监听地址；PORT 必须为 1—65535 的整数。API 进程共用一个数据库连接池，应用关闭时释放。
+`GET /health` 返回 HTTP 200 和 `{"status":"ok"}`。登录校验当前用户，受保护请求读取数据库中的当前角色与门店绑定；巡检、审核队列、证据链接和看板业务见[巡检主链](inspection.md)，聊天与管理见[聊天](chat.md)、[管理](admin.md)。API 监听 `HOST`（缺省 `127.0.0.1`），启动日志输出 shared 项目名及监听地址；PORT 必须为 1—65535 的整数。API 进程共用一个数据库连接池，应用关闭时释放。
 
 ## Web 页面壳
 
@@ -22,7 +22,7 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 
 ## Mobile 运行
 
-店员可在 Expo Web 和 Mobile 应用中登录、查看今日待巡、创建巡检、填写检查结果与备注、上传必拍照片、提交，以及补交主管打回的巡检；行为见 [Mobile 店员巡检](mobile-inspector.md)。
+店员可在 Expo Web 和 Mobile 应用中完成巡检主链、聊天和本店历史记录查看；行为见 [Mobile 店员巡检](mobile-inspector.md)。
 
 根布局使用浅色主题。Provider 在原生端调用 Appearance，将 system 模式映射为 unspecified；在 Expo Web 端切换已有的根元素 light/dark 样式类，卸载时恢复，不调用缺失的原生主题设置方法。Expo Web 是移动应用预览，与独立 Web 应用不同。
 
@@ -30,7 +30,7 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 
 ## 没有的
 
-没有聊天、用户/门店/模板管理页、缓存、CI/CD、云部署、APK 签名或商店发布。Web 与 Mobile 使用服务端会话表和 HttpOnly cookie，不把 token 放进脚本可读存储。Web 生产构建与 preview 带 CSP，开发服务器不添加 CSP。
+没有用户管理页、缓存、CI/CD、云部署、APK 签名或商店发布。聊天、门店和模板管理见[聊天](chat.md)与[管理](admin.md)，Mobile 历史记录见[店员巡检](mobile-inspector.md#记录)。Web 与 Mobile 使用服务端会话表和 HttpOnly cookie，不把 token 放进脚本可读存储。Web 生产构建与 preview 带 CSP，开发服务器不添加 CSP。
 
 ## 数据契约（归档时再生成）
 
@@ -38,9 +38,9 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 | ---------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | workspace 与命令 | 四包编排和根检查入口                                    | [package.json](../../package.json)、[pnpm-workspace.yaml](../../pnpm-workspace.yaml)                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | shared           | APP_NAME 与巡检主链 zod 契约                            | [源码](../../packages/shared/src/index.ts)、[契约](../../packages/shared/src/contract/index.ts)                                                                                                                                                                                                                                                                                                                                                                                                           |
-| API              | /health、会话登录/退出、/me、巡检/审核/证据/看板接口    | [控制器](../../apps/api/src/health.controller.ts)、[认证接口](../../apps/api/src/auth.controller.ts)、[巡检](../../apps/api/src/inspection.controller.ts)、[证据](../../apps/api/src/evidence.controller.ts)、[审核](../../apps/api/src/review.controller.ts)、[看板](../../apps/api/src/dashboard.controller.ts)、[共用查询](../../apps/api/src/inspection-queries.ts)、[认证](../../apps/api/src/auth.ts)、[连接池生命周期](../../apps/api/src/db/pool.provider.ts)、[启动](../../apps/api/src/main.ts) |
-| Web              | /、/console、HttpOnly 登录会话、审核/看板 API、生产 CSP | [路由](../../apps/web/src/router.tsx)、[客户端](../../apps/web/src/lib/api.ts)、[构建配置](../../apps/web/vite.config.ts)                                                                                                                                                                                                                                                                                                                                                                                 |
-| Mobile           | 登录、今日巡检、巡检详情、检查项与证据上传              | [导航](../../apps/mobile/app/_layout.tsx)、[屏幕](../../apps/mobile/components/mobile/)、[API](../../apps/mobile/lib/api.ts)、[功能客户端](../../apps/mobile/lib/api/)                                                                                                                                                                                                                                                                                                                                    |
+| API              | /health、会话、巡检/审核/证据/看板、聊天、管理与记录接口    | [控制器](../../apps/api/src/health.controller.ts)、[认证接口](../../apps/api/src/auth.controller.ts)、[巡检](../../apps/api/src/inspection.controller.ts)、[证据](../../apps/api/src/evidence.controller.ts)、[审核](../../apps/api/src/review.controller.ts)、[看板](../../apps/api/src/dashboard.controller.ts)、[共用查询](../../apps/api/src/inspection-queries.ts)、[认证](../../apps/api/src/auth.ts)、[连接池生命周期](../../apps/api/src/db/pool.provider.ts)、[启动](../../apps/api/src/main.ts) |
+| Web              | /、/console、HttpOnly 登录会话、审核/看板/聊天/管理 API、生产 CSP | [路由](../../apps/web/src/router.tsx)、[客户端](../../apps/web/src/lib/api.ts)、[构建配置](../../apps/web/vite.config.ts)                                                                                                                                                                                                                                                                                                                                                                                 |
+| Mobile           | 登录、巡检、检查项与证据上传、聊天、记录              | [导航](../../apps/mobile/app/_layout.tsx)、[屏幕](../../apps/mobile/components/mobile/)、[API](../../apps/mobile/lib/api.ts)、[功能客户端](../../apps/mobile/lib/api/)                                                                                                                                                                                                                                                                                                                                    |
 
 ## 修订记录
 
@@ -54,3 +54,4 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 | 2026-10-26 | FW-008 拆分 API/Web/Mobile 功能模块，Mobile 改用 Tabs 导航；业务源码 400 行上限纳入 lint。                                               |
 | 2026-10-27 | FW-009 三端改用 HttpOnly 服务端会话；Web 生产构建和 preview 增加 CSP。                                                                   |
 | 2026-10-28 | FW-010 API 进程共用一个数据库连接池，应用关闭时释放；接口行为不变。                                                                      |
+| 2026-10-29 | g02 集成聊天、门店与模板管理和 Mobile 记录页；真实跨端演示链及 Android 原生相册回归通过。 |
