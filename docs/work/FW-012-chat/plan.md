@@ -19,8 +19,8 @@ Preflight：只改 spec「批准记录」的写入范围。T03、T04 动 Mobile 
 | --- | ------------------------------------------------------------ | --------- | --------------------------------------------------------------------------- |
 | T01 | API 边角与权限测试                                           | `done` | AC-06（API 部分）；`apps/api/src/chat.test.ts`                              |
 | T02 | Web 聊天面板：列表、加载更早、轮询与可见性、发文字与图、错误 | `done` | AC-01～AC-05、AC-08 的 Web 部分，AC-06 的总部只读；`tests/web/chat.spec.ts` |
-| T03 | Mobile 聊天面板（Expo Web）                                  | `in_progress` | AC-01～AC-05、AC-08 的 Mobile 部分；`tests/mobile/chat.spec.ts`             |
-| T04 | Mobile 原生往返（模拟器）                                    | `pending` | AC-07                                                                       |
+| T03 | Mobile 聊天面板（Expo Web）                                  | `done` | AC-01～AC-05、AC-08 的 Mobile 部分；`tests/mobile/chat.spec.ts`             |
+| T04 | Mobile 原生往返（模拟器）                                    | `in_progress` | AC-07                                                                       |
 | T05 | 最终代码审查（独立 Subagent）                                | `pending` | 派审查前跑本槽位全部测试和全量门禁；审查记录                                |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
@@ -33,6 +33,7 @@ Preflight：只改 spec「批准记录」的写入范围。T03、T04 动 Mobile 
 | ---- | ------ | ------- | -------- | ---- |
 | T01 | passed | `pnpm --filter @libs/shared build`; `pnpm --filter @apps/api typecheck`; `FW_SLOT=1 pnpm --filter @apps/api test -- src/chat.test.ts` | `apps/api/src/chat.test.ts` | 首次类型检查因 shared 尚未构建失败；构建后复跑通过。测试结束删除新增消息和会话。 |
 | T02 | passed | `pnpm --filter @apps/web typecheck`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `apps/web/src/components/console/chat-panel.tsx`; `tests/web/chat.spec.ts` | HQ 只读步骤限定到 `#main` 的内容区按钮；图片 `naturalWidth > 0` 强断言保留，图片签名重取和加载通过。槽位存储请求临时映射到 API 3110，待 FW-015 修好 `API_PUBLIC_BASE_URL` 后移除。 |
+| T03 | passed | `pnpm --filter @apps/mobile typecheck`; `FW_SLOT=1 pnpm e2e:mobile -- tests/mobile/chat.spec.ts` | `apps/mobile/components/mobile/chat-panel.tsx`; `tests/mobile/chat.spec.ts` | Expo Web 对照真实 API 验证最近 50 条与 before 分页、2 秒轮询接收他账号消息、1001 字禁用、发文字及 ImagePicker 图文发送和图片显示；API 测试消息清理。预读 `~/.agents/skills/expo-overview/SKILL.md`、`expo-data-fetching/SKILL.md`；SDK 57.0.0 ImagePicker/FileSystem 文档请求遇 TLS EOF，按锁定包 57.0.20/57.0.7 类型定义核对。 |
 | T02 | failed | `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `tests/web/chat.spec.ts` | 实验 1：首次图片请求 HTTP 403 后，签名重取接口 200、重试图片请求发生，但 `naturalWidth` 仍为 0；`route.abort()` 并非唯一原因。 |
 | T02 | passed | `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `tests/web/chat.spec.ts` | 实验 2：消息图的 `src` 仅变更 2 次（初始和一次重取），无轮询反复覆盖；重取后属性为新 URL，采样时 `currentSrc` 仍为旧 URL。 |
 | T02 | failed | `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `tests/web/chat.spec.ts` | 实验 3：独立 `Image` 加载同样失败；Playwright 报 `ECONNREFUSED 192.168.110.17:3018`，无 HTTP 响应头可读。签名 URL 指向开发地址，槽位 API 实际在 3110；配置未覆盖 `API_PUBLIC_BASE_URL`。 |

@@ -7,7 +7,7 @@ import {
   updateItem,
   submit,
 } from './api/inspection';
-import { chatMessages, sendChatMessage } from './api/chat';
+import { chatImageUrl, chatMessages, sendChatMessage } from './api/chat';
 import { inspectorRecords } from './api/records';
 export { ApiError } from './api/errors';
 export { userFacingError } from './api/request';
@@ -23,6 +23,7 @@ export const api = {
   uploadEvidence,
   submit,
   chatMessages,
+  chatImageUrl,
   sendChatMessage,
   inspectorRecords,
 };
