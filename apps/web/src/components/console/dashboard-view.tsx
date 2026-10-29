@@ -7,14 +7,24 @@ import { getErrorMessage } from './helpers';
 import { statusLabel } from './labels';
 
 export function DashboardView({ onQueue }: { onQueue: () => void }) {
-  const [sites, setSites] = useState<DashboardSite[]>([]);
+  const [sites, setSites] = useState<
+    Array<DashboardSite & { site: DashboardSite['site'] & { active: boolean } }>
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const load = useCallback(() => {
     setLoading(true);
     setError('');
     void getDashboard()
-      .then(setSites)
+      .then((result) =>
+        setSites(
+          result as Array<
+            DashboardSite & {
+              site: DashboardSite['site'] & { active: boolean };
+            }
+          >,
+        ),
+      )
       .catch((reason: unknown) => setError(getErrorMessage(reason)))
       .finally(() => setLoading(false));
   }, []);
@@ -76,6 +86,11 @@ export function DashboardView({ onQueue }: { onQueue: () => void }) {
                     {entry.latestStatus
                       ? statusLabel[entry.latestStatus]
                       : '暂无记录'}
+                    {!entry.site.active && (
+                      <span className="ml-2 font-medium text-destructive">
+                        已停用
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

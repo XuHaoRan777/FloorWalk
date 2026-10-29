@@ -64,13 +64,20 @@ export function TodayScreen({
           {today.template.items.length} 个检查项 ·{' '}
           {today.submittedToday ? '今天已提交' : '今天尚未提交'}
         </Text>
-        <PrimaryButton
-          disabled={loading}
-          onPress={() => void startInspection()}
-          testID="start-inspection"
-        >
-          {loading ? '准备中…' : '开始巡检'}
-        </PrimaryButton>
+        {today.site.active ? (
+          <PrimaryButton
+            disabled={loading}
+            onPress={() => void startInspection()}
+            testID="start-inspection"
+          >
+            {loading ? '准备中…' : '开始巡检'}
+          </PrimaryButton>
+        ) : (
+          <View style={styles.warning}>
+            <Text style={styles.warningTitle}>门店已停用</Text>
+            <Text style={styles.muted}>当前门店停用期间不能新建巡检。</Text>
+          </View>
+        )}
       </View>
       <ErrorBanner message={error} />
       <Text style={styles.sectionTitle}>被打回的巡检</Text>

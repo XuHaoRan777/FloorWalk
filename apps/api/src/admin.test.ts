@@ -5,8 +5,10 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import {
   loginResponseSchema,
+  inspectorRecordsResponseSchema,
   siteResponseSchema,
   templateResponseSchema,
+  todayResponseSchema,
 } from '@libs/shared';
 import { AppModule } from './app.module.js';
 import { createPool } from './db/client.js';
@@ -88,6 +90,9 @@ describe('admin API', () => {
         `${testCodePrefix}%`,
       ]);
       await pool.query('DELETE FROM floorwalk.sessions');
+      await pool.query(
+        `UPDATE floorwalk.sites SET deactivated_at = NULL WHERE code = 'NB-001'`,
+      );
     } finally {
       await pool.end();
       await app.close();
@@ -462,5 +467,95 @@ describe('admin API', () => {
       .post(`/api/admin/templates/${randomUUID()}/current`)
       .set('Cookie', hqCookie)
       .expect(404);
+  });
+
+  it('blocks new inspections at a deactivated site while records and submitted reviews remain available', async () => {
+    const todayBefore = await request(app.getHttpServer())
+      .get('/api/inspector/today')
+      .set('Cookie', inspectorCookie)
+      .expect(200);
+    const initialToday = todayResponseSchema.parse(todayBefore.body);
+    const template = await request(app.getHttpServer())
+      .post('/api/admin/templates')
+      .set('Cookie', supervisorCookie)
+      .send({
+        name: `${testCodePrefix} 停用测试模板`,
+        items: [
+          { title: '停用测试检查项', photoRequired: false, critical: false },
+        ],
+      })
+      .expect(201);
+    createdTemplateIds.push(template.body.id);
+    const created = await request(app.getHttpServer())
+      .post('/api/inspections')
+      .set('Cookie', inspectorCookie)
+      .send({ templateId: template.body.id })
+      .expect(201);
+    createdInspectionIds.push(created.body.id);
+    const detail = await request(app.getHttpServer())
+      .get(`/api/inspections/${created.body.id}`)
+      .set('Cookie', inspectorCookie)
+      .expect(200);
+    for (const item of detail.body.items)
+      await request(app.getHttpServer())
+        .patch(`/api/inspections/${created.body.id}/items/${item.id}`)
+        .set('Cookie', inspectorCookie)
+        .send({ result: 'pass' })
+        .expect(200);
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${created.body.id}/submit`)
+      .set('Cookie', inspectorCookie)
+      .expect(201);
+
+    try {
+      await request(app.getHttpServer())
+        .patch(`/api/admin/sites/${initialToday.site.id}`)
+        .set('Cookie', supervisorCookie)
+        .send({ active: false })
+        .expect(200);
+      const stopped = await request(app.getHttpServer())
+        .get('/api/inspector/today')
+        .set('Cookie', inspectorCookie)
+        .expect(200);
+      expect(todayResponseSchema.parse(stopped.body).site.active).toBe(false);
+      await request(app.getHttpServer())
+        .post('/api/inspections')
+        .set('Cookie', inspectorCookie)
+        .send({ templateId: template.body.id })
+        .expect(409);
+
+      const records = await request(app.getHttpServer())
+        .get('/api/inspector/inspections?limit=10')
+        .set('Cookie', inspectorCookie)
+        .expect(200);
+      expect(
+        inspectorRecordsResponseSchema
+          .parse(records.body)
+          .items.some((item) => item.id === created.body.id),
+      ).toBe(true);
+      const history = await request(app.getHttpServer())
+        .get(`/api/inspections/${created.body.id}`)
+        .set('Cookie', inspectorCookie)
+        .expect(200);
+      expect(history.body.status).toBe('submitted');
+
+      await request(app.getHttpServer())
+        .post(`/api/inspections/${created.body.id}/review`)
+        .set('Cookie', supervisorCookie)
+        .send({ action: 'start' })
+        .expect(201);
+      const reviewed = await request(app.getHttpServer())
+        .post(`/api/inspections/${created.body.id}/review`)
+        .set('Cookie', supervisorCookie)
+        .send({ action: 'approve' })
+        .expect(201);
+      expect(reviewed.body.status).toBe('passed');
+    } finally {
+      await request(app.getHttpServer())
+        .patch(`/api/admin/sites/${initialToday.site.id}`)
+        .set('Cookie', supervisorCookie)
+        .send({ active: true })
+        .expect(200);
+    }
   });
 });

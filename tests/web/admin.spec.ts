@@ -239,3 +239,42 @@ test('AC-07 管理接口错误和网络错误显示中文提示，401 回登录�
   await page.getByRole('button', { name: '刷新' }).click();
   await expect(page.getByLabel('邮箱')).toBeVisible();
 });
+
+test('AC-06 总部看板标记停用门店并保留最近分数', async ({ page }) => {
+  await login(page, 'hq@northbean.example');
+  await expect(page.getByRole('heading', { name: /总部看板/ })).toBeVisible();
+  const beforeResponse = await page.request.get(`${apiBase}/dashboard/sites`);
+  const beforeSites = (await beforeResponse.json()) as Array<{
+    site: { id: string; code: string; name: string; active: boolean };
+    latestScore: number | null;
+  }>;
+  const target = beforeSites.find((entry) => entry.site.code === 'NB-001');
+  expect(target).toBeTruthy();
+  if (!target) throw new Error('NB-001 is missing from the dashboard');
+
+  await page.request
+    .patch(`${apiBase}/admin/sites/${target.site.id}`, {
+      data: { active: false },
+    })
+    .then((response) => expect(response.ok()).toBeTruthy());
+  try {
+    await page.getByRole('button', { name: '刷新' }).click();
+    const row = page.getByRole('row').filter({ hasText: 'NB-001' });
+    await expect(row).toContainText('已停用');
+    if (target.latestScore !== null)
+      await expect(row).toContainText(String(target.latestScore));
+    const afterResponse = await page.request.get(`${apiBase}/dashboard/sites`);
+    const afterSites = (await afterResponse.json()) as typeof beforeSites;
+    const stopped = afterSites.find(
+      (entry) => entry.site.id === target.site.id,
+    );
+    expect(stopped?.site.active).toBe(false);
+    expect(stopped?.latestScore).toBe(target.latestScore);
+  } finally {
+    await page.request
+      .patch(`${apiBase}/admin/sites/${target.site.id}`, {
+        data: { active: true },
+      })
+      .then((response) => expect(response.ok()).toBeTruthy());
+  }
+});
