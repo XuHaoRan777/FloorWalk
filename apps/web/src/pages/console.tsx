@@ -42,7 +42,8 @@ import { getErrorMessage } from '@/components/console/helpers';
 import { roleLabel } from '@/components/console/labels';
 import { QueueView } from '@/components/console/queue-view';
 import { ReviewDetail } from '@/components/console/review-detail';
-import { AdminEmptyPage } from '@/components/console/admin-empty-page';
+import { SitesPage } from '@/components/console/sites-page';
+import { TemplatesPage } from '@/components/console/templates-page';
 
 function useConsoleSession() {
   const navigate = useNavigate();
@@ -220,9 +221,9 @@ export function ConsolePage() {
         <Main id="main">
           <ErrorBanner message={error} />
           {canManage && section === 'sites' ? (
-            <AdminEmptyPage title="门店" />
+            <SitesPage />
           ) : canManage && section === 'templates' ? (
-            <AdminEmptyPage title="模板" />
+            <TemplatesPage />
           ) : user.role === 'inspector' ? (
             <div className="mx-auto max-w-xl rounded-md border bg-card p-8 text-center">
               <FileText
