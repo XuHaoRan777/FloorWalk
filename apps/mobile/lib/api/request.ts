@@ -1,9 +1,21 @@
 import { ApiError } from './errors';
+import Constants from 'expo-constants';
 
-const baseUrl = (
+const configuredBaseUrl = (
   (process.env.EXPO_PUBLIC_API_BASE_URL as string | undefined) ??
   'http://127.0.0.1:3018/api'
 ).replace(/\/$/, '');
+const baseUrl = (() => {
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (!hostUri) return configuredBaseUrl;
+  const expoHost = hostUri.split(':')[0];
+  if (!expoHost) return configuredBaseUrl;
+
+  const apiUrl = new URL(configuredBaseUrl);
+  if (['127.0.0.1', 'localhost'].includes(apiUrl.hostname))
+    apiUrl.hostname = expoHost;
+  return apiUrl.toString().replace(/\/$/, '');
+})();
 
 export function logRaw(label: string, detail: Record<string, unknown>) {
   if (!__DEV__) return;

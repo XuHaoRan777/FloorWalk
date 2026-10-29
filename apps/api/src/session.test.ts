@@ -98,6 +98,7 @@ describe('HttpOnly sessions', () => {
       imports: [AppModule],
     }).compile();
     app = moduleRef.createNestApplication<NestExpressApplication>();
+    app.enableCors({ origin: true, credentials: true });
     app.useGlobalFilters(new HttpErrorFilter());
     await app.init();
   }, 60000);
@@ -326,16 +327,22 @@ describe('HttpOnly sessions', () => {
   });
 
   it.each([
-    ['allowlisted', 'http://127.0.0.1:3111'],
+    ['arbitrary', 'http://outside.example'],
     ['absent', undefined],
   ])('allows session writes with an %s Origin', async (_label, origin) => {
     const call = login();
     if (origin) call.set('Origin', origin);
-    const cookie = cookieFrom(await call.expect(201));
-    await request(app.getHttpServer())
-      .get('/api/me')
-      .set('Cookie', cookie)
-      .expect(200);
+    const loginResponse = await call.expect(201);
+    if (origin) {
+      expect(loginResponse.headers['access-control-allow-origin']).toBe(origin);
+      expect(loginResponse.headers['access-control-allow-credentials']).toBe(
+        'true',
+      );
+    }
+    const cookie = cookieFrom(loginResponse);
+    const me = request(app.getHttpServer()).get('/api/me').set('Cookie', cookie);
+    if (origin) me.set('Origin', origin);
+    await me.expect(200);
     const logout = request(app.getHttpServer())
       .delete('/api/auth/session')
       .set('Cookie', cookie);
@@ -344,62 +351,25 @@ describe('HttpOnly sessions', () => {
     await unauthenticated(cookie);
   });
 
-  it('rejects foreign-Origin session creation and deletion without changing sessions', async () => {
-    const before = await pool.query(
-      'SELECT COUNT(*)::int AS count FROM floorwalk.sessions',
-    );
-    const rejectedLogin = await login()
-      .set('Origin', 'http://outside.example')
-      .expect(403);
-    expect(errorResponseSchema.parse(rejectedLogin.body).code).toBe(
-      'FORBIDDEN',
-    );
-    expect(rejectedLogin.headers['set-cookie'] === undefined).toBe(true);
-    const after = await pool.query(
-      'SELECT COUNT(*)::int AS count FROM floorwalk.sessions',
-    );
-    expect(after.rows).toEqual(before.rows);
-    const cookie = cookieFrom(await login().expect(201));
-    const rejectedLogout = await request(app.getHttpServer())
-      .delete('/api/auth/session')
-      .set('Cookie', cookie)
-      .set('Origin', 'http://outside.example')
-      .expect(403);
-    expect(errorResponseSchema.parse(rejectedLogout.body).code).toBe(
-      'FORBIDDEN',
-    );
-    expect(rejectedLogout.headers['set-cookie'] === undefined).toBe(true);
-    const session = await pool.query(
-      'SELECT revoked_at FROM floorwalk.sessions WHERE token_hash = $1',
-      [hash(cookie.slice('fw_session='.length))],
-    );
-    expect(session.rows[0].revoked_at).toBeNull();
-    await request(app.getHttpServer())
-      .get('/api/me')
-      .set('Cookie', cookie)
-      .expect(200);
-  });
-
-  it('rejects a foreign-Origin PATCH before modifying the inspection item', async () => {
+  it('accepts a foreign-Origin PATCH and modifies the inspection item', async () => {
     await withDraft(async ({ cookie, inspectionId, itemId }) => {
       const response = await request(app.getHttpServer())
         .patch(`/api/inspections/${inspectionId}/items/${itemId}`)
         .set('Cookie', cookie)
         .set('Origin', 'http://outside.example')
         .send({ result: 'pass' })
-        .expect(403);
-      expect(errorResponseSchema.parse(response.body).code).toBe('FORBIDDEN');
+        .expect(200);
       const item = await pool.query(
         'SELECT result FROM floorwalk.inspection_items WHERE id = $1',
         [itemId],
       );
-      expect(item.rows[0].result).toBe('pending');
+      expect(item.rows[0].result).toBe('pass');
     });
   });
 
-  it('rejects foreign-Origin multipart upload before writing any evidence', async () => {
+  it('accepts a foreign-Origin multipart upload', async () => {
     await withDraft(async ({ cookie, inspectionId, itemId }) => {
-      const response = await request(app.getHttpServer())
+      await request(app.getHttpServer())
         .post(`/api/inspections/${inspectionId}/items/${itemId}/evidence`)
         .set('Cookie', cookie)
         .set('Origin', 'http://outside.example')
@@ -407,13 +377,12 @@ describe('HttpOnly sessions', () => {
           filename: 'origin.jpg',
           contentType: 'image/jpeg',
         })
-        .expect(403);
-      expect(errorResponseSchema.parse(response.body).code).toBe('FORBIDDEN');
+        .expect(201);
       const evidence = await pool.query(
         'SELECT id FROM floorwalk.evidence WHERE inspection_item_id = $1',
         [itemId],
       );
-      expect(evidence.rows).toHaveLength(0);
+      expect(evidence.rows).toHaveLength(1);
     });
   });
 

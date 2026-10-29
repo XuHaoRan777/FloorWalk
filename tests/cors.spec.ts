@@ -60,22 +60,19 @@ for (const origin of allowedOrigins) {
   });
 }
 
-test('a non-allowlisted origin cannot read a credentialed API response', async ({
+test('an arbitrary origin can read and write credentialed API responses', async ({
   page,
 }) => {
-  const allowedOrigin = allowedOrigins[0];
   const foreignOrigin = 'http://127.0.0.1:3999';
-  for (const origin of [allowedOrigin, foreignOrigin]) {
-    await page.route(`${origin}/**`, (route) =>
-      route.fulfill({
-        contentType: 'text/html',
-        body: '<!doctype html><title>CORS origin</title>',
-      }),
-    );
-  }
-  await page.goto(allowedOrigin);
-  const loginStatus = await page.evaluate(async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/auth/session`, {
+  await page.route(`${foreignOrigin}/**`, (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<!doctype html><title>CORS origin</title>',
+    }),
+  );
+  await page.goto(foreignOrigin);
+  const result = await page.evaluate(async (baseUrl) => {
+    const login = await fetch(`${baseUrl}/auth/session`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -84,24 +81,23 @@ test('a non-allowlisted origin cannot read a credentialed API response', async (
         password: 'northbean-demo',
       }),
     });
-    return response.status;
-  }, apiUrl);
-  expect(loginStatus).toBe(201);
-  await page.goto(foreignOrigin);
-  const result = await page.evaluate(async (baseUrl) => {
-    try {
-      await fetch(`${baseUrl}/me`, { credentials: 'include' });
-      return 'readable';
-    } catch (error) {
-      return error instanceof TypeError ? 'blocked' : 'unexpected error';
-    }
-  }, apiUrl);
-  expect(result).toBe('blocked');
-  await page.goto(allowedOrigin);
-  await page.evaluate(async (baseUrl) => {
-    await fetch(`${baseUrl}/auth/session`, {
+    const me = await fetch(`${baseUrl}/me`, { credentials: 'include' });
+    const user = await me.json();
+    const logout = await fetch(`${baseUrl}/auth/session`, {
       method: 'DELETE',
       credentials: 'include',
     });
+    return {
+      loginStatus: login.status,
+      meStatus: me.status,
+      role: user.role,
+      logoutStatus: logout.status,
+    };
   }, apiUrl);
+  expect(result).toEqual({
+    loginStatus: 201,
+    meStatus: 200,
+    role: 'supervisor',
+    logoutStatus: 204,
+  });
 });

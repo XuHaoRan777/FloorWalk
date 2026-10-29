@@ -63,7 +63,7 @@ describe('inspection contract API', () => {
       imports: [AppModule],
     }).compile();
     app = moduleRef.createNestApplication<NestExpressApplication>();
-    app.enableCors({ origin: ['http://127.0.0.1:3019'] });
+    app.enableCors({ origin: true, credentials: true });
     app.useGlobalFilters(new HttpErrorFilter());
     await app.init();
 

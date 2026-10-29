@@ -1,6 +1,4 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
-import { OriginGuard } from './cors.js';
 import { HealthController } from './health.controller.js';
 import { InspectionController } from './inspection.controller.js';
 import { StorageController } from './storage.controller.js';
@@ -20,7 +18,6 @@ import {
   providers: [
     databasePoolProvider,
     DatabasePoolLifecycle,
-    { provide: APP_GUARD, useClass: OriginGuard },
   ],
   controllers: [
     HealthController,

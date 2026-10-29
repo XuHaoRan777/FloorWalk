@@ -5,7 +5,6 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { getJwtSecret } from './auth.js';
 import { HttpErrorFilter } from './http-exception.filter.js';
-import { getCorsOrigins } from './cors.js';
 
 async function bootstrap() {
   getJwtSecret();
@@ -13,12 +12,19 @@ async function bootstrap() {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('PORT 必须是 1 到 65535 之间的整数。');
   }
-  const host = process.env.HOST ?? '127.0.0.1';
+  const configuredHost = process.env.HOST;
+  const isLocalDevelopment =
+    process.env.NODE_ENV === 'development' && !process.env.FW_SLOT;
+  const host =
+    isLocalDevelopment &&
+    (!configuredHost || ['127.0.0.1', 'localhost'].includes(configuredHost))
+      ? '0.0.0.0'
+      : (configuredHost ?? '127.0.0.1');
   if (host.length === 0) {
     throw new Error('HOST 不能为空。');
   }
   const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: getCorsOrigins(), credentials: true });
+  app.enableCors({ origin: true, credentials: true });
   app.useGlobalFilters(new HttpErrorFilter());
   app.enableShutdownHooks();
   await app.listen(port, host);

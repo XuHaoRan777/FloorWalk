@@ -14,7 +14,7 @@
 
 提交要求所有检查项均非 `pending`，必拍项至少有一张照片。分数为合格项数除以总项数乘 100，四舍五入取整，并在提交时锁定；重新提交重新计算。存在 `critical` 项不合格时不能通过。看板按每家门店 `decided_at` 最大的 `passed` 或 `failed` 巡检单显示分数。照片上传字段为 `file`，只接受 `image/jpeg`、`image/png`，单张不超过 10 MB；照片链接使用 API 当前访问地址拼接。
 
-统一错误格式为 `{code, message}`：401 `UNAUTHENTICATED`；403 `FORBIDDEN`；409 `INVALID_STATE`；422 `INCOMPLETE`；422 `CRITICAL_FAILED`；400 `VALIDATION_FAILED`；404 `NOT_FOUND`。浏览器来源由 `CORS_ORIGINS` 控制，未配置时允许本机开发与三个 e2e 槽位端口；带 Origin 的跨站写请求必须在白名单内，CORS 使用 credentials。
+统一错误格式为 `{code, message}`：401 `UNAUTHENTICATED`；403 `FORBIDDEN`；409 `INVALID_STATE`；422 `INCOMPLETE`；422 `CRITICAL_FAILED`；400 `VALIDATION_FAILED`；404 `NOT_FOUND`。API 接受任意浏览器来源，CORS 将请求 Origin 回显并启用 credentials；带 Origin 的跨站写请求不做来源白名单校验。会话 Cookie 仍设置 `SameSite=Strict`，但来源不受限意味着同站的其他来源可代表已登录用户调用 API，并读取允许跨域访问的响应；决策背景见 [ADR 0002](../adr/0002-unrestricted-api-cors.md)。
 
 ## 接口
 
@@ -86,5 +86,6 @@ Northbean Coffee 有 12 家门店 `NB-001`～`NB-012`，每家店一个店员账
 | 2026-10-25 | FW-004 完成提交、审核、照片证据与看板业务规则，演示链 API 闭环通过。                                                                                          |
 | 2026-10-26 | FW-008 按认证、巡检、证据、审核、看板拆控制器；接口、权限与业务规则保持不变。                                                                                 |
 | 2026-10-27 | FW-009 改用服务端会话表与 HttpOnly cookie，移除旧登录和 Bearer 认证；写请求检查 Origin，CORS 开启 credentials。                                                     |
+| 2026-10-29 | 用户确认 API 接受任意 Origin，移除写请求 Origin 白名单校验；CORS 回显请求来源并继续启用 credentials。                                                      |
 | 2026-10-29 | FW-011 增加聊天、门店/模板与店员记录 API 契约和存储结构；接入聊天读写、签名图片及记录分页，today、建单和看板补门店/当前模板字段。 |
 | 2026-10-29 | 门店与模板写接口持久化，停用限制新建，模板修改保留既有巡检快照；详见管理规格。 |

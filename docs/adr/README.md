@@ -25,4 +25,4 @@
 
 决策变更采用前向取代：旧 ADR 状态改为 `superseded` 并指向新编号，正文保持历史原文。
 
-当前 ADR：[`0001-new-repo-store-inspection.md`](0001-new-repo-store-inspection.md)。
+当前 ADR：[`0001-new-repo-store-inspection.md`](0001-new-repo-store-inspection.md)、[`0002-unrestricted-api-cors.md`](0002-unrestricted-api-cors.md)。

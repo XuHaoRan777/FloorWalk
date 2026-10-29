@@ -6,7 +6,7 @@
 
 - 已建立 pnpm workspace：`apps/api`、`apps/web`、`apps/mobile`、`packages/shared`；FW-003 已完成巡检主链契约、数据库种子和 API 契约接口，提交锁分与审核业务规则由并行单元 FW-004 实现。
 - 本轮实测 Node `24.19.0`、pnpm `11.21.0`；根 packageManager 锁定 pnpm，`.node-version` 记录 Node。TypeScript：API/Web/shared `5.9.3`，Mobile 按 Expo 配套使用 `6.0.3`。
-- 本地 API `127.0.0.1:3018`；Web dev `127.0.0.1:3019`；Web preview `127.0.0.1:3019`（与 dev 择一启动）；Metro 默认 LAN 模式、端口 `3020`，供同一局域网真机扫码。2026-10-06 用户已确认同一 Wi-Fi 真机 Expo Go 加载成功。
+- 本地 API 端口 `3018`；Web dev `127.0.0.1:3019`；Web preview `127.0.0.1:3019`（与 dev 择一启动）；Metro 默认 LAN 模式、端口 `3020`，供同一局域网真机扫码。`pnpm dev` 下 API 监听所有网卡，Mobile 使用 Expo Metro 主机名访问 API，供同一 Wi-Fi 真机使用；e2e 槽位仍使用 loopback。
 - 数据库：本机 Docker 容器 `local-pg18`（PostgreSQL 18），宿主端口 `5433`；角色 `floorwalk`（非超级用户，不能建库），库 `floorwalk`（开发）和 `floorwalk_e2e_1`～`floorwalk_e2e_3`（e2e 槽位，见 [并行组](../howto/parallel.md)）。schema `floorwalk` 已由版本化迁移建立 8 张表并可由种子重建。没有缓存、对象存储、邮件服务或部署环境。
 - 开发 Agent：Codex 桌面版，权限用完全访问（2026-10-23 用户决定），没有沙箱，边界见 [`AGENTS.md`](../../AGENTS.md) 第 12 节。并行单元的对话工作位置选「新建本地工作树」，Codex 建工作树时按 [`.worktreeinclude`](../../.worktreeinclude) 复制各端 env 文件。
 - 只读参考仓库：`F:\react_project\Gift2CashApp`；本轮未读取或复制其源码。
@@ -14,7 +14,7 @@
 ## 环境配置
 
 - API、Web、Mobile 各自使用 `.env.development` 与 `.env.production`，实际文件被 Git 忽略，配套 `.example` 模板可提交。初始化步骤、加载优先级和变量边界见 [本地开发说明](../howto/local-development.md#环境文件与生效时机)。
-- API 以 Node 原生 env-file 在 dev/start 时加载，端口来自 PORT，监听地址来自 HOST（默认 `127.0.0.1`）；Web 通过 Vite mode/loadEnv 分别加载开发与生产配置，dev/preview 端口来自 PORT；Mobile 通过 Node env-file 预加载，开发端口使用 Expo 内置 RCT_METRO_PORT，生产配置用于 bundle 导出。
+- API 以 Node 原生 env-file 在 dev/start 时加载，端口来自 PORT；本地开发默认监听所有网卡，e2e 槽位仍监听 loopback，其他启动方式监听 HOST（默认 `127.0.0.1`）。Web 通过 Vite mode/loadEnv 分别加载开发与生产配置，dev/preview 端口来自 PORT；Mobile 通过 Node env-file 预加载，开发端口使用 Expo 内置 RCT_METRO_PORT，未显式配置 API 地址时用 Expo 的 Metro 主机名访问同机 API，生产配置用于 bundle 导出。
 - 2026-10-06 本机验证：三端类型检查通过；API/Web 构建成功；开发端口 3018/3019/3020 的 HTTP/Metro 检查通过；API 生产启动 3018、Web preview 3019 通过。Mobile 生产导出单 worker 成功；2026-10-06 用户确认真机首页与体验按钮交互通过，设备操作系统未记录。Agent 验证时启动的测试服务已清理，用户自启进程不作清理。
 
 ## 基础依赖选型
