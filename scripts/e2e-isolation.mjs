@@ -95,8 +95,7 @@ function run(args, env, filename, requireMissingSlot = false) {
       console.log(
         `${filename}: ${passed ? 'passed' : 'FAILED'} (exit ${code})`,
       );
-      if (passed) resolve({ filename, code });
-      else reject(new Error(`${filename} 失败，见日志。`));
+      resolve({ filename, code, passed });
     });
   });
 }
@@ -137,6 +136,13 @@ await writeFile(
   `${directory}/result.json`,
   JSON.stringify({ results, unchanged }, null, 2),
 );
-if (!unchanged || results.some((result) => result.status === 'rejected')) {
+if (
+  !unchanged ||
+  results.some(
+    (result) =>
+      result.status === 'rejected' ||
+      result.value.some((command) => !command.passed),
+  )
+) {
   process.exitCode = 1;
 }

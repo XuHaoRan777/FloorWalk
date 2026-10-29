@@ -4,12 +4,12 @@
 
 ## 当前状态
 
-- 工作单元状态：`blocked`
+- 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：T07 三道开组门与 master 全量门禁
+- 当前任务：T08 最终代码审查（独立 Subagent）
 - 并行组：g02，契约单元，槽位 1（并发隔离门使用 1～3）
-- 阻塞：T07 恢复后，demo-ui 定位与 file-map 目录问题已修复；但三槽位并发门的 Mobile 冷启动仍有 `page.goto('/')` 120 秒超时，AC-09 未通过，AC-10 本轮未覆盖完。
-- 下一步：等待用户决定是否再授权修复门禁启动/执行流程；不进入 T08，不标记 verified 或归档。
+- 阻塞：无；用户于 2026-10-29 授权继续诊断三槽位 Mobile 冷启动与门禁执行流程。
+- 下一步：T07 已通过，提交该任务后由独立 Subagent 执行 T08 最终代码审查。
 
 Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、`apps/api/drizzle/`（均为 hardline）、`apps/api/src`、`apps/web/src`、`apps/mobile`（`app/`、`components/`、`lib/`）、`tests/`、`scripts/demo-chain.mjs`；不动 `package.json`、锁文件。全程用槽位 1，三道门的并发隔离用 1～3。T06 动 Mobile 前先读 `~/.agents/skills/expo-overview`，按分流读 `expo-router` 与 `expo-data-fetching`，查 SDK 57 文档，在证据里记一行。
 
@@ -23,8 +23,8 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、
 | T04 | API 演示链加聊天与记录页两步                     | `done` | AC-07（聊天两步绿）                                                                 |
 | T05 | 两端注册行、分区、Tab、空页与简陋 `ChatPanel`    | `done` | AC-05、AC-06；Web e2e、`e2e:mobile`                                                 |
 | T06 | 跨端最薄链路（模拟器）                           | `done` | AC-08                                                                               |
-| T07 | 三道开组门与 master 全量门禁                     | `blocked` | AC-09、AC-10                                                                        |
-| T08 | 最终代码审查（独立 Subagent）                    | `pending` | 审查记录                                                                            |
+| T07 | 三道开组门与 master 全量门禁                     | `done` | AC-09、AC-10                                                                        |
+| T08 | 最终代码审查（独立 Subagent）                    | `in_progress` | 审查记录                                                                            |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
 方式 B 按用户可观察的切片切，不按数据、后端、前端分层切：每行写交付哪几条 AC，并在本任务内取得它们的证据；一条 AC 跨几个切片时记在完成它的那个任务。可以有一个先行任务只做数据结构与共享契约（表、迁移、共享类型，不含接口和页面），这一列写「无，机器门」。不设"Agent 验收""机器门汇总"这类只收集其他任务证据的任务；单元结束的全量套件和构建在「最终代码审查」任务里、派审查之前跑。
@@ -47,8 +47,9 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、
 | T05 / AC-05、AC-06 | passed | `$env:FW_SLOT='1'; pnpm --filter @libs/shared build; pnpm --filter @apps/web typecheck; pnpm --filter @apps/mobile typecheck; pnpm --filter @apps/web lint; pnpm --filter @apps/mobile lint; NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm exec playwright test --config playwright.web.config.ts; $env:FW_SLOT='1'; pnpm e2e:mobile; git diff --check` | `apps/web/src/pages/console.tsx`, `apps/web/src/components/console/chat-panel.tsx`, `apps/mobile/app/(authenticated)/(tabs)/records.tsx`, `apps/mobile/components/mobile/chat-panel.tsx`, `tests/web/console.spec.ts`, `tests/mobile/mobile-inspection.spec.ts` | 类型、lint 与 diff 检查通过；Web 7/7、Mobile 9/9。Mobile 测试曾因既有 Tab 数量断言仍为 2 而失败，断言更新为 3 并验证「记录」标签后全套通过；未放宽行为断言。Web 侧覆盖主管/总部管理入口、店员无入口和主管聊天输入。Web/Mobile e2e 串行使用槽位 1；结束后 3110–3112 无监听进程。不加依赖。 |
 | T06 / AC-08 | passed | `Android 17 模拟器 + Expo Go；adb reverse 3110/3112；Android 系统相册选图；Web 审核页查看并回复；重开 Mobile 巡检页；签名图 HTTP 读取；adb logcat` | `docs/work/FW-011-g02-contract/evidence/mobile-chat.png`, `docs/work/FW-011-g02-contract/evidence/mobile-reopened.png` | 模拟器店员登录 NB-001 并打开同一巡检；从系统 Photos 选图，原生 multipart 发送图文；Web 主管重开审核详情看到店员消息和图片，并发送 `FW011-web-reply-20261028`；重开 Mobile 同单后 UI 树显示主管回复。API GET 返回 2 条（店员图文、主管文字），签名图 URL 200、`image/png` 且 PNG magic bytes 正确；原生 `adb logcat -d -s ReactNativeJS:V Expo:V ReactNative:V` 未见 JS Error/Unhandled。`Cannot connect to Expo CLI` 不作为失败判据。结束后关闭本次 API/Web/Metro/AVD；项目 `seedDatabase` 恢复槽位 1 标准种子并清理临时聊天及图片；3110–3112 已释放。不加依赖。 |
 
-| T07 / AC-09、AC-10 | failed | 门一：只读 Subagent 对流程、路由与状态迁移作静态复核；门二：`$env:FW_SLOT='1'; node --env-file=apps/api/.env.development scripts/api-snapshot.mjs docs/work/FW-011-g02-contract/evidence/t07-fresh-api.json`；定位修复：`pnpm --filter @apps/mobile typecheck`; `$env:FW_SLOT='1'; $env:NO_PROXY='127.0.0.1,localhost'; $env:no_proxy='127.0.0.1,localhost'; pnpm e2e:demo-ui`；门三：`node --env-file=apps/api/.env.development scripts/e2e-isolation.mjs`（脚本内部并发使用槽位 1～3） | `docs/work/FW-011-g02-contract/evidence/t07-fresh-api.json`, `logs/e2e-isolation/result.json`, `logs/e2e-isolation/slot-1-mobile.log`, `logs/e2e-isolation/slot-2-mobile.log`, `logs/e2e-isolation/slot-3-mobile.log` | 门一发现 NB-002 演示链漏真实重新提交→start→rework，补齐后由独立只读上下文复核；门二真请求快照覆盖路由三角色、种子不变量、NB-002 打回单及真实 JPEG 签名读取，finally 重建槽位种子并清理上传。此前完整门禁曾通过 API 32/32、e2e 1/1、Web 7/7、Mobile 9/9、CORS 3/3、API 演示链；demo-ui 仅槽位 2 过，另两槽位因宽泛定位失败。2026-10-29 用户授权继续后，将定位改为精确 Tab role，断言仍为可见；初始化槽位 file-map 目录并显式传递 FW_SLOT。Mobile 类型检查通过，槽位 1 demo-ui 1/1 通过，缓存 ENOENT 未再出现。重过门时七条命令缺 FW_SLOT 均按预期拒绝；槽位 API 32/32、e2e 1/1、Web 7/7 均过；Mobile 槽位 1、2 各 4/9，槽位 3 为 6/9，失败均在 `page.goto('/')` 等待 `load` 达到既有 120 秒测试上限（部分记录 `net::ERR_ABORTED`）；未改断言或超时。门禁脚本在一个槽位命令失败时停止该槽后续命令，故本轮 CORS、API demo、demo-ui 未运行。开发库快照 `unchanged: true`。三道门未全绿，AC-09 失败、AC-10 尚未在本轮完整覆盖；master 全量门禁未完成，T08 未启动。 |
-| T07 / 停止收尾 | passed | `Get-NetTCPConnection -State Listen`；`Get-CimInstance Win32_Process`；`git diff --check` | `docs/work/FW-011-g02-contract/plan.md` | 核对 3018～3020 与 3110～3132 各槽位端口均无监听，无本轮 API/Web/Metro/模拟器残留进程（Codex 工具 runtime 不属测试进程）；保留失败日志与 trace。本地保存阻塞检查点，T07 不标 done，不推送。文档校验另报既有 `testlog-debt`，见「决策与偏差」。 |
+| T07 / AC-09 | passed | `node --env-file=apps/api/.env.development scripts/e2e-isolation.mjs`; `$env:FW_SLOT='1'; pnpm typecheck`; `$env:FW_SLOT='1'; pnpm lint`; `$env:FW_SLOT='1'; pnpm format:check`; `$env:FW_SLOT='1'; pnpm build` | `logs/e2e-isolation/result.json` | 三道门：流程/路由与状态迁移复核通过；槽位 1 真请求快照通过（见 `evidence/t07-fresh-api.json`）；并发门七条无 FW_SLOT 命令均拒绝，三个槽位 7 类命令全绿，开发库前后快照一致。master 类型、lint、格式、构建全通过。先前冷启动超时本轮未复现；单槽冷启动 Mobile 9/9（31s），三槽并发 Mobile 9/9（43～47s）；不把间歇性失败归因到未证实的根因。 |
+| T07 / AC-10 | passed | `node --env-file=apps/api/.env.development scripts/e2e-isolation.mjs` | `logs/e2e-isolation/slot-1-api.log`, `logs/e2e-isolation/slot-1-e2e.log`, `logs/e2e-isolation/slot-1-web.log`, `logs/e2e-isolation/slot-1-mobile.log`, `logs/e2e-isolation/slot-1-cors.log`, `logs/e2e-isolation/slot-1-demo.log`, `logs/e2e-isolation/slot-1-demo-ui.log` | 槽位 1～3 每槽 API 32/32、e2e 1/1、Web 7/7、Mobile 9/9、CORS 3/3、API demo 退出 0、demo-ui 1/1；无槽位变量七条均按预期拒绝。隔离脚本改为收集失败结果后继续该槽余下命令，最后统一返回非零，保证失败时也能完成 AC-10 覆盖；本轮三槽全绿。 |
+| T07 / 停止收尾 | passed | `Get-NetTCPConnection -State Listen`; `Get-CimInstance Win32_Process`; `git diff --check` | `docs/work/FW-011-g02-contract/plan.md` | 3018～3020 与 3110～3132 均无监听，无本轮 API/Web/Metro/模拟器残留进程；日志与三槽门禁结果保留。曾出现的 Metro file-map 缓存告警及 demo-ui 定位问题已修；本轮无告警。文档校验仍报既有 `testlog-debt`，用户已明确要求待 FW-011 完成后再收。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
@@ -58,7 +59,7 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、
 
 | 日期 | 反馈 | 改动 | 提交 |
 | ---- | ---- | ---- | ---- |
-| 2026-10-29 | 用户回复「继续」，授权恢复 T07 | 收紧 demo-ui Tab 定位；确保槽位 file-map 目录存在并显式传递 FW_SLOT | 待提交 |
+| 2026-10-29 | 用户回复「继续」，授权恢复 T07 | 修正隔离门失败后的套件继续策略并重过全部门禁；完整 T07 证据见上 | 待提交 |
 
 ## 决策与偏差
 
@@ -74,7 +75,7 @@ Preflight：动 `packages/shared/src/contract/`、`apps/api/src/db/schema.ts`、
 - 2026-10-28 上下文压缩后继续 T07；此前并发门失败：槽位 3 demo-ui 报 `Cannot find module ...dist/main`，根因为三个槽位共用 Nest `apps/api/dist` 且构建删除产物。修复实验：测试 API 编译/启动改为 `.e2e/slot-N/dist`，测试启动不再并发清空 shared 产物（与 API 测试一样依赖预先构建 shared），完整重跑三槽位门，不以单套补跑代替。
 - 2026-10-28 T07 第一道门（只读 Subagent）发现 AC-07 演示链缺步：本轮打回的是 NB-001，NB-002 仅读取种子 rework 单。补 NB-002 真实重新提交 → start → rework 后再聊天；无新增任务或产品语义。
 - 2026-10-28 上下文压缩后继续 T07，沿用 Expo overview/router/data-fetching 阅读结论；并发排障由只读 Subagent 完成，不把资源争用假设写作已证实唯一根因。第二次修复后仍不通过即按 AGENTS.md 第 10 节停止，不做第三次。
-- 2026-10-28 卡在哪一步：T07 第三道门未通过；2026-10-29 收紧 demo-ui 定位并创建 file-map 目录后，该用例通过且缓存告警消失，但三槽位 Mobile 首批测试仍在 `page.goto('/')` 等待 load 时触发原有 120 秒超时，导致 AC-09 未过；门禁脚本遇首个失败后跳过该槽后续 CORS/demo 命令，AC-10 本轮覆盖不完整。
-- 2026-10-29 要用户定什么：是否再授权诊断并修复 Mobile 并发冷启动/门禁执行流程，再完整重过 T07；本次需要用户动手类别为「答停下」，不要求用户运行 adb、排障或传话。
-- 2026-10-29 可选项和倾向：A 继续本单元，保留现有断言与 120 秒超时，调查并解决 Metro 首次 bundle 加载阻塞，同时令隔离脚本在单项失败后仍执行其余槽位套件（倾向 A）；B 保持 blocked，先由用户与 Claude 复核运行资源和隔离门设计。未获答复不做下一轮修复、不进入 T08。
+- 2026-10-29 卡在哪一步：首次并发重跑时出现 Mobile 首批页面加载超时，单槽和第二次三槽并发完整门均通过；超时具间歇性，当前未确认唯一根因。门禁调度已改为单项失败后仍继续同槽命令，以保障完整诊断覆盖。
+- 2026-10-29 要用户定什么：本轮无待答产品/风险决策；此前用户授权继续，未要求用户运行 adb 或协助排障。用户要求 `testlog-debt` 待 FW-011 完成后再收。
+- 2026-10-29 决策：不放宽 `page.goto` 行为、测试断言或 120 秒超时；接受三槽完整门和根级机器门全绿作为 T07 完成证据。
 - 2026-10-29 独立文档债务：`python scripts/validate_docs.py` 报 `docs/testlog.md` 最早一行 3 天、上限 2 天（`testlog-debt`）；不属于 FW-011，不自行 Promote，待用户决定是否「收一下」。
