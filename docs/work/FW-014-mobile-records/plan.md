@@ -5,10 +5,10 @@
 ## 当前状态
 
 - 工作单元状态：`verified`
-- 归档状态：`active`
+- 归档状态：`archived`
 - 当前任务：无
 - 阻塞：无
-- 下一步：打 g02/done/FW-014，按并行组完成标记决定是否开 FW-015 集成对话。
+- 下一步：无；FW-015 已完成 Promote 与归档。
 - 并行组：g02，并行单元，槽位 3（并行 FW-012、FW-013、FW-014；集成 FW-015）
 
 Preflight：只改 spec「批准记录」的写入范围。`records.controller.ts` 已由 FW-011 实现游标分页（含毫秒精度修复），本单元核对并补测试，不重写。T02 动 Mobile 前先读 `~/.agents/skills/expo-overview`，按分流读 `expo-router` 与 `expo-data-fetching`，查 SDK 57 文档，在证据里记一行。Mobile 首屏在三槽并发时偶发加载超时（FW-011 记录，根因未定），遇到先单独重跑一次。
@@ -55,3 +55,5 @@ Preflight：只改 spec「批准记录」的写入范围。`records.controller.t
 - 人工触点由 Claude 在集成复核时按类别补记；本单元停下时照常在这里写三行并打 `g02/blocked/FW-014`。
 
 - 2026-10-29 验收边界：按用户授权仅 Expo Web，原生下拉手势留 FW-015 原生回归；不声称模拟器/真机已验。详情新增测试首轮发现 Pressable 直接放文本，已包 Text 修复；后续定位冲突改精确 Tab/按钮定位后 5/5 通过。
+
+- 2026-10-29 FW-015 T06 对账：g02/start..g02/FW-014 的 4 个提交均带 FW-014，合并后无本单元回修或硬线补审。独立审查 finding 已关闭，无人工项；记录事实已升入 mobile-inspector.md；FW-015 AC-05 已完成 Android 原生列表/只读详情回归。原生下拉手势未单独列入 FW-015 AC，不扩称已取证。
