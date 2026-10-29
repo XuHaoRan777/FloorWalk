@@ -25,7 +25,8 @@ const maxFileSize = 10 * 1024 * 1024;
 
 function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]) {
   const byId = new Map(current.map((message) => [message.id, message]));
-  for (const message of incoming) byId.set(message.id, message);
+  for (const message of incoming)
+    if (!byId.has(message.id)) byId.set(message.id, message);
   return [...byId.values()].sort(
     (left, right) => Number(left.seq) - Number(right.seq),
   );
@@ -55,6 +56,10 @@ export function ChatPanel({
   const fetching = useRef(false);
   const triedImageRefresh = useRef(new Set<string>());
   const errorShown = useRef(false);
+  const contentHeight = useRef(0);
+  const scrollOffset = useRef(0);
+  const pendingPrepend = useRef<{ height: number; top: number } | null>(null);
+  const scrollToBottom = useRef(false);
 
   useEffect(() => {
     errorShown.current = Boolean(error);
@@ -65,7 +70,11 @@ export function ChatPanel({
       setAppActive(state === 'active'),
     );
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const syncFocus = () => setFocused(document.hasFocus());
+      const syncFocus = () =>
+        setFocused(
+          document.visibilityState === 'visible' && document.hasFocus(),
+        );
+      syncFocus();
       window.addEventListener('focus', syncFocus);
       window.addEventListener('blur', syncFocus);
       document.addEventListener('visibilitychange', syncFocus);
@@ -96,9 +105,7 @@ export function ChatPanel({
         setMessages(response.messages);
         setHasMoreBefore(response.hasMoreBefore);
         loaded.current = true;
-        requestAnimationFrame(() =>
-          scroll.current?.scrollToEnd({ animated: false }),
-        );
+        scrollToBottom.current = true;
       })
       .catch((cause: unknown) => {
         if (active) setError(userFacingError(cause));
@@ -126,14 +133,11 @@ export function ChatPanel({
         });
         if (!active) return;
         setError(null);
-        setHasMoreBefore(response.hasMoreBefore);
         if (response.messages.length) {
           latestSeq.current =
             response.messages.at(-1)?.seq ?? latestSeq.current;
+          scrollToBottom.current = true;
           setMessages((current) => mergeMessages(current, response.messages));
-          requestAnimationFrame(() =>
-            scroll.current?.scrollToEnd({ animated: true }),
-          );
         }
       } catch (cause) {
         if (active && !errorShown.current) {
@@ -161,6 +165,11 @@ export function ChatPanel({
       const response = await api.chatMessages(inspectionId, {
         before: firstSeq,
       });
+      pendingPrepend.current = {
+        height: contentHeight.current,
+        top: scrollOffset.current,
+      };
+      scrollToBottom.current = false;
       setMessages((current) => mergeMessages(current, response.messages));
       setHasMoreBefore(response.hasMoreBefore);
     } catch (cause) {
@@ -207,13 +216,10 @@ export function ChatPanel({
             }
           : {}),
       });
-      latestSeq.current = message.seq;
+      scrollToBottom.current = true;
       setMessages((current) => mergeMessages(current, [message]));
       setText('');
       setImage(null);
-      requestAnimationFrame(() =>
-        scroll.current?.scrollToEnd({ animated: true }),
-      );
     } catch (cause) {
       setError(userFacingError(cause));
     } finally {
@@ -256,8 +262,23 @@ export function ChatPanel({
       <ScrollView
         ref={scroll}
         style={{ maxHeight: 320 }}
-        onContentSizeChange={() => {
-          if (!loadingEarlier) scroll.current?.scrollToEnd({ animated: false });
+        scrollEventThrottle={16}
+        onScroll={(event) => {
+          scrollOffset.current = event.nativeEvent.contentOffset.y;
+        }}
+        onContentSizeChange={(_width, height) => {
+          contentHeight.current = height;
+          const prepend = pendingPrepend.current;
+          if (prepend) {
+            scrollToBottom.current = false;
+            const top = prepend.top + height - prepend.height;
+            scrollOffset.current = top;
+            scroll.current?.scrollTo({ y: top, animated: false });
+            pendingPrepend.current = null;
+          } else if (scrollToBottom.current) {
+            scroll.current?.scrollToEnd({ animated: false });
+            scrollToBottom.current = false;
+          }
         }}
         testID="chat-message-list"
       >

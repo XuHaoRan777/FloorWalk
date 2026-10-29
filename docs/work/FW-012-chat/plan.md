@@ -32,18 +32,23 @@ Preflight：只改 spec「批准记录」的写入范围。T03、T04 动 Mobile 
 | 任务 | status | command | artifact | 备注 |
 | ---- | ------ | ------- | -------- | ---- |
 | T01 | passed | `pnpm --filter @libs/shared build`; `pnpm --filter @apps/api typecheck`; `FW_SLOT=1 pnpm --filter @apps/api test -- src/chat.test.ts` | `apps/api/src/chat.test.ts` | 首次类型检查因 shared 尚未构建失败；构建后复跑通过。测试结束删除新增消息和会话。 |
-| T02 | passed | `pnpm --filter @apps/web typecheck`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `apps/web/src/components/console/chat-panel.tsx`; `tests/web/chat.spec.ts` | HQ 只读步骤限定到 `#main` 的内容区按钮；图片 `naturalWidth > 0` 强断言保留，图片签名重取和加载通过。槽位存储请求临时映射到 API 3110，待 FW-015 修好 `API_PUBLIC_BASE_URL` 后移除。 |
-| T03 | passed | `pnpm --filter @apps/mobile typecheck`; `FW_SLOT=1 pnpm e2e:mobile -- tests/mobile/chat.spec.ts` | `apps/mobile/components/mobile/chat-panel.tsx`; `tests/mobile/chat.spec.ts` | Expo Web 对照真实 API 验证最近 50 条与 before 分页、2 秒轮询接收他账号消息、1001 字禁用、发文字及 ImagePicker 图文发送和图片显示；API 测试消息清理。预读 `~/.agents/skills/expo-overview/SKILL.md`、`expo-data-fetching/SKILL.md`；SDK 57.0.0 ImagePicker/FileSystem 文档请求遇 TLS EOF，按锁定包 57.0.20/57.0.7 类型定义核对。 |
+| T02 | passed | `pnpm --filter @apps/web typecheck`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts --workers=1` | `apps/web/src/components/console/chat-panel.tsx`; `tests/web/chat.spec.ts` | 最终修复后通过：保留原分页、权限、图片 naturalWidth 强断言；补交错发送不漏消息、空轮询/新消息不改历史按钮、发送中禁用、403/409/422 失败保留与重试、断网稳定单提示/恢复补拉、非法类型/超 10MB 无发送、401 中文提示后照常回登录。错误定位限定聊天 region，避免混入审核错误。HQ 步骤限定 #main；存储临时映射 API 3110，待 FW-015 修配置后移除。测试删除消息及文件。 |
+| T03 | passed | `pnpm --filter @apps/mobile typecheck`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e:mobile tests/mobile/chat.spec.ts --workers=1` | `apps/mobile/components/mobile/chat-panel.tsx`; `tests/mobile/chat.spec.ts` | 最终修复后通过：真实 API 最近 50 条、before 分页且消息相对容器锚点不跳、轮询历史按钮保持、交错发送、hidden/blur 请求计数停止和恢复立即补拉、1001 字禁用、busy/401/403/409/422/断网保留重试及自动补拉、类型/大小拦截、图文上传。403 后签名接口恰好重取一次，图片 naturalWidth>0；RN Web ImageLoader/隐藏 img/CSS 会产生多个图片请求，按签名次数验证而非内部请求次数。清理消息 RETURNING storage_key 并删对应文件。预读 expo-overview、expo-data-fetching；SDK57 文档 TLS EOF，核对锁定包57.0.20/57.0.7 类型定义。 |
 | T02 | failed | `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `tests/web/chat.spec.ts` | 实验 1：首次图片请求 HTTP 403 后，签名重取接口 200、重试图片请求发生，但 `naturalWidth` 仍为 0；`route.abort()` 并非唯一原因。 |
 | T02 | passed | `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `tests/web/chat.spec.ts` | 实验 2：消息图的 `src` 仅变更 2 次（初始和一次重取），无轮询反复覆盖；重取后属性为新 URL，采样时 `currentSrc` 仍为旧 URL。 |
 | T02 | failed | `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `tests/web/chat.spec.ts` | 实验 3：独立 `Image` 加载同样失败；Playwright 报 `ECONNREFUSED 192.168.110.17:3018`，无 HTTP 响应头可读。签名 URL 指向开发地址，槽位 API 实际在 3110；配置未覆盖 `API_PUBLIC_BASE_URL`。 |
 | T02 | blocked | `pnpm --filter @apps/web typecheck`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `tests/web/chat.spec.ts` | 一次修复将图片请求映射至槽位 API 后，重签名 200、存储响应 200、`naturalWidth > 0` 均通过；随后 HQ 只读测试因按钮严格定位命中侧栏与内容区两个元素失败。按用户要求不做第二次修复。 |
 
+| T04 | passed | `FW_SLOT=1 expo start --lan --android --port 3112`; `adb -s emulator-5554 reverse / push / uiautomator dump / input tap / logcat` | `apps/mobile/components/mobile/chat-panel.tsx` | Expo Go 巡检页独立文字、相册图片到 Web 主管分别 931ms、1956ms（naturalWidth=1），Web 回复在原生同页 3254ms 出现；logcat 无 JS/AndroidRuntime 错误。真实 API 准备 submitted 巡检进入审核队列，结束按 ID 删除聊天、照片、审核、检查项、巡检和 4 个存储文件，删除模拟器图片；按端口核对并停 API、Web、Metro、AVD，移除 reverse。 |
+| T05 | passed | `pnpm typecheck`; `pnpm lint`; `pnpm format:check`; `pnpm build`; `FW_SLOT=1 pnpm --filter @apps/api test`; `FW_SLOT=1 pnpm e2e`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts --workers=1`; 同环境 `pnpm e2e:mobile --workers=1`、`pnpm e2e:cors`、`pnpm e2e:demo`、`pnpm e2e:demo-ui --workers=1`、槽位 VITE_API_BASE_URL 构建后 `pnpm e2e --config=playwright.csp.config.ts --workers=1` | `tests/web/chat.spec.ts`; `tests/mobile/chat.spec.ts` | 类型、lint、格式、三端构建通过；API 35、隔离 1、Web 8、Mobile 10、CORS 3、界面演示链 1、CSP 1 通过，API 演示链通过。Web 首次默认双 worker 与审核测试抢同单，改单 worker 后通过；CSP 首次默认产物指向 3018，按槽位重建后通过。Expo 在线依赖检查 TLS 失败，EXPO_OFFLINE=1 检查依赖匹配（工具提示离线可靠性有限）。套件同槽串行，种子及各测试清理本槽数据。 |
+
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
+
 
 ## 回修
 
-T04 / AC-07 原生证据：`passed`；命令：槽位 API、`expo start --lan --android --port 3112`（`FW_SLOT=1`）、`adb -s emulator-5554 reverse`、`adb push`、`uiautomator dump`、`input tap`、`logcat -d ReactNativeJS:E AndroidRuntime:E '*:S'`；artifact：`apps/mobile/components/mobile/chat-panel.tsx`。Expo Go 在巡检页发独立文字与相册图，Web 主管分别约 931ms、1956ms 内看到（图片 naturalWidth=1）；Web 回复约 3254ms 内在原生同一页面出现，未重开页面。logcat 无 JS/AndroidRuntime 错误。巡检填项与必拍图通过真实 API 准备为 submitted，以进入 Web 审核队列。取证后按巡检 ID 删除聊天、照片、审核、检查项与巡检及 4 个存储文件，删除模拟器推入的图片。
+T05 审查记录：独立 Subagent 首轮指出 5 项，均在批准文件中修复：接收游标只由 GET 推进，历史分页只由首次/before 维护，Mobile 高度差恢复滚动锚点，补 AC-03/04/05/08 客观测试，清理 Mobile 上传文件。Web 401 全局处理会卸载面板，聊天客户端在继续抛错回登录前用中文提示框展示错误；认证处理未变。针对两面板和客户端的类型、lint/格式检查及两个聊天测试文件通过；待原审查者仅复核这 5 项。
+
 
 <!-- 交付后、归档前用户的反馈，一条一行：日期、用户说的、改了什么、提交号；改到 AC 的写用户原话；带「硬线：」的提交在归档前补审，补审记进证据表。归档后的反馈进 testlog。 -->
 
@@ -60,3 +65,4 @@ T04 / AC-07 原生证据：`passed`；命令：槽位 API、`expo start --lan --
 - 根因判断：`playwright.web.config.ts` 的槽位 API 环境未设置 `API_PUBLIC_BASE_URL`（mobile、demo、csp 配置均已设置），签名图片地址指向开发地址。本单元 `tests/web/chat.spec.ts` 的 `/storage` 请求改写是临时绕过，待 FW-015 在 master 修好配置后删除。
 - 用户 2026-10-29 授权 A：HQ 只读步骤的「审核队列」定位限定到内容区，只改定位、不放宽断言，并把改动写进证据。
 - T04 开始核对发现 T03 曾在范围外 `apps/mobile/lib/api.ts` 增加签名函数导出；已收回该差异，面板直接引用批准范围内的 `lib/api/chat.ts`。
+- T05 独立 Subagent 首轮审查发现 5 项：发送响应推进游标漏消息、增量轮询覆盖历史分页状态、Mobile 前插滚动跳动、AC-03/04/05/08 部分证据缺口、Mobile 测试存储文件残留。当前修复这些 finding 并仅复核这些项，尚未 verified。

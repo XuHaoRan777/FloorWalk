@@ -18,7 +18,8 @@ const maxFileSize = 10 * 1024 * 1024;
 
 function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]) {
   const byId = new Map(current.map((message) => [message.id, message]));
-  for (const message of incoming) byId.set(message.id, message);
+  for (const message of incoming)
+    if (!byId.has(message.id)) byId.set(message.id, message);
   return [...byId.values()].sort(
     (left, right) => Number(left.seq) - Number(right.seq),
   );
@@ -104,7 +105,6 @@ export function ChatPanel({
         });
         if (!active) return;
         setError('');
-        setHasMoreBefore(response.hasMoreBefore);
         if (response.messages.length) {
           latestSeq.current =
             response.messages.at(-1)?.seq ?? latestSeq.current;
@@ -165,7 +165,6 @@ export function ChatPanel({
         ...(text.trim() ? { text: text.trim() } : {}),
         ...(file ? { file } : {}),
       });
-      latestSeq.current = message.seq;
       scrollToBottom.current = true;
       setMessages((current) => mergeMessages(current, [message]));
       setText('');
