@@ -7,8 +7,8 @@
 - 工作单元状态：`blocked`
 - 归档状态：`active`
 - 当前任务：T02
-- 阻塞：T02 AC-05 图片签名地址重取后，浏览器图片仍未成功解码；两轮修复后仍失败。
-- 下一步：等待用户决定图片重试失败后的处理方向。
+- 阻塞：T02 一次修复后 AC-05 图片解码通过，但完整 Web e2e 在 HQ 只读步骤因“审核队列”按钮有两个匹配项而失败。
+- 下一步：等待用户决定是否授权修复该测试定位并继续 T02。
 - 并行组：g02，并行单元，槽位 1（并行 FW-012、FW-013、FW-014；集成 FW-015）
 
 Preflight：只改 spec「批准记录」的写入范围。T03、T04 动 Mobile 前先读 `~/.agents/skills/expo-overview`，按分流读 `expo-data-fetching`，查 SDK 57 文档，在证据里记一行。Mobile 首屏在三槽并发时偶发加载超时（FW-011 记录，根因未定），遇到先单独重跑一次，不当成本单元的 bug。
@@ -33,6 +33,10 @@ Preflight：只改 spec「批准记录」的写入范围。T03、T04 动 Mobile 
 | ---- | ------ | ------- | -------- | ---- |
 | T01 | passed | `pnpm --filter @libs/shared build`; `pnpm --filter @apps/api typecheck`; `FW_SLOT=1 pnpm --filter @apps/api test -- src/chat.test.ts` | `apps/api/src/chat.test.ts` | 首次类型检查因 shared 尚未构建失败；构建后复跑通过。测试结束删除新增消息和会话。 |
 | T02 | blocked | `pnpm --filter @apps/web typecheck`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `apps/web/src/components/console/chat-panel.tsx`; `tests/web/chat.spec.ts` | 类型检查通过；e2e 的分页、可见性轮询、跨账号更新、文字发送与签名重取 API 均通过，重取后的图片解码失败。 |
+| T02 | failed | `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `tests/web/chat.spec.ts` | 实验 1：首次图片请求 HTTP 403 后，签名重取接口 200、重试图片请求发生，但 `naturalWidth` 仍为 0；`route.abort()` 并非唯一原因。 |
+| T02 | passed | `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `tests/web/chat.spec.ts` | 实验 2：消息图的 `src` 仅变更 2 次（初始和一次重取），无轮询反复覆盖；重取后属性为新 URL，采样时 `currentSrc` 仍为旧 URL。 |
+| T02 | failed | `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `tests/web/chat.spec.ts` | 实验 3：独立 `Image` 加载同样失败；Playwright 报 `ECONNREFUSED 192.168.110.17:3018`，无 HTTP 响应头可读。签名 URL 指向开发地址，槽位 API 实际在 3110；配置未覆盖 `API_PUBLIC_BASE_URL`。 |
+| T02 | blocked | `pnpm --filter @apps/web typecheck`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `tests/web/chat.spec.ts` | 一次修复将图片请求映射至槽位 API 后，重签名 200、存储响应 200、`naturalWidth > 0` 均通过；随后 HQ 只读测试因按钮严格定位命中侧栏与内容区两个元素失败。按用户要求不做第二次修复。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
@@ -49,6 +53,8 @@ Preflight：只改 spec「批准记录」的写入范围。T03、T04 动 Mobile 
 
 - 2026-10-29 产品决定见 FW-011 plan「决策与偏差」：店员（本店）与主管能发、总部只读，结束后仍可发，文字和图，2 秒轮询，不做已读、通知、编辑、删除。
 - 人工触点由 Claude 在集成复核时按类别补记；本单元停下时照常在这里写三行并打 `g02/blocked/FW-012`。
-- 卡在哪一步：T02 AC-05，图片请求失败后客户端成功调用签名重取端点（HTTP 200）并再次请求图片，但浏览器 `naturalWidth` 持续为 0。
-- 要我定什么：是否先只交付图片选择与发送，还是要求本单元继续查清图片重取后无法显示的原因再推进 T03。
-- 可选项和我的倾向：A 允许先交付其他 Web 聊天行为并把图片解码问题留待后续；B 继续定位并修复 AC-05 后再推进。我倾向 B，因为批准的 AC 明确要求图片可显示及过期签名重试。
+- 用户 2026-10-29 选 B：继续定位并修复 AC-05，不降低 AC，不放宽断言；完成三个区分实验后只做一次修复。
+- 根因判断：聊天客户端只在收到图片加载错误后重签一次；e2e API 生成的签名图片 URL 使用继承的 `API_PUBLIC_BASE_URL`（开发服务器 3018），槽位测试实际 API 位于 3110，浏览器连接被拒。修复限定为在本单元 Web e2e 把签名存储请求映射到当前槽位 API，保留路径、签名参数及 `naturalWidth > 0` 断言。
+- 卡在哪一步：T02 修复后完整 e2e 的 HQ 只读步骤，`审核队列` 严格定位匹配侧栏与内容区两个按钮；AC-05 本次已通过。
+- 要我定什么：是否授权只修正 HQ 只读测试的按钮定位并继续 T02。
+- 可选项和我的倾向：A 授权将定位限定到内容区并继续；B 保持当前提交与阻塞状态。我倾向 A，因为失败由重复可访问名称引起，与业务行为无关。

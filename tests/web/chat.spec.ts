@@ -261,9 +261,16 @@ test('chat history, polling, visibility, sending, images, and HQ read-only', asy
   await page.route(chatImageUrl, async (route) => {
     if (!failedImage) {
       failedImage = true;
-      await route.abort();
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: '{"message":"照片链接无效或已过期。"}',
+      });
     } else {
-      await route.continue();
+      const url = new URL(route.request().url());
+      await route.continue({
+        url: `${apiBase}${url.pathname}${url.search}`,
+      });
     }
   });
   await page.getByLabel('选择聊天图片').setInputFiles({
