@@ -48,7 +48,9 @@ async function login(page: Page) {
   await page.getByLabel('邮箱').fill(email);
   await page.getByLabel('密码').fill(password);
   await page.getByTestId('login-button').click();
-  await expect(page.getByLabel('记录')).toBeVisible();
+  await expect(
+    page.getByRole('tab', { name: '记录', exact: true }),
+  ).toBeVisible();
 }
 
 async function readAllRecords(page: Page) {
@@ -161,7 +163,7 @@ test('记录列表按 API 分页显示，支持加载更多和刷新回到第一
     expectedRecords.some((record) => record.id === colleagueInspectionId),
   ).toBe(true);
 
-  await page.getByLabel('记录').click();
+  await page.getByRole('tab', { name: '记录', exact: true }).click();
   const rows = page.locator('[data-testid^="record-row-"]');
   await expect(rows).toHaveCount(10);
   const firstPageIds = expectedRecords.slice(0, 10).map((record) => record.id);
@@ -208,8 +210,90 @@ test('记录列表按 API 分页显示，支持加载更多和刷新回到第一
   ).toEqual(firstPageIds);
 });
 
+test('刷新时丢弃仍在途的旧游标页', async ({ page }) => {
+  await login(page);
+  await createTestRecords(page);
+  const expectedRecords = await readAllRecords(page);
+  const expectedFirstPage = expectedRecords
+    .slice(0, 10)
+    .map((record) => record.id);
+
+  await page.getByRole('tab', { name: '记录', exact: true }).click();
+  const rows = page.locator('[data-testid^="record-row-"]');
+  await expect(rows).toHaveCount(10);
+
+  let releaseCursorResponse: (() => void) | undefined;
+  const cursorResponseGate = new Promise<void>((resolve) => {
+    releaseCursorResponse = resolve;
+  });
+  let cursorRequestArrived: (() => void) | undefined;
+  const cursorRequest = new Promise<void>((resolve) => {
+    cursorRequestArrived = resolve;
+  });
+  await page.route('**/api/inspector/inspections*', async (route) => {
+    if (!new URL(route.request().url()).searchParams.has('cursor'))
+      return route.continue();
+    cursorRequestArrived?.();
+    await cursorResponseGate;
+    await route.continue();
+  });
+
+  await page.getByTestId('load-more-records').click();
+  await cursorRequest;
+  const refreshResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname.endsWith('/inspector/inspections') &&
+      !url.searchParams.has('cursor')
+    );
+  });
+  await page.getByLabel('刷新记录').click();
+  await refreshResponse;
+  const staleResponse = page.waitForResponse((response) =>
+    new URL(response.url()).searchParams.has('cursor'),
+  );
+  releaseCursorResponse?.();
+  await (await staleResponse).finished();
+
+  await expect(rows).toHaveCount(10);
+  expect(
+    await rows.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('data-testid')?.slice(11)),
+    ),
+  ).toEqual(expectedFirstPage);
+  await page.getByTestId('load-more-records').click();
+  await expect(rows).toHaveCount(20);
+  expect(
+    await rows.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('data-testid')?.slice(11)),
+    ),
+  ).toEqual(expectedRecords.slice(0, 20).map((record) => record.id));
+});
+
 test('记录详情只读显示检查项、照片和按时间排列的审核历史', async ({ page }) => {
   await login(page);
+  await createTestRecords(page);
+  const meResponse = await page.context().request.get(`${apiBase}/me`);
+  expect(meResponse.status()).toBe(200);
+  const me = await meResponse.json();
+  const colleagueResponse = await page
+    .context()
+    .request.get(`${apiBase}/inspections/${colleagueInspectionId}`);
+  expect(colleagueResponse.status()).toBe(200);
+  const colleague = await colleagueResponse.json();
+  expect(colleague.inspectorId).toBe(colleagueId);
+  expect(colleague.inspectorId).not.toBe(me.id);
+  await page.getByRole('tab', { name: '记录', exact: true }).click();
+  await page.getByTestId(`record-row-${colleague.id}`).click();
+  await expect(page.getByTestId('record-detail-summary')).toContainText(
+    '状态：已通过',
+  );
+  await expect(page.getByTestId('record-item-1')).toContainText(
+    '同店店员填写的记录备注',
+  );
+  await expect(page.getByTestId('record-item-1')).toContainText('结果：合格');
+  await page.getByRole('button', { name: '返回记录', exact: true }).click();
+
   const records = await readAllRecords(page);
   let expected: {
     id: string;
@@ -242,7 +326,10 @@ test('记录详情只读显示检查项、照片和按时间排列的审核历�
   expect(expected).not.toBeNull();
   if (!expected) throw new Error('种子记录缺少照片或审核历史。');
 
-  await page.getByLabel('记录').click();
+  await page.getByRole('tab', { name: '记录', exact: true }).click();
+  while (!(await page.getByTestId(`record-row-${expected.id}`).count())) {
+    await page.getByTestId('load-more-records').click();
+  }
   await page.getByTestId(`record-row-${expected.id}`).click();
   await expect(page.getByTestId('record-detail-summary')).toContainText(
     statusLabels[expected.status],
@@ -262,6 +349,21 @@ test('记录详情只读显示检查项、照片和按时间排列的审核历�
       await expect(
         page.getByTestId(`record-photo-${evidence.id}`),
       ).toBeVisible();
+  }
+
+  for (const item of expected.items) {
+    for (const evidence of item.evidence) {
+      const photo = page.getByTestId(`record-photo-${evidence.id}`);
+      await expect
+        .poll(async () =>
+          photo
+            .locator('img')
+            .evaluateAll((images) =>
+              images.some((image) => image.complete && image.naturalWidth > 0),
+            ),
+        )
+        .toBe(true);
+    }
   }
 
   const reviews = page.locator('[data-testid^="review-"]');
@@ -293,7 +395,7 @@ test('记录列表区分首次加载和空列表', async ({ page }) => {
   const initialResponse = page.waitForResponse((response) =>
     response.url().includes('/api/inspector/inspections'),
   );
-  await page.getByLabel('记录').click();
+  await page.getByRole('tab', { name: '记录', exact: true }).click();
   await expect(page.getByText('正在加载巡检记录…')).toBeVisible();
   releaseResponse?.();
   await initialResponse;
@@ -319,7 +421,7 @@ test('网络错误、接口错误显示中文提示，401 返回登录页', asyn
   const initialResponse = page.waitForResponse((response) =>
     response.url().includes('/api/inspector/inspections'),
   );
-  await page.getByLabel('记录').click();
+  await page.getByRole('tab', { name: '记录', exact: true }).click();
   await initialResponse;
 
   const outcomes: Array<

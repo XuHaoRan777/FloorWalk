@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -47,22 +47,31 @@ export function RecordsScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestVersion = useRef(0);
 
   const loadFirstPage = useCallback(
     async (isRefresh = false) => {
+      const version = ++requestVersion.current;
       setError(null);
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
+      setLoadingMore(false);
       try {
         const page = await api.inspectorRecords();
+        if (version !== requestVersion.current) return;
         setRecords(page.items);
         setNextCursor(page.nextCursor);
       } catch (cause) {
-        if (cause instanceof ApiError && cause.status === 401) onUnauthorized();
-        setError(userFacingError(cause));
+        if (version === requestVersion.current) {
+          if (cause instanceof ApiError && cause.status === 401)
+            onUnauthorized();
+          setError(userFacingError(cause));
+        }
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (version === requestVersion.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
     [onUnauthorized],
@@ -73,20 +82,24 @@ export function RecordsScreen({
   }, [loadFirstPage]);
 
   const loadMore = useCallback(async () => {
-    if (!nextCursor || loadingMore) return;
+    if (!nextCursor || loadingMore || refreshing || loading) return;
+    const version = requestVersion.current;
     setError(null);
     setLoadingMore(true);
     try {
       const page = await api.inspectorRecords(nextCursor);
+      if (version !== requestVersion.current) return;
       setRecords((current) => [...current, ...page.items]);
       setNextCursor(page.nextCursor);
     } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 401) onUnauthorized();
-      setError(userFacingError(cause));
+      if (version === requestVersion.current) {
+        if (cause instanceof ApiError && cause.status === 401) onUnauthorized();
+        setError(userFacingError(cause));
+      }
     } finally {
-      setLoadingMore(false);
+      if (version === requestVersion.current) setLoadingMore(false);
     }
-  }, [loadingMore, nextCursor, onUnauthorized]);
+  }, [loading, loadingMore, nextCursor, onUnauthorized, refreshing]);
 
   const emptyMessage = loading
     ? '正在加载巡检记录…'
@@ -118,7 +131,7 @@ export function RecordsScreen({
         records.length === 0 ? null : nextCursor ? (
           <Pressable
             accessibilityRole="button"
-            disabled={loadingMore}
+            disabled={loadingMore || refreshing || loading}
             onPress={() => void loadMore()}
             style={recordStyles.footerButton}
             testID="load-more-records"

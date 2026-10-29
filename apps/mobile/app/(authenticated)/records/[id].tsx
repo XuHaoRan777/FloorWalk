@@ -7,6 +7,7 @@ import { ErrorBanner } from '../../../components/mobile/error-banner';
 import { useSession } from '../../../components/mobile/session-provider';
 import { styles } from '../../../components/mobile/styles';
 import { ApiError, api, userFacingError } from '../../../lib/api';
+import { evidenceUrl } from '../../../lib/api/records';
 
 const statusLabels: Record<InspectionDetail['status'], string> = {
   draft: '草稿',
@@ -48,7 +49,7 @@ export default function RecordDetailPage() {
       const urls = await Promise.all(
         next.items.flatMap((item) =>
           item.evidence.map(async (evidence) => {
-            const signed = await api.evidenceUrl(evidence.id);
+            const signed = await evidenceUrl(evidence.id);
             return [evidence.id, signed.url] as const;
           }),
         ),
@@ -78,7 +79,7 @@ export default function RecordDetailPage() {
         onPress={() => router.back()}
         style={styles.link}
       >
-        返回记录
+        <Text style={styles.link}>返回记录</Text>
       </Pressable>
       {loading && <Text style={styles.muted}>正在加载巡检详情…</Text>}
       <ErrorBanner message={error} />
