@@ -52,6 +52,8 @@ describe('inspection contract API', () => {
   let createdEvidenceId: string | undefined;
   let createdEvidenceStorageKey: string | undefined;
   const createdChatMessageIds: string[] = [];
+  const createdAdminSiteIds: string[] = [];
+  const createdAdminTemplateIds: string[] = [];
   const createdChatStorageKeys: string[] = [];
 
   beforeAll(async () => {
@@ -148,6 +150,35 @@ describe('inspection contract API', () => {
           'DELETE FROM floorwalk.chat_messages WHERE id = ANY($1::uuid[])',
           [createdChatMessageIds],
         );
+      const cleanup = await pool.connect();
+      try {
+        await cleanup.query('BEGIN');
+        await cleanup.query(
+          'UPDATE floorwalk.templates SET is_current = false WHERE is_current',
+        );
+        await cleanup.query(
+          'UPDATE floorwalk.templates SET is_current = true WHERE id = $1',
+          [templateId],
+        );
+        await cleanup.query(
+          'DELETE FROM floorwalk.template_items WHERE template_id = ANY($1::uuid[])',
+          [createdAdminTemplateIds],
+        );
+        await cleanup.query(
+          'DELETE FROM floorwalk.templates WHERE id = ANY($1::uuid[])',
+          [createdAdminTemplateIds],
+        );
+        await cleanup.query(
+          'DELETE FROM floorwalk.sites WHERE id = ANY($1::uuid[])',
+          [createdAdminSiteIds],
+        );
+        await cleanup.query('COMMIT');
+      } catch (error) {
+        await cleanup.query('ROLLBACK');
+        throw error;
+      } finally {
+        cleanup.release();
+      }
       await pool.query('DELETE FROM floorwalk.sessions');
       if (createdEvidenceStorageKey) {
         await rm(
@@ -523,6 +554,7 @@ describe('inspection contract API', () => {
       .send({ code: 'FW-011-TEMP', name: '临时门店' })
       .expect(201);
     expect(createdSite.body.active).toBe(true);
+    createdAdminSiteIds.push(createdSite.body.id);
 
     const templates = await request(app.getHttpServer())
       .get('/api/admin/templates')
@@ -539,17 +571,18 @@ describe('inspection contract API', () => {
       })
       .expect(201);
     templateResponseSchema.parse(createdTemplate.body);
+    createdAdminTemplateIds.push(createdTemplate.body.id);
     expect(createdTemplate.body.isCurrent).toBe(false);
 
     const updatedSite = await request(app.getHttpServer())
-      .patch(`/api/admin/sites/${sites.body[0].id}`)
+      .patch(`/api/admin/sites/${createdSite.body.id}`)
       .set('Cookie', supervisorCookie)
       .send({ active: false })
       .expect(200);
     siteResponseSchema.parse(updatedSite.body);
 
     const updatedTemplate = await request(app.getHttpServer())
-      .put(`/api/admin/templates/${templateId}`)
+      .put(`/api/admin/templates/${createdTemplate.body.id}`)
       .set('Cookie', supervisorCookie)
       .send({
         name: '开店检查更新',
@@ -566,11 +599,15 @@ describe('inspection contract API', () => {
     templateResponseSchema.parse(updatedTemplate.body);
 
     const currentTemplate = await request(app.getHttpServer())
-      .post(`/api/admin/templates/${templateId}/current`)
+      .post(`/api/admin/templates/${createdTemplate.body.id}/current`)
       .set('Cookie', supervisorCookie)
       .expect(200);
     templateResponseSchema.parse(currentTemplate.body);
     expect(currentTemplate.body.isCurrent).toBe(true);
+    await request(app.getHttpServer())
+      .post(`/api/admin/templates/${templateId}/current`)
+      .set('Cookie', supervisorCookie)
+      .expect(200);
 
     for (const path of ['/api/admin/sites', '/api/admin/templates'])
       await request(app.getHttpServer())
@@ -1317,7 +1354,7 @@ describe('inspection contract API', () => {
       .send({ code: 'FW-011-ROUTE', name: '路由表测试门店' })
       .expect(201);
     const adminSiteUpdateResponse = await request(app.getHttpServer())
-      .patch(`/api/admin/sites/${adminSiteListResponse.body[0].id}`)
+      .patch(`/api/admin/sites/${adminSiteCreateResponse.body.id}`)
       .set('Cookie', supervisorCookie)
       .send({ active: false })
       .expect(200);
@@ -1334,10 +1371,10 @@ describe('inspection contract API', () => {
       })
       .expect(201);
     const adminTemplateUpdateResponse = await request(app.getHttpServer())
-      .put(`/api/admin/templates/${templateId}`)
+      .put(`/api/admin/templates/${adminTemplateCreateResponse.body.id}`)
       .set('Cookie', supervisorCookie)
       .send({
-        name: '开店检查',
+        name: 'FW-011 路由表测试模板更新',
         items: [
           {
             position: 1,
@@ -1349,9 +1386,13 @@ describe('inspection contract API', () => {
       })
       .expect(200);
     const adminTemplateCurrentResponse = await request(app.getHttpServer())
-      .post(`/api/admin/templates/${templateId}/current`)
+      .post(
+        `/api/admin/templates/${adminTemplateCreateResponse.body.id}/current`,
+      )
       .set('Cookie', supervisorCookie)
       .expect(200);
+    createdAdminSiteIds.push(adminSiteCreateResponse.body.id);
+    createdAdminTemplateIds.push(adminTemplateCreateResponse.body.id);
     const routeResponses = {
       createSession: login,
       deleteSession: deletedSession,

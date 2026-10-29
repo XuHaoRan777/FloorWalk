@@ -118,24 +118,24 @@ export class InspectionController {
         message: '店员未绑定门店。',
       });
     const input = createInspectionRequestSchema.parse(body);
-    const site = await this.pool.query<{ deactivatedAt: Date | null }>(
-      'SELECT deactivated_at AS "deactivatedAt" FROM floorwalk.sites WHERE id = $1',
-      [request.user.siteId],
-    );
-    if (!site.rows[0])
-      throw new NotFoundException({
-        code: 'NOT_FOUND',
-        message: '门店不存在。',
-      });
-    if (site.rows[0].deactivatedAt)
-      throw new ConflictException({
-        code: 'INVALID_STATE',
-        message: '已停用门店不能新建巡检单。',
-      });
     const pool = this.pool;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      const site = await client.query<{ deactivatedAt: Date | null }>(
+        'SELECT deactivated_at AS "deactivatedAt" FROM floorwalk.sites WHERE id = $1 FOR UPDATE',
+        [request.user.siteId],
+      );
+      if (!site.rows[0])
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '门店不存在。',
+        });
+      if (site.rows[0].deactivatedAt)
+        throw new ConflictException({
+          code: 'INVALID_STATE',
+          message: '已停用门店不能新建巡检单。',
+        });
       const inspection = await client.query(
         `INSERT INTO floorwalk.inspections (site_id, template_id, inspector_id, status)
          VALUES ($1, $2, $3, 'draft')
