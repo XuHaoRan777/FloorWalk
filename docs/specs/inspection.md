@@ -1,6 +1,6 @@
 # 巡检主链
 
-代码（归档时再生成）：共享契约 `packages/shared/src/contract/`；API 认证、巡检、照片、审核、看板、聊天、门店与模板骨架、记录列表分别在 `apps/api/src/auth.ts`、`apps/api/src/auth.controller.ts`、`apps/api/src/inspection.controller.ts`、`apps/api/src/evidence.controller.ts`、`apps/api/src/review.controller.ts`、`apps/api/src/dashboard.controller.ts`、`apps/api/src/chat.controller.ts`、`apps/api/src/admin.controller.ts`、`apps/api/src/records.controller.ts`、`apps/api/src/inspection-queries.ts`；数据库定义与迁移在 `apps/api/src/db/schema.ts`、`apps/api/drizzle/`；Web 控制台在 `apps/web/src/pages/console.tsx`、`apps/web/src/components/console/`、`apps/web/src/lib/api/`；Mobile 页面与聊天组件在 `apps/mobile/app/`、`apps/mobile/components/mobile/`、`apps/mobile/lib/api/`。
+代码（归档时再生成）：共享契约 `packages/shared/src/contract/`；API 认证、巡检、照片、审核、看板、聊天、门店与模板管理、记录列表分别在 `apps/api/src/auth.ts`、`apps/api/src/auth.controller.ts`、`apps/api/src/inspection.controller.ts`、`apps/api/src/evidence.controller.ts`、`apps/api/src/review.controller.ts`、`apps/api/src/dashboard.controller.ts`、`apps/api/src/chat.controller.ts`、`apps/api/src/admin.controller.ts`、`apps/api/src/records.controller.ts`、`apps/api/src/inspection-queries.ts`；数据库定义与迁移在 `apps/api/src/db/schema.ts`、`apps/api/drizzle/`；Web 控制台在 `apps/web/src/pages/console.tsx`、`apps/web/src/components/console/`、`apps/web/src/lib/api/`；Mobile 页面与聊天组件在 `apps/mobile/app/`、`apps/mobile/components/mobile/`、`apps/mobile/lib/api/`。
 
 ## 契约与权限
 
@@ -41,14 +41,14 @@
 | `GET /api/messages/:id/image-url`                  | 获取巡检聊天图片的签名链接                                                   |
 | `GET /api/inspector/inspections`                   | 店员读取本店全部状态记录，按创建时间倒序；默认 10 条，最多 50 条，cursor 不透明 |
 | `GET /api/admin/sites`                             | 主管、总部读取全部门店，包含停用门店和 `active`                             |
-| `POST /api/admin/sites`                            | 门店契约骨架：请求 `{ code, name }`，响应 201                                |
-| `PATCH /api/admin/sites/:id`                       | 门店契约骨架：更新请求 `{ name?, active? }`，响应 200                        |
+| `POST /api/admin/sites`                            | 新建门店并持久化：请求 `{ code, name }`，响应 201                                |
+| `PATCH /api/admin/sites/:id`                       | 更新门店并持久化：请求 `{ name?, active? }`，响应 200                        |
 | `GET /api/admin/templates`                         | 主管、总部读取模板、检查项及 `isCurrent`                                     |
-| `POST /api/admin/templates`                        | 模板契约骨架：请求 `{ name, items }`，新模板不设为当前，响应 201             |
-| `PUT /api/admin/templates/:id`                     | 模板契约骨架：整体替换检查项，至少一项且位置从 1 连续，响应 200              |
-| `POST /api/admin/templates/:id/current`            | 模板契约骨架：设当前模板，响应 200                                           |
+| `POST /api/admin/templates`                        | 新建模板并持久化：请求 `{ name, items }`，新模板不设为当前，响应 201             |
+| `PUT /api/admin/templates/:id`                     | 事务整体替换检查项，至少一项且位置从 1 连续，响应 200              |
+| `POST /api/admin/templates/:id/current`            | 事务设当前模板，响应 200                                           |
 
-FW-011 增加以上聊天、记录和管理路由；聊天发送/读取与记录查询已接入实际数据。门店与模板的写路由当前只返回符合 schema 的骨架响应，尚未持久化 CRUD。`GET /api/inspector/today` 的“今天”按 `Asia/Shanghai` 时区的日历日计算，并返回门店 `active` 与唯一当前模板；停用门店新建巡检返回 409 `INVALID_STATE`；看板门店也带 `active`。提交会校验检查项和必拍照片、锁定分数；审核动作推进状态并保存审核记录。巡检证据照片上传写入 `STORAGE_DIR`，链接签名有效一小时；聊天图片写入 `chat/<inspectionId>/<uuid>.<ext>`，复用签名和文件读取机制。两类图片路由均校验签名后按存储键读取。
+聊天、记录和管理路由均已接入实际数据；门店与模板的持久化、当前模板与停用规则见[门店与模板管理](admin.md)。`GET /api/inspector/today` 的“今天”按 `Asia/Shanghai` 时区的日历日计算，并返回门店 `active` 与唯一当前模板；停用门店新建巡检返回 409 `INVALID_STATE`；看板门店也带 `active`。提交会校验检查项和必拍照片、锁定分数；审核动作推进状态并保存审核记录。巡检证据照片上传写入 `STORAGE_DIR`，链接签名有效一小时；聊天图片写入 `chat/<inspectionId>/<uuid>.<ext>`，复用签名和文件读取机制。两类图片路由均校验签名后按存储键读取。
 
 ## 数据结构
 
@@ -87,3 +87,4 @@ Northbean Coffee 有 12 家门店 `NB-001`～`NB-012`，每家店一个店员账
 | 2026-10-26 | FW-008 按认证、巡检、证据、审核、看板拆控制器；接口、权限与业务规则保持不变。                                                                                 |
 | 2026-10-27 | FW-009 改用服务端会话表与 HttpOnly cookie，移除旧登录和 Bearer 认证；写请求检查 Origin，CORS 开启 credentials。                                                     |
 | 2026-10-29 | FW-011 增加聊天、门店/模板与店员记录 API 契约和存储结构；接入聊天读写、签名图片及记录分页，today、建单和看板补门店/当前模板字段。 |
+| 2026-10-29 | 门店与模板写接口持久化，停用限制新建，模板修改保留既有巡检快照；详见管理规格。 |

@@ -9,7 +9,7 @@
 | 能力                                          | 现状 `有\|部分\|无` | 依据 / 缺口                                                                                                       |
 | --------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | 邮箱登录，三角色分开使用                      | 有                  | [巡检契约](specs/inspection.md)、[Mobile 店员巡检](specs/mobile-inspector.md)、[Web 控制台](specs/web-console.md) |
-| 门店与检查模板（含必拍项、严重项）            | 部分                | FW-011 已有管理 API 契约与骨架、种子当前模板；管理页和持久化 CRUD 待 g02 并行单元                                 |
+| 门店与检查模板（含必拍项、严重项） | 有 | [门店与模板管理](specs/admin.md) |
 | 店员提交巡检并锁定分数快照                    | 有                  | [巡检契约](specs/inspection.md)、[Mobile 店员巡检](specs/mobile-inspector.md)                                     |
 | 主管打回、再提交、通过或不合格                | 有                  | [巡检契约](specs/inspection.md)、[Web 控制台](specs/web-console.md)                                               |
 | 巡检单上聊天 | 有 | [巡检单聊天](specs/chat.md) |
@@ -23,7 +23,6 @@
 
 | ID     | 工作单元                                                    | 状态     | 依赖                   | 下一步                   |
 | ------ | ----------------------------------------------------------- | -------- | ---------------------- | ------------------------ |
-| FW-013 | [门店与模板管理](work/FW-013-sites-templates-admin/spec.md) | verified | FW-011                 | g02 槽位 2               |
 | FW-014 | [Mobile 记录页](work/FW-014-mobile-records/spec.md)         | verified | FW-011                 | g02 槽位 3               |
 | FW-015 | [并行组 g02 集成](work/FW-015-g02-integration/spec.md) | in_progress | FW-012、FW-013、FW-014 | T06 按序 Promote 与归档 |
 
@@ -60,3 +59,4 @@
 | FW-010 | [API 共用数据库连接池](work/FW-010-shared-db-pool/spec.md)                          | 2026-10-28 | 归档提交（见 git log）                                    |
 | FW-011 | [g02 契约：聊天、门店与模板、记录页](work/FW-011-g02-contract/spec.md)              | 2026-10-29 | 任务提交、收尾提交及归档提交，未推送（见 git log）        |
 | FW-012 | [巡检单聊天](work/FW-012-chat/spec.md) | 2026-10-29 | FW-015 T06 按序 Promote 与归档（见 git log），未推送 |
+| FW-013 | [门店与模板管理](work/FW-013-sites-templates-admin/spec.md) | 2026-10-29 | FW-015 T06 按序 Promote 与归档（见 git log），未推送 |
