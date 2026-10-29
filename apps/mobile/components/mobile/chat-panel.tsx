@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import type { ChatMessage } from '@libs/shared';
 import { api, userFacingError } from '../../lib/api';
+import { chatImageUrl } from '../../lib/api/chat';
 import { ErrorBanner } from './error-banner';
 import { PrimaryButton } from './primary-button';
 import { styles } from './styles';
@@ -224,7 +225,7 @@ export function ChatPanel({
     if (triedImageRefresh.current.has(messageId)) return;
     triedImageRefresh.current.add(messageId);
     try {
-      const signed = await api.chatImageUrl(messageId);
+      const signed = await chatImageUrl(messageId);
       setMessages((current) =>
         current.map((message) =>
           message.id === messageId
