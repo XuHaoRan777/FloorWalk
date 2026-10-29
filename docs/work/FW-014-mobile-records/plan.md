@@ -6,9 +6,9 @@
 
 - 工作单元状态：`approved`
 - 归档状态：`active`
-- 当前任务：T02
+- 当前任务：T03
 - 阻塞：无
-- 下一步：实现记录列表、分页刷新和错误状态。
+- 下一步：完成只读详情页，并进行单元最终门禁与独立审查。
 - 并行组：g02，并行单元，槽位 3（并行 FW-012、FW-013、FW-014；集成 FW-015）
 
 Preflight：只改 spec「批准记录」的写入范围。`records.controller.ts` 已由 FW-011 实现游标分页（含毫秒精度修复），本单元核对并补测试，不重写。T02 动 Mobile 前先读 `~/.agents/skills/expo-overview`，按分流读 `expo-router` 与 `expo-data-fetching`，查 SDK 57 文档，在证据里记一行。Mobile 首屏在三槽并发时偶发加载超时（FW-011 记录，根因未定），遇到先单独重跑一次。
@@ -18,8 +18,8 @@ Preflight：只改 spec「批准记录」的写入范围。`records.controller.t
 | ID  | 任务                                           | 状态          | 交付的 AC 与证据                                         |
 | --- | ---------------------------------------------- | ------------- | -------------------------------------------------------- |
 | T01 | 记录列表 API 的分页完整性与权限测试            | `done`        | AC-01、AC-04（API 部分）；`apps/api/src/records.test.ts` |
-| T02 | 「记录」Tab 列表：加载更多、下拉刷新、三种状态 | `pending`     | AC-02、AC-05；`tests/mobile/records.spec.ts`             |
-| T03 | 只读详情页                                     | `pending`     | AC-03、AC-04（界面部分）；`tests/mobile/records.spec.ts` |
+| T02 | 「记录」Tab 列表：加载更多、下拉刷新、三种状态 | `done`        | AC-02、AC-05；`tests/mobile/records.spec.ts`             |
+| T03 | 只读详情页                                     | `in_progress` | AC-03、AC-04（界面部分）；`tests/mobile/records.spec.ts` |
 | T04 | 最终代码审查（独立 Subagent）                  | `pending`     | 派审查前跑本槽位全部测试和全量门禁；审查记录             |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
@@ -28,10 +28,11 @@ Preflight：只改 spec「批准记录」的写入范围。`records.controller.t
 
 ## 证据
 
-| 任务                   | status | command                                                                 | artifact                                                                           | 备注                                                                                                                                                                                                   |
-| ---------------------- | ------ | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| T01 / AC-01、AC-04 API | passed | `FW_SLOT=3 pnpm --filter @apps/api test -- src/records.test.ts`         | `apps/api/src/records.test.ts`                                                     | 对照数据库本店全集翻完所有页；同毫秒稳定分页、同店另一店员、外店隔离、角色 403、超限与伪造游标 400 均通过。首跑因 shared dist 缺失未收集测试，构建 shared 后重跑通过。                                 |
-| T02 前置阅读           | passed | `read Expo skills and SDK 57 Router reference`                          | `apps/mobile/package.json`                                                         | expo-overview → expo-router、expo-data-fetching；Expo SDK 57.0.31 / Router 57.0.29，官方文档：`https://docs.expo.dev/versions/v57.0.0/sdk/router.md`。                                                 |
+| 任务                   | status | command                                                                 | artifact                                                                           | 备注                                                                                                                                                                                         |
+| ---------------------- | ------ | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T01 / AC-01、AC-04 API | passed | `FW_SLOT=3 pnpm --filter @apps/api test -- src/records.test.ts`         | `apps/api/src/records.test.ts`                                                     | 对照数据库本店全集翻完所有页；同毫秒稳定分页、同店另一店员、外店隔离、角色 403、超限与伪造游标 400 均通过。首跑因 shared dist 缺失未收集测试，构建 shared 后重跑通过。                       |
+| T02 前置阅读           | passed | `read Expo skills and SDK 57 Router reference`                          | `apps/mobile/package.json`                                                         | expo-overview → expo-router、expo-data-fetching；Expo SDK 57.0.31 / Router 57.0.29，官方文档：`https://docs.expo.dev/versions/v57.0.0/sdk/router.md`。                                       |
+| T02 / AC-02、AC-05     | passed | `FW_SLOT=3 pnpm e2e:mobile -- tests/mobile/records.spec.ts --workers=1` | `apps/mobile/components/mobile/records-screen.tsx`; `tests/mobile/records.spec.ts` | Expo Web 用例通过，实时 API 对照分页、追加和刷新；覆盖加载/空状态、网络错误、400/403/404 中文提示及 401 登录跳转。Mobile 类型检查、目标 lint、Prettier 通过；槽位端口 3130–3132 无遗留监听。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
