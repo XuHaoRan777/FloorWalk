@@ -22,6 +22,7 @@
 - AC-04（`用户要求`）：跨端界面演示链 `e2e:demo-ui` 扩展：主管在 Web 打回后在聊天里写原因；店员在 Expo Web 巡检页 5 秒内看到，回一条带图消息，补拍提交；主管 5 秒内看到店员的消息并通过；店员在「记录」Tab 第一行看到这张单并能打开只读详情、看到聊天；总部在 Web 停用一家无未审单的门店，看板标"已停用"。每个角色用独立的 `browser.newContext()`。
 - AC-05（`用户要求`）：原生回归在模拟器上：登录 → 巡检选图上传提交（88）→ 巡检页聊天发图，Web 看到 →「记录」Tab 打开只读详情 → 冷启动保持登录。logcat 无 JS 错误。
 - AC-06（`用户要求`）：交付与归档：三个并行单元都是方式 B，没有人工项时直接按 FW-012、FW-013、FW-014 的顺序归档（[`howto/archive.md`](../../howto/archive.md)，对账范围按 parallel.md 第 6 节），最后归档本单元；归档时在试行记录追加 g02 的数，含「集成回修」和按类别的「人工触点」，并按「值不值」判定写一行结论。
+- AC-07（`用户要求`，2026-10-29 补，用户原话"补上"）：`playwright.web.config.ts` 的槽位 API 环境补上 `API_PUBLIC_BASE_URL`（`http://127.0.0.1:<槽位 API 端口>`，与 Mobile、demo、csp 配置一致），并删掉 FW-012 在 `tests/web/chat.spec.ts` 里把 `/storage` 请求改写到槽位 API 的临时绕过（保留第一次请求 `fulfill` 403 模拟过期）。修完后 Web e2e 全部通过，且 `tests/web/` 里断言图片能显示的步骤用 `naturalWidth > 0` 而不是只数 `img` 个数。这是集成单元自己的修复（parallel.md 第 7 节），提交写 FW-015。
 
 ## 验收方式
 
@@ -44,4 +45,4 @@
 
 - 批准依据：用户 2026-10-29 四个单元一起批准（原话"四个单元一起批准。提交推送，告诉我补 env 和打 g02/start 的步骤，再给我三条并行启动语。"）；产品决定与默认见 FW-011 plan「决策与偏差」
 - 批准时间：`2026-10-29`
-- 特殊授权：在主目录的 master 上合并、提交，不推送；写入范围：合并冲突涉及的文件、`tests/demo/`、`playwright.demo.config.ts`、docs；第 7 节记在本单元的修复按修正模式的速度做；只用 `floorwalk` 角色连 `floorwalk_e2e_1`～`3`。
+- 特殊授权：在主目录的 master 上合并、提交，不推送；写入范围：合并冲突涉及的文件、`tests/demo/`、`playwright.demo.config.ts`、`playwright.web.config.ts`、`tests/web/`（AC-07 的配置修复与断言加强）、docs；第 7 节记在本单元的修复按修正模式的速度做；只用 `floorwalk` 角色连 `floorwalk_e2e_1`～`3`。
