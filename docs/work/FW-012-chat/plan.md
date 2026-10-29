@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- 工作单元状态：`in_progress`
+- 工作单元状态：`blocked`
 - 归档状态：`active`
 - 当前任务：T02
-- 阻塞：无
-- 下一步：实现 Web 聊天面板并用真实 API 取证。
+- 阻塞：T02 AC-05 图片签名地址重取后，浏览器图片仍未成功解码；两轮修复后仍失败。
+- 下一步：等待用户决定图片重试失败后的处理方向。
 - 并行组：g02，并行单元，槽位 1（并行 FW-012、FW-013、FW-014；集成 FW-015）
 
 Preflight：只改 spec「批准记录」的写入范围。T03、T04 动 Mobile 前先读 `~/.agents/skills/expo-overview`，按分流读 `expo-data-fetching`，查 SDK 57 文档，在证据里记一行。Mobile 首屏在三槽并发时偶发加载超时（FW-011 记录，根因未定），遇到先单独重跑一次，不当成本单元的 bug。
@@ -18,7 +18,7 @@ Preflight：只改 spec「批准记录」的写入范围。T03、T04 动 Mobile 
 | ID  | 任务                                                         | 状态      | 交付的 AC 与证据                                                            |
 | --- | ------------------------------------------------------------ | --------- | --------------------------------------------------------------------------- |
 | T01 | API 边角与权限测试                                           | `done` | AC-06（API 部分）；`apps/api/src/chat.test.ts`                              |
-| T02 | Web 聊天面板：列表、加载更早、轮询与可见性、发文字与图、错误 | `in_progress` | AC-01～AC-05、AC-08 的 Web 部分，AC-06 的总部只读；`tests/web/chat.spec.ts` |
+| T02 | Web 聊天面板：列表、加载更早、轮询与可见性、发文字与图、错误 | `blocked` | AC-01～AC-05、AC-08 的 Web 部分，AC-06 的总部只读；`tests/web/chat.spec.ts` |
 | T03 | Mobile 聊天面板（Expo Web）                                  | `pending` | AC-01～AC-05、AC-08 的 Mobile 部分；`tests/mobile/chat.spec.ts`             |
 | T04 | Mobile 原生往返（模拟器）                                    | `pending` | AC-07                                                                       |
 | T05 | 最终代码审查（独立 Subagent）                                | `pending` | 派审查前跑本槽位全部测试和全量门禁；审查记录                                |
@@ -32,6 +32,7 @@ Preflight：只改 spec「批准记录」的写入范围。T03、T04 动 Mobile 
 | 任务 | status | command | artifact | 备注 |
 | ---- | ------ | ------- | -------- | ---- |
 | T01 | passed | `pnpm --filter @libs/shared build`; `pnpm --filter @apps/api typecheck`; `FW_SLOT=1 pnpm --filter @apps/api test -- src/chat.test.ts` | `apps/api/src/chat.test.ts` | 首次类型检查因 shared 尚未构建失败；构建后复跑通过。测试结束删除新增消息和会话。 |
+| T02 | blocked | `pnpm --filter @apps/web typecheck`; `FW_SLOT=1 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost pnpm e2e --config=playwright.web.config.ts tests/web/chat.spec.ts` | `apps/web/src/components/console/chat-panel.tsx`; `tests/web/chat.spec.ts` | 类型检查通过；e2e 的分页、可见性轮询、跨账号更新、文字发送与签名重取 API 均通过，重取后的图片解码失败。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
@@ -48,3 +49,6 @@ Preflight：只改 spec「批准记录」的写入范围。T03、T04 动 Mobile 
 
 - 2026-10-29 产品决定见 FW-011 plan「决策与偏差」：店员（本店）与主管能发、总部只读，结束后仍可发，文字和图，2 秒轮询，不做已读、通知、编辑、删除。
 - 人工触点由 Claude 在集成复核时按类别补记；本单元停下时照常在这里写三行并打 `g02/blocked/FW-012`。
+- 卡在哪一步：T02 AC-05，图片请求失败后客户端成功调用签名重取端点（HTTP 200）并再次请求图片，但浏览器 `naturalWidth` 持续为 0。
+- 要我定什么：是否先只交付图片选择与发送，还是要求本单元继续查清图片重取后无法显示的原因再推进 T03。
+- 可选项和我的倾向：A 允许先交付其他 Web 聊天行为并把图片解码问题留待后续；B 继续定位并修复 AC-05 后再推进。我倾向 B，因为批准的 AC 明确要求图片可显示及过期签名重试。
