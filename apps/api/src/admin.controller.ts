@@ -55,21 +55,26 @@ export class AdminController {
   async createSite(@Body() body: unknown, @Req() request: AuthedRequest) {
     assertRole(request.user, ...apiRoutes.createAdminSite.roles);
     const input = createSiteRequestSchema.parse(body);
-    const duplicate = await this.pool.query(
-      'SELECT 1 FROM floorwalk.sites WHERE code = $1',
-      [input.code],
-    );
-    if (duplicate.rowCount)
-      throw new ConflictException({
-        code: 'INVALID_STATE',
-        message: '门店编码已存在。',
+    try {
+      const result = await this.pool.query(
+        `INSERT INTO floorwalk.sites (code, name)
+         VALUES ($1, $2)
+         RETURNING id, code, name, deactivated_at IS NULL AS active,
+           created_at AS "createdAt"`,
+        [input.code, input.name],
+      );
+      return siteResponseSchema.parse({
+        ...result.rows[0],
+        createdAt: iso(result.rows[0].createdAt),
       });
-    return siteResponseSchema.parse({
-      id: randomUUID(),
-      ...input,
-      active: true,
-      createdAt: new Date().toISOString(),
-    });
+    } catch (error) {
+      if (isUniqueViolation(error))
+        throw new ConflictException({
+          code: 'INVALID_STATE',
+          message: '门店编码已存在。',
+        });
+      throw error;
+    }
   }
 
   @UseGuards(AuthGuard)
@@ -82,10 +87,17 @@ export class AdminController {
     assertRole(request.user, ...apiRoutes.updateAdminSite.roles);
     const input = updateSiteRequestSchema.parse(body);
     const result = await this.pool.query(
-      `SELECT id, code, name, deactivated_at IS NULL AS active,
-          created_at AS "createdAt"
-       FROM floorwalk.sites WHERE id = $1`,
-      [id],
+      `UPDATE floorwalk.sites
+       SET name = COALESCE($2, name),
+           deactivated_at = CASE
+             WHEN $3::boolean IS NULL THEN deactivated_at
+             WHEN $3 THEN NULL
+             ELSE COALESCE(deactivated_at, now())
+           END
+       WHERE id = $1
+       RETURNING id, code, name, deactivated_at IS NULL AS active,
+         created_at AS "createdAt"`,
+      [id, input.name ?? null, input.active ?? null],
     );
     const site = result.rows[0];
     if (!site)
@@ -95,7 +107,6 @@ export class AdminController {
       });
     return siteResponseSchema.parse({
       ...site,
-      ...input,
       createdAt: iso(site.createdAt),
     });
   }
@@ -228,4 +239,13 @@ export class AdminController {
       })),
     };
   }
+}
+
+function isUniqueViolation(error: unknown): error is { code: string } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === '23505'
+  );
 }

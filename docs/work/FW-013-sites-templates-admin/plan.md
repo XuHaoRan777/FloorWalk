@@ -6,22 +6,22 @@
 
 - 工作单元状态：`approved`
 - 归档状态：`active`
-- 当前任务：无
+- 当前任务：T02 模板管理 API 落库、事务与“不影响已有单”测试
 - 阻塞：无
-- 下一步：在 Codex 新建的工作树里从 T01 开始。
+- 下一步：完成 T02 模板管理 API 落库、事务与“不影响已有单”测试。
 - 并行组：g02，并行单元，槽位 2（并行 FW-012、FW-013、FW-014；集成 FW-015）
 
 Preflight：只改 spec「批准记录」的写入范围。`inspection.controller.ts` 里建单的停用 409 已由 FW-011 实现，本单元核对并补测试，不重写。T04 动 Mobile 前先读 `~/.agents/skills/expo-overview`，在证据里记一行。Mobile 首屏在三槽并发时偶发加载超时（FW-011 记录，根因未定），遇到先单独重跑一次。
 
 ## 任务表
 
-| ID  | 任务                                        | 状态      | 交付的 AC 与证据                                                          |
-| --- | ------------------------------------------- | --------- | ------------------------------------------------------------------------- |
-| T01 | 门店管理 API 落库与权限测试                 | `pending` | AC-01、AC-03（门店部分）；`apps/api/src/admin.test.ts`                    |
-| T02 | 模板管理 API 落库、事务与"不影响已有单"测试 | `pending` | AC-02、AC-03（模板部分）；`apps/api/src/admin.test.ts`                    |
-| T03 | Web 门店页与模板页                          | `pending` | AC-04、AC-05、AC-07；`tests/web/admin.spec.ts`                            |
-| T04 | 停用效果：Mobile 今日页、看板、主管审完     | `pending` | AC-06；`tests/mobile/site-deactivated.spec.ts`、`tests/web/admin.spec.ts` |
-| T05 | 最终代码审查（独立 Subagent）               | `pending` | 派审查前跑本槽位全部测试和全量门禁；审查记录                              |
+| ID  | 任务                                        | 状态          | 交付的 AC 与证据                                                          |
+| --- | ------------------------------------------- | ------------- | ------------------------------------------------------------------------- |
+| T01 | 门店管理 API 落库与权限测试                 | `done`        | AC-01、AC-03（门店部分）；`apps/api/src/admin.test.ts`                    |
+| T02 | 模板管理 API 落库、事务与"不影响已有单"测试 | `in_progress` | AC-02、AC-03（模板部分）；`apps/api/src/admin.test.ts`                    |
+| T03 | Web 门店页与模板页                          | `pending`     | AC-04、AC-05、AC-07；`tests/web/admin.spec.ts`                            |
+| T04 | 停用效果：Mobile 今日页、看板、主管审完     | `pending`     | AC-06；`tests/mobile/site-deactivated.spec.ts`、`tests/web/admin.spec.ts` |
+| T05 | 最终代码审查（独立 Subagent）               | `pending`     | 派审查前跑本槽位全部测试和全量门禁；审查记录                              |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
 方式 B 按用户可观察的切片切，不按数据、后端、前端分层切：每行写交付哪几条 AC，并在本任务内取得它们的证据；一条 AC 跨几个切片时记在完成它的那个任务。可以有一个先行任务只做数据结构与共享契约（表、迁移、共享类型，不含接口和页面），这一列写「无，机器门」。不设"Agent 验收""机器门汇总"这类只收集其他任务证据的任务；单元结束的全量套件和构建在「最终代码审查」任务里、派审查之前跑。
@@ -29,8 +29,9 @@ Preflight：只改 spec「批准记录」的写入范围。`inspection.controlle
 
 ## 证据
 
-| 任务 | status | command | artifact | 备注 |
-| ---- | ------ | ------- | -------- | ---- |
+| 任务 | status | command                                                                                                                                                                                                                                                                                                                                     | artifact                                                         | 备注                                              |
+| ---- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------- |
+| T01  | passed | `FW_SLOT=2 pnpm --filter @apps/api test -- src/admin.test.ts`; `pnpm --filter @apps/api typecheck`; `pnpm exec eslint apps/api/src/admin.controller.ts apps/api/src/admin.test.ts`; `pnpm exec prettier --check apps/api/src/admin.controller.ts apps/api/src/admin.test.ts docs/work/FW-013-sites-templates-admin/plan.md docs/backlog.md` | `apps/api/src/admin.controller.ts`, `apps/api/src/admin.test.ts` | 3 项 API 测试通过；先构建 shared 后类型检查通过。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
