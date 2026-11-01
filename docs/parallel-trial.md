@@ -192,3 +192,15 @@
 - 有效的：FW-008 拆模块加竖切，三个写入范围真正分开，合并只冲突 `docs/backlog.md`；契约改动 0；单元级回修 0（g01 是 3 个产品 bug）；三道门在开组前拦下三槽共用 `apps/api/dist`；跨端最薄链路让原生发图在 FW-012 一次通过；`blocked` 标记让用户一眼看出谁在等。
 - 无效的：触点超过基线。17 次里 12 次集中在四个可修的源头：FW-015 起 Metro 被执行策略拒绝 6 次（答停下 1、传话 3、排障 2；同一命令在用户手动开的 FW-012 能跑，在 `create_thread` 开出的 FW-015 不能，原因未确认）；FW-012 停两次 4 次（第二次是 Claude 写的"只给一次修复机会"太死）；FW-015 写入范围太窄 2 次（补 AC-07、Mobile workers 扩围）；测试设施缺口（Web 槽位缺 `API_PUBLIC_BASE_URL`，从 g01 起 Web e2e 的图片就没加载；同槽多 worker 互相污染）拖到集成才发现，并入前面几项。四处都修掉约剩 5 次，1.25 次/单元；这是事后推算，不改 g02 的判定。
 - 改了什么：2026-10-30 `howto/parallel.md` 按用户的新构想重写（见上面「值不值」2026-10-30 一段）。抽进模板的第 1 条（判为值）不满足，本组不抽。
+
+### g03 准备 · 2026-11-01 · create_thread 探针
+
+- 现象：用户手动开 P1（新建本地工作树、起点 `probe/a`、完全访问），P1 用 `create_thread` 开 P2（起点 `probe/a`）、P3（起点 `probe/b`）。P1、P2 的普通 node 常驻进程都能起；Metro 原命令（`expo start --lan --android --port 31N2`）和去掉 `--android` 的版本，在 P1、P2 都报 `blocked by policy`。P2 自报 `danger-full-access`、审批 `never`。P1、P2、P3 的工作树都是游离 HEAD，停在起点分支的提交上，没有检出分支。`create_thread` 只有 `local`/`worktree` 两种环境和起点分支参数，没有权限、沙箱、目录参数。按 PID 停 node 后端口仍在监听（子进程）。
+- 原因：Metro 被拒与开对话的方式、权限都无关，不是常驻进程本身，也不是 `--android`；`~/.codex/rules/default.rules` 里没有 expo 规则，推断是 Codex 内置策略拦 `expo start`，没测出是否拦全部 expo 子命令。g02 记的"同一命令在用户手动开的对话里能跑"这次没复现。起点分支只决定提交，所以按 `howto/parallel.md` 第 2、4 节，线上单元的提交不会落到 `gNN/Lk`。
+- 改了什么：结论记在此处；接力改成上游 `git switch --detach` 让出分支、下游 `git switch gNN/Lk`，原生线的 Metro 改由用户启动，两项等用户批准后再改 `howto/parallel.md`。探针的工作树、分支和结果文件已删。
+
+### g03 准备 · 2026-11-01 · 进程脚本探针
+
+- 现象：新增 `scripts/dev/proc.mjs`（`start|stop|status <服务> --slot N`，PID 与日志在忽略目录 `.run/`），用户在 Codex 手动开本地主目录对话（完全访问，自报 `danger-full-access`、审批 `never`）跑：脚本起、查、停槽位 1 Metro 全部通过，停后 3112 释放、无残留 expo 进程；单条 `pnpm exec expo start --port 3112`（不设环境变量、不写 `cd`、无 `--lan`）也能起；多语句 PowerShell（先设 `$env:`、再跑 node）能跑。Claude Code 里同样实测通过，另验了重复 start、重复 stop、端口被非登记进程占用三种情况，都只报告不杀。
+- 原因：上一条探针被拒的两条命令都是"多语句设环境变量 + `expo start --lan`"，这次拆开后每一部分都能过，具体是哪个组合触发的策略没再细分。脚本把环境变量放进代码、命令行只剩 `node scripts/dev/proc.mjs ...`，绕开了这个不确定性。只在本地主目录验过，没在工作树里验。
+- 改了什么：常驻进程统一走 `scripts/dev/proc.mjs`，第一版只有 `metro`；工作流不再点名执行器的改法等用户批准。

@@ -17,6 +17,7 @@
 *~
 .playwright-mcp
 apps/api/.e2e/
+.run/
 tests/e2e-results/
 tests/web-results/
 test-results/

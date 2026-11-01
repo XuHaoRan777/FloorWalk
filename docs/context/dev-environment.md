@@ -9,6 +9,7 @@
 - 本地 API 端口 `3018`；Web dev `127.0.0.1:3019`；Web preview `127.0.0.1:3019`（与 dev 择一启动）；Metro 默认 LAN 模式、端口 `3020`，供同一局域网真机扫码。`pnpm dev` 下 API 监听所有网卡，Mobile 使用 Expo Metro 主机名访问 API，供同一 Wi-Fi 真机使用；e2e 槽位仍使用 loopback。
 - 数据库：本机 Docker 容器 `local-pg18`（PostgreSQL 18），宿主端口 `5433`；角色 `floorwalk`（非超级用户，不能建库），库 `floorwalk`（开发）和 `floorwalk_e2e_1`～`floorwalk_e2e_3`（e2e 槽位，见 [并行组](../howto/parallel.md)）。schema `floorwalk` 已由版本化迁移建立 8 张表并可由种子重建。没有缓存、对象存储、邮件服务或部署环境。
 - 开发 Agent：Codex 桌面版，权限用完全访问（2026-10-23 用户决定），没有沙箱，边界见 [`AGENTS.md`](../../AGENTS.md) 第 12 节。并行单元的对话工作位置选「新建本地工作树」，Codex 建工作树时按 [`.worktreeinclude`](../../.worktreeinclude) 复制各端 env 文件。
+- 起停脚本（AGENTS.md 第 12 节）：`node scripts/dev/proc.mjs start|stop <服务> --slot N`，`status` 列出在跑的；目前只有 `metro`（槽位端口 31N2，环境变量写在脚本里）。PID 和日志在忽略目录 `.run/`；只停自己登记的进程树，端口被别的进程占用时只报告。2026-11-01 在 Claude Code 和 Codex 本地对话都实测通过（[试行记录](../parallel-trial.md)）。
 - 只读参考仓库：`F:\react_project\Gift2CashApp`；本轮未读取或复制其源码。
 
 ## 环境配置
