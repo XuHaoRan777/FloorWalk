@@ -8,7 +8,7 @@
 - 归档状态：`active`
 - 当前任务：T06
 - 阻塞：无
-- 下一步：按改过的 AC-05、AC-06 从 T06 继续；T07 补 Android 模拟器主链（AC-08）后写交接，等用户 AC-09
+- 下一步：T06 先修 768px 门店页布局（按 spec「三个阶段」新补的规则），再按 AC-05、AC-06 做质感增量；T07 模拟器 Metro 用 proc.mjs 起停
 
 ## 任务表
 
@@ -59,3 +59,7 @@
 - 2026-11-02（Claude 复核）：`e2e:demo-ui` 卡在 `entry.bundle` 的原因是本机残留的三个进程（3019 vite preview、3020 开发 Metro、3112 未经 `proc.mjs` 起的 Metro），三个 Metro 共用 `apps/mobile` 的缓存，`--clear` 时互相干扰；停掉后 `FW_SLOT=3 pnpm e2e:demo-ui` 34 秒 1 passed。以后开工前先 `node scripts/dev/proc.mjs status` 并查端口。
 - 2026-11-02（Claude 复核）：全量 lint/format 的阻塞是 `b07826e` 遗留，已在修正模式 `5d7682e` 修掉，不进本单元写入范围；现在 `pnpm lint`、`pnpm format:check` 通过。
 - 2026-11-02：用户批准改 AC-05（`inspect.mjs` 不能登录，登录后页面改为截图加 critique）和 AC-06（对比度按 token 计算）。
+- 2026-11-02（T06 续接）：已先读上面三条决策；`node scripts/dev/proc.mjs status` 无运行记录，监听检查确认 3019、3020、3110～3112、3120～3122、3130～3132 均空闲；spec 所需 11 个 skill 文件均存在，`python scripts/validate_docs.py` 通过。保留既有未跟踪取证文件 `tests/web/ui-foundation.spec.ts`，本次未启动服务或改业务代码。
+- 2026-11-02（T06 前置审查停止）：已目视核对既有截图 `docs/work/FW-016-ui-foundation/evidence/web-sites-768.png` 与 `web-review-1440.png`（阶段 2 基线副本在 `.taste-skill/before/t06/`）。768px、主管登录进入门店页时，两个输入框重叠，新建门店按钮超出白色工作区；审核队列打开详情后，页面显示「审核中」及开始审核记录，同时出现「当前状态不允许执行该审核操作」。后者源码存在自动 start 的 effect 且应用开启 StrictMode，重复请求仅为根因假设，尚未以请求记录确认；不能靠隐藏错误提示处理。截图中的灰色照片不能据此判为图片损坏，后续取证需等待图片与聊天加载完成。依据 spec「三个阶段」的「发现问题停下报告，不顺手改前一阶段的边界内容」，暂停 T06，待用户决定是否允许先回修布局及自动开始审核的前端请求触发逻辑；不改 token、API、权限或审核状态机语义。AC-05、AC-06 尚未完成，T07、T08 未推进。
+- 2026-11-02（Claude 复核）：审核详情"审核中"同时报状态冲突，是 FW-008 引入的旧 bug（开发模式 StrictMode 让自动开始审核发两次），不属本单元；修正模式 `528307e` 修掉并在 `tests/web/console.spec.ts` AC-03 加断言。
+- 2026-11-02：用户批准给 spec「三个阶段」补规则：前置审查发现前一阶段缺陷，本阶段直接修（≤3 处、不改方向和 token、不出写入范围），768px 门店页布局在 T06 里修。
