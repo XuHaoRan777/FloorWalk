@@ -107,8 +107,22 @@ test('AC-03 详情展示检查项、照片和按时间排列的审核历史', as
   expect(submitted).toBeTruthy();
 
   await login(page, 'supervisor@northbean.example');
+  const startRequests: string[] = [];
+  page.on('request', (sent) => {
+    if (
+      sent.method() === 'POST' &&
+      sent.url().includes(`/api/inspections/${submitted.id}/review`) &&
+      sent.postData()?.includes('"start"')
+    )
+      startRequests.push(sent.url());
+  });
   await page.getByText(submitted.site.name, { exact: true }).click();
   await expect(page.getByRole('heading', { name: '巡检聊天' })).toBeVisible();
+  // 打开 submitted 单只自动开始审核一次，开发模式的 StrictMode 双跑 effect 也不能报状态冲突
+  if (submitted.status === 'submitted') {
+    await expect.poll(() => startRequests.length).toBe(1);
+    await expect(page.getByText('当前状态不允许执行该审核操作')).toHaveCount(0);
+  }
   await expect(page.getByRole('textbox', { name: '聊天内容' })).toBeVisible();
   for (const item of submitted.items)
     await expect(page.getByText(item.title, { exact: true })).toBeVisible();

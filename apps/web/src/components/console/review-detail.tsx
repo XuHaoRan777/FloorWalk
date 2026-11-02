@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Check, LoaderCircle, RotateCcw, X } from 'lucide-react';
 import {
   reviewInspection,
@@ -32,8 +32,12 @@ export function ReviewDetail({
   const criticalFailure = inspection.items.some(
     (item) => item.critical && item.result === 'fail',
   );
+  // StrictMode 在开发模式会把 effect 跑两次；同一张单只自动开始审核一次，第二次会被 API 判为 INVALID_STATE
+  const startRequestedFor = useRef<string | null>(null);
   useEffect(() => {
     if (!canReview || inspection.status !== 'submitted') return;
+    if (startRequestedFor.current === inspection.id) return;
+    startRequestedFor.current = inspection.id;
     setBusy(true);
     void reviewInspection(inspection.id, { action: 'start' })
       .then(setInspection)
