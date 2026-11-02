@@ -340,7 +340,9 @@ describe('HttpOnly sessions', () => {
       );
     }
     const cookie = cookieFrom(loginResponse);
-    const me = request(app.getHttpServer()).get('/api/me').set('Cookie', cookie);
+    const me = request(app.getHttpServer())
+      .get('/api/me')
+      .set('Cookie', cookie);
     if (origin) me.set('Origin', origin);
     await me.expect(200);
     const logout = request(app.getHttpServer())
@@ -353,7 +355,7 @@ describe('HttpOnly sessions', () => {
 
   it('accepts a foreign-Origin PATCH and modifies the inspection item', async () => {
     await withDraft(async ({ cookie, inspectionId, itemId }) => {
-      const response = await request(app.getHttpServer())
+      await request(app.getHttpServer())
         .patch(`/api/inspections/${inspectionId}/items/${itemId}`)
         .set('Cookie', cookie)
         .set('Origin', 'http://outside.example')

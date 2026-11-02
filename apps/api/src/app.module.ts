@@ -15,10 +15,7 @@ import {
 } from './db/pool.provider.js';
 
 @Module({
-  providers: [
-    databasePoolProvider,
-    DatabasePoolLifecycle,
-  ],
+  providers: [databasePoolProvider, DatabasePoolLifecycle],
   controllers: [
     HealthController,
     AuthController,
