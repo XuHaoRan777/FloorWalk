@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-router';
 import { HomePage } from './pages/home';
 import { ConsolePage } from './pages/console';
+import { DesignSamplesPage } from './pages/design-samples';
 
 const rootRoute = createRootRoute({
   component: Outlet,
@@ -32,8 +33,18 @@ const consoleRoute = createRoute({
   component: ConsolePage,
 });
 
+const designSamplesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/_design-samples',
+  component: DesignSamplesPage,
+});
+
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([homeRoute, consoleRoute]),
+  routeTree: rootRoute.addChildren([
+    homeRoute,
+    consoleRoute,
+    designSamplesRoute,
+  ]),
 });
 
 declare module '@tanstack/react-router' {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import {
   AppState,
+  ActivityIndicator,
   Image,
   Platform,
   ScrollView,
@@ -14,7 +15,7 @@ import { api, userFacingError } from '../../lib/api';
 import { chatImageUrl } from '../../lib/api/chat';
 import { ErrorBanner } from './error-banner';
 import { PrimaryButton } from './primary-button';
-import { styles } from './styles';
+import { classes, styles } from './styles';
 
 const roleLabels = {
   inspector: '店员',
@@ -45,6 +46,7 @@ export function ChatPanel({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(true);
   const [hasMoreBefore, setHasMoreBefore] = useState(false);
   const [appActive, setAppActive] = useState(
     AppState.currentState === 'active',
@@ -97,6 +99,7 @@ export function ChatPanel({
     setMessages([]);
     setHasMoreBefore(false);
     setError(null);
+    setLoadingMessages(true);
     void api
       .chatMessages(inspectionId)
       .then((response) => {
@@ -106,14 +109,35 @@ export function ChatPanel({
         setHasMoreBefore(response.hasMoreBefore);
         loaded.current = true;
         scrollToBottom.current = true;
+        setLoadingMessages(false);
       })
       .catch((cause: unknown) => {
-        if (active) setError(userFacingError(cause));
+        if (active) {
+          setError(userFacingError(cause));
+          setLoadingMessages(false);
+        }
       });
     return () => {
       active = false;
     };
   }, [inspectionId]);
+
+  async function retryMessages() {
+    setLoadingMessages(true);
+    setError(null);
+    try {
+      const response = await api.chatMessages(inspectionId);
+      latestSeq.current = response.messages.at(-1)?.seq ?? null;
+      setMessages(response.messages);
+      setHasMoreBefore(response.hasMoreBefore);
+      loaded.current = true;
+      scrollToBottom.current = true;
+    } catch (cause) {
+      setError(userFacingError(cause));
+    } finally {
+      setLoadingMessages(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -245,11 +269,20 @@ export function ChatPanel({
   }
 
   return (
-    <View style={styles.card}>
-      <Text accessibilityRole="header" style={styles.sectionTitle}>
+    <View className={classes.card} style={styles.card}>
+      <Text
+        accessibilityRole="header"
+        className={classes.foreground}
+        style={styles.sectionTitle}
+      >
         巡检聊天
       </Text>
       <ErrorBanner message={error} />
+      {error && !loadingMessages && !loaded.current && (
+        <PrimaryButton onPress={() => void retryMessages()} variant="secondary">
+          重新加载聊天
+        </PrimaryButton>
+      )}
       {hasMoreBefore && (
         <PrimaryButton
           disabled={loadingEarlier}
@@ -282,23 +315,43 @@ export function ChatPanel({
         }}
         testID="chat-message-list"
       >
+        {loadingMessages ? (
+          <View className={classes.empty} style={styles.empty}>
+            <ActivityIndicator accessibilityLabel="正在加载聊天消息" />
+            <Text className={classes.muted} style={styles.muted}>
+              正在加载聊天消息…
+            </Text>
+          </View>
+        ) : !error && messages.length === 0 ? (
+          <View className={classes.empty} style={styles.empty}>
+            <Text className={classes.muted} style={styles.muted}>
+              暂无聊天消息。
+            </Text>
+          </View>
+        ) : null}
         {messages.map((message) => (
           <View
             key={message.id}
+            className={classes.chatMessage}
             style={styles.chatMessage}
             testID={`chat-message-${message.id}`}
           >
-            <Text style={styles.label}>
+            <Text className={classes.muted} style={styles.label}>
               {message.displayName} · {roleLabels[message.role]} ·{' '}
               {new Date(message.createdAt).toLocaleString()}
             </Text>
-            {message.body && <Text style={styles.value}>{message.body}</Text>}
+            {message.body && (
+              <Text className={classes.foreground} style={styles.value}>
+                {message.body}
+              </Text>
+            )}
             {message.imageUrl && (
               <Image
                 accessibilityLabel="聊天图片"
                 onError={() => void refreshImage(message.id)}
                 resizeMode="contain"
                 source={{ uri: message.imageUrl }}
+                className={classes.chatImage}
                 style={styles.chatImage}
               />
             )}
@@ -312,15 +365,22 @@ export function ChatPanel({
             editable={!busy}
             multiline
             onChangeText={setText}
+            className={classes.noteInput}
             placeholder="输入消息"
             style={styles.noteInput}
             value={text}
           />
-          <Text style={styles.muted} accessibilityLiveRegion="polite">
+          <Text
+            className={classes.muted}
+            style={styles.muted}
+            accessibilityLiveRegion="polite"
+          >
             {text.length}/1000
           </Text>
           {image && (
-            <Text style={styles.muted}>{image.fileName ?? '已选择图片'}</Text>
+            <Text className={classes.muted} style={styles.muted}>
+              {image.fileName ?? '已选择图片'}
+            </Text>
           )}
           <PrimaryButton
             disabled={busy}

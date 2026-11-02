@@ -5,6 +5,7 @@ import {
   getChatMessages,
   sendChatMessage,
 } from '@/lib/api/chat';
+import { LoaderCircle, MessageSquareText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ErrorBanner } from './error-banner';
 import { formatTime, getErrorMessage } from './helpers';
@@ -36,6 +37,7 @@ export function ChatPanel({
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [hasMoreBefore, setHasMoreBefore] = useState(false);
@@ -70,6 +72,7 @@ export function ChatPanel({
     setMessages([]);
     setHasMoreBefore(false);
     setError('');
+    setLoading(true);
     void getChatMessages(inspectionId)
       .then((response) => {
         if (!active) return;
@@ -81,6 +84,9 @@ export function ChatPanel({
       })
       .catch((reason: unknown) => {
         if (active) setError(getErrorMessage(reason));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
     return () => {
       active = false;
@@ -214,8 +220,8 @@ export function ChatPanel({
   }
 
   return (
-    <section className="space-y-3 border-t pt-4" aria-label="巡检聊天">
-      <h2 className="text-lg font-semibold">巡检聊天</h2>
+    <section className="space-y-3 border-t pt-6" aria-label="巡检聊天">
+      <h2 className="fw-section-title">巡检聊天</h2>
       <ErrorBanner message={error} />
       {hasMoreBefore && (
         <Button
@@ -230,8 +236,20 @@ export function ChatPanel({
       <ol
         ref={list}
         aria-label="聊天消息"
-        className="max-h-80 space-y-3 overflow-y-auto"
+        className="max-h-80 space-y-3 overflow-y-auto border-y border-rule py-3"
       >
+        {loading && (
+          <li className="fw-state min-h-16 border-0 py-2" role="status">
+            <LoaderCircle className="animate-spin" aria-hidden="true" />
+            正在加载聊天…
+          </li>
+        )}
+        {!loading && !error && messages.length === 0 && (
+          <li className="fw-state min-h-16 border-0 py-2">
+            <MessageSquareText aria-hidden="true" />
+            暂无聊天消息
+          </li>
+        )}
         {messages.map((message) => (
           <li
             key={message.id}

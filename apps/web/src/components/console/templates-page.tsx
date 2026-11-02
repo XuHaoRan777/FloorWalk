@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Plus, RotateCcw, Save, Star } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ClipboardList,
+  LoaderCircle,
+  Plus,
+  RotateCcw,
+  Save,
+  Star,
+} from 'lucide-react';
 import type { TemplateItem } from '@libs/shared';
 import { Button } from '@/components/ui/button';
 import {
@@ -161,10 +170,10 @@ export function TemplatesPage() {
 
   return (
     <section className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="fw-page-heading">
         <div>
-          <p className="text-sm text-muted-foreground">巡检配置</p>
-          <h1 className="mt-1 text-2xl font-semibold">模板</h1>
+          <p className="fw-page-eyebrow">巡检配置</p>
+          <h1>模板</h1>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -179,9 +188,17 @@ export function TemplatesPage() {
       </div>
       <ErrorBanner message={error} />
       {loading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
+        <p className="fw-state" role="status">
+          <LoaderCircle className="animate-spin" aria-hidden="true" />
           正在加载模板…
         </p>
+      ) : error &&
+        templates.length === 0 &&
+        !isNew ? null : templates.length === 0 && !isNew ? (
+        <div className="fw-state">
+          <ClipboardList aria-hidden="true" />
+          <p>暂无模板</p>
+        </div>
       ) : (
         <>
           <div className="divide-y border-y">
@@ -200,7 +217,7 @@ export function TemplatesPage() {
                   {template.items.length} 项
                 </span>
                 {template.isCurrent && (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700">
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-warning">
                     <Star className="size-3" aria-hidden="true" />
                     当前模板
                   </span>
@@ -208,11 +225,6 @@ export function TemplatesPage() {
               </button>
             ))}
           </div>
-          {templates.length === 0 && !isNew && (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              暂无模板
-            </p>
-          )}
           {(selected || isNew) && (
             <div className="space-y-5 pt-1">
               <div className="flex flex-wrap items-end gap-3">
@@ -225,7 +237,7 @@ export function TemplatesPage() {
                   />
                 </label>
                 {selected?.isCurrent && (
-                  <span className="pb-2 text-sm font-medium text-amber-700">
+                  <span className="pb-2 text-sm font-medium text-warning">
                     当前模板
                   </span>
                 )}

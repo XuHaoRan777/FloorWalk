@@ -4,29 +4,37 @@
 
 ## 当前状态
 
-- 工作单元状态：`approved`
+- 工作单元状态：`blocked`
 - 归档状态：`active`
-- 当前任务：无
-- 阻塞：无
-- 下一步：从 T01 开始；执行器先确认 spec「三个阶段」表里的 skill 都可用
+- 当前任务：T06
+- 阻塞：AC-05 缺少全部已登录 Web 页面逐页 Inspector 证据；Expo Web `entry.bundle` 在 `e2e:demo-ui` 两次独立运行中均未响应。全仓 lint/format 同时受本单元授权范围外的 `apps/api/` 既有问题阻断。
+- 下一步：定位 Expo Web bundle 卡住原因；补齐认证页面 Inspector 与可访问性证据后再恢复 T06
 
 ## 任务表
 
-| ID  | 任务                                                                                                                                                                                | 状态      | 交付的 AC 与证据                               |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------------------------------------------- |
-| T01 | 阶段 1 前置：记录两端现状截图（Web `inspect.mjs --app --out .taste-skill/before`、Mobile 模拟器截图），建共享 token 源并在 Mobile 实测主题生效（NativeWind 5 是 preview，先验能用） | `pending` | 无，机器门                                     |
-| T02 | 阶段 1：出 2～3 个方向，每个方向 Web、Mobile 各一张样张页；停下等用户挑选                                                                                                           | `pending` | AC-01                                          |
-| T03 | 阶段 1 收口：选中方向写进 token 与 `DESIGN.md`，删掉落选方向；两端主题接上                                                                                                          | `pending` | AC-02                                          |
-| T04 | 阶段 2 Web：先用 `improve-ui` 审现状，再换全部页面并补齐三种状态；Web e2e 只改定位                                                                                                  | `pending` | AC-03、AC-04（Web）                            |
-| T05 | 阶段 2 Mobile：换全部页面并补齐三种状态；Mobile e2e 只改定位                                                                                                                        | `pending` | AC-03、AC-04（Mobile）                         |
-| T06 | 阶段 3 质感：先审阶段 2 产物，两端按 design-taste-frontend 改版流程做增量，Web 过 `inspect.mjs --app` 与 `lint.mjs`，两端过可访问性检查                                             | `pending` | AC-05、AC-06                                   |
-| T07 | 模拟器走店员主链截图；全量机器门；交接两行，登记待人工验收                                                                                                                          | `pending` | AC-08、AC-07                                   |
-| T08 | 最终代码审查                                                                                                                                                                        | `pending` | 独立 Subagent，按 `docs/howto/final-review.md` |
+| ID  | 任务                                                                                                                                                                                | 状态          | 交付的 AC 与证据                               |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------------- |
+| T01 | 阶段 1 前置：记录两端现状截图（Web `inspect.mjs --app --out .taste-skill/before`、Mobile 模拟器截图），建共享 token 源并在 Mobile 实测主题生效（NativeWind 5 是 preview，先验能用） | `done`        | 无，机器门                                     |
+| T02 | 阶段 1：出 2～3 个方向，每个方向 Web、Mobile 各一张样张页；停下等用户挑选                                                                                                           | `done`        | AC-01                                          |
+| T03 | 阶段 1 收口：选中方向写进 token 与 `DESIGN.md`，删掉落选方向；两端主题接上                                                                                                          | `done`        | AC-02                                          |
+| T04 | 阶段 2 Web：先用 `improve-ui` 审现状，再换全部页面并补齐三种状态；Web e2e 只改定位                                                                                                  | `done`        | AC-03、AC-04（Web）                            |
+| T05 | 阶段 2 Mobile：换全部页面并补齐三种状态；Mobile e2e 只改定位                                                                                                                        | `done`        | AC-03、AC-04（Mobile）                         |
+| T06 | 阶段 3 质感：先审阶段 2 产物，两端按 design-taste-frontend 改版流程做增量，Web 过 `inspect.mjs --app` 与 `lint.mjs`，两端过可访问性检查                                             | `blocked`     | AC-05、AC-06                                   |
+| T07 | 模拟器走店员主链截图；全量机器门；交接两行，登记待人工验收                                                                                                                          | `blocked`     | AC-08、AC-07                                   |
+| T08 | 最终代码审查                                                                                                                                                                        | `pending`     | 独立 Subagent，按 `docs/howto/final-review.md` |
 
 ## 证据
 
-| 任务 | status | command | artifact | 备注 |
-| ---- | ------ | ------- | -------- | ---- |
+| 任务 | status    | command                                                                                                                                                                                          | artifact                                                                                                                                                                                                                                                                             | 备注                                                                                                                                                                                                                                                                                  |
+| ---- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T01  | `passed`  | `node .../inspect.mjs http://127.0.0.1:3019/console --app --out .taste-skill/before`; `adb` 截图；Web/Mobile typecheck、lint、Web build、Mobile Android export；`pnpm exec prettier --check ...` | `packages/tokens/tokens.css`; `.taste-skill/before/report.json`; `.taste-skill/before/mobile-android.png`; `.taste-skill/mobile-token-runtime.png`                                                                                                                                   | 检查器 0 FAIL、2 WARN；Android 原生加载正常，JS 解析错误 0；登录页出现网络错误提示因本轮未启动 API。                                                                                                                                                                                  |
+| T01  | `failed`  | `pnpm format:check`                                                                                                                                                                              | `apps/api/src/app.module.ts`; `apps/api/src/session.test.ts`                                                                                                                                                                                                                         | 全仓格式门仍报这两份未改文件；本次改动文件已通过定向 Prettier 检查。                                                                                                                                                                                                                  |
+| T02  | `passed`  | `inspect.mjs --app` 两方向 × 3 视口；`adb` 模拟器截图；`pnpm --filter @apps/web typecheck/lint/build`; `pnpm --filter @apps/mobile typecheck/lint/build`                                         | `apps/web/src/pages/design-samples.tsx`; `apps/mobile/app/__design-samples.tsx`; `.taste-skill/web-framed-sheet-final/report.json`; `.taste-skill/web-accent-ladder-final/report.json`; `.taste-skill/mobile-sample-framed-clean.png`; `.taste-skill/mobile-sample-accent-clean.png` | Web 1440/768/390 均 0 FAIL、0 WARN；Web/Mobile 类型检查、lint、构建均通过。用户 2026-11-02 选择 Framed sheet。 |
+| T03  | `blocked` | `node .../design.md lint DESIGN.md`; `node .../design.md export DESIGN.md --format css-tailwind`; Web typecheck/lint/build; Mobile typecheck/lint/Android export; 定向 Prettier；`git diff --check`; `python scripts/validate_docs.py`; `inspect.mjs --app` 三视口；Android 模拟器样张 | `packages/tokens/tokens.css`; `apps/web/src/styles/theme.css`; `apps/mobile/global.css`; `DESIGN.md`; `.taste-skill/web-framed-sheet-t03/report.json`; `.taste-skill/mobile-t03-token-check.png` | 主题与设计文档接入、构建通过；设计 lint 0 error/0 warning、导出含颜色/字体/字号/圆角/间距；Web inspect 0 FAIL、4 WARN（空白比例、次级字号、卡片空带、移动空隙，阶段 1 样张的内容密度待阶段 2 收口）。全量扫描发现旧 Mobile 页面仍有硬编码颜色，受阶段 1「不改现有页面代码」限制，AC-02 的页面值子句待 T04/T05 改版后复验。 |
+| T04  | `passed`  | Web typecheck、lint、production build；`FW_SLOT=3 pnpm exec playwright test --config=playwright.web.config.ts`；登录页 `inspect.mjs --app`；Web 颜色扫描；定向 Prettier、`git diff --check`、`python scripts/validate_docs.py` | `apps/web/src/styles/console.css`; `apps/web/src/pages/home.tsx`; `apps/web/src/pages/console.tsx`; `apps/web/src/components/console/`; `.taste-skill/web-login-t04/report.json` | Web e2e 12/12 通过；Inspector 1440/768/390 0 FAIL、1 WARN（登录页首屏 29% 留白，作为聚焦式登录页留白保留）；独立 Web 页面未发现 `#`/`rgb()` 硬编码颜色。首轮三角色用例发现店员说明框窄屏压缩，样式显式约束宽度后单测及全套通过。 |
+| T05  | `passed`  | `pnpm --filter @apps/mobile typecheck`; `pnpm --filter @apps/mobile lint`; `pnpm --filter @apps/mobile build`; `pnpm exec prettier --check` 定向检查；检查各页面状态分支 | `apps/mobile/components/mobile/`; `apps/mobile/app/(authenticated)/records/[id].tsx`; `.taste-skill/mobile-t05-login-verified.png` | Mobile 页面均按 Framed sheet 重构；列表/详情含加载、空、错误呈现与可用恢复入口；类型、lint、Android bundle 和格式检查通过。全量 Mobile e2e、模拟器主链留在 T07。 |
+| T06  | `blocked` | `inspect.mjs http://127.0.0.1:3019/console --app --out .taste-skill/after/web-console-t06`; `lint.mjs`; Web/Mobile source accessibility audit | `.taste-skill/after/web-console-t06/report.json`; `.taste-skill/after/web-console-t06/desktop-fold.jpg`; `.taste-skill/after/mobile-login.png` | Inspector 1440/768/390 为 0 FAIL、1 WARN（登录页 29% 留白，沿用 T04 解释）；当前仅登录页可测，未获得 AC-05 要求的全部已登录页面报告。`lint.mjs` 0 FAIL、37 WARN，覆盖全仓 135 个文件；WARN 含 mono/eyebrow/shadow/transition 等，尚未完成逐屏处置。源码核对到 Web 可见焦点、Mobile 44pt+触控目标、字段标签及减少动态效果；AC-06 尚缺运行时对比度/聚焦实测。 |
+| T07  | `blocked` | `$env:FW_SLOT='2'; pnpm e2e:mobile`; `$env:FW_SLOT='3'; pnpm e2e:cors`; `$env:FW_SLOT='3'; pnpm e2e:demo`; `$env:FW_SLOT='3'; pnpm e2e:demo-ui`（两次）；`$env:FW_SLOT='3'; pnpm exec playwright test --config=playwright.web.config.ts`; `$env:FW_SLOT='3'; pnpm --filter @apps/api test`; `pnpm e2e:slots`; `pnpm typecheck`; `pnpm lint`; `pnpm format:check`; `pnpm build` | `tests/web-results/demo-slot-3/inspection-chain-店员、主管与总部通过真实界面完成-NB-001-巡检闭环/trace.zip`; `apps/mobile/dist/`; `apps/web/dist/` | 通过：Mobile 16/16、Web 12/12、CORS 3/3、演示链、槽位设施 3/3、API 43/43、类型检查、总构建。失败：`e2e:demo-ui` 两次均在 Expo Web 的 `entry.bundle` 请求无响应处 180 秒超时，未进入界面步骤；trace 已确认卡在初始导航。`pnpm lint` 报未改 `apps/api/src/session.test.ts:356` unused `response`；`pnpm format:check` 报未改 `apps/api/src/app.module.ts` 和 `session.test.ts`。AC-08 Android 模拟器主链未执行，AC-09 待用户最终查看。 |
 
 ## 交接
 
@@ -41,3 +49,10 @@
 ## 决策与偏差
 
 - 2026-11-02：三阶段边界、每阶段必须用的 skill 由用户定；design-taste-frontend 放在阶段 1（出方向）和阶段 3（`--keep palette,type` 改版），按 app-screen 流程；执行器缺 skill 就停下，不绑定执行器。
+- 2026-11-02：用户在 T02 选择 Framed sheet，作为本单元两端的统一方向。
+- 2026-11-02：阶段 1 两个候选方向的字体需要在 Android 样张中真实加载；新增 `expo-font` 作为字体加载器，不改变现有页面。
+- 2026-11-02：新增 `@expo-google-fonts/dm-sans`，用于展示 accent-ladder 方向指定的 DM Sans。
+- 2026-11-02：新增 `@expo-google-fonts/ibm-plex-sans`，用于展示 framed-sheet 方向指定的 IBM Plex Sans。
+- 2026-11-02：新增 `@expo-google-fonts/ibm-plex-mono`，用于展示 framed-sheet 方向指定的编号字体。
+- 2026-11-02：重试技能检查后，spec 所列技能文件均存在；`ui-ux-pro-max:design-system` 以 `ui-ux-pro-max` 的 `--design-system` 流程提供，脚本可正常运行。阶段技能前置不再阻塞。
+- 2026-11-02：`e2e:demo-ui` 两次独立运行均停在 Expo Web 初始 bundle 请求，已停止重试；trace 为 `GET /` 成功、`entry.bundle` 请求无响应。

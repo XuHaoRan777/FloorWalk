@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { RotateCcw } from 'lucide-react';
+import { ClipboardCheck, LoaderCircle, RotateCcw } from 'lucide-react';
 import { getReviewQueue, type InspectionDetail } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { ErrorBanner } from './error-banner';
@@ -27,12 +27,10 @@ export function QueueView({
   useEffect(() => load(), [load]);
   return (
     <>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="fw-page-heading">
         <div>
-          <p className="text-sm text-muted-foreground">现场提交的巡检单</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-            审核队列
-          </h1>
+          <p className="fw-page-eyebrow">现场提交的巡检单</p>
+          <h1>审核队列</h1>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RotateCcw aria-hidden="true" />
@@ -41,28 +39,31 @@ export function QueueView({
       </div>
       <ErrorBanner message={error} />
       {loading ? (
-        <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+        <p className="fw-state" role="status">
+          <LoaderCircle className="animate-spin" aria-hidden="true" />
           正在加载审核队列…
         </p>
-      ) : queue.length === 0 ? (
-        <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-          当前没有待审核巡检单。
-        </p>
+      ) : error && queue.length === 0 ? null : queue.length === 0 ? (
+        <div className="fw-state">
+          <ClipboardCheck aria-hidden="true" />
+          <p>当前没有待审核巡检单。</p>
+        </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="divide-y divide-rule border-y border-rule">
           {queue.map((inspection) => (
             <button
               type="button"
               key={inspection.id}
               onClick={() => onSelect(inspection)}
-              className="grid gap-3 rounded-md border bg-card p-4 text-left shadow-xs transition-colors hover:bg-accent sm:grid-cols-[1fr_auto_auto] sm:items-center"
+              className="fw-list-row grid w-full gap-3 py-4 text-left transition-colors hover:bg-raised sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
             >
               <span>
                 <span className="block font-medium">
                   {inspection.site.name}
                 </span>
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  {inspection.site.code} · 提交于{' '}
+                  <span className="font-mono">{inspection.site.code}</span>
+                  {' · 提交于 '}
                   {formatTime(inspection.submittedAt)}
                 </span>
               </span>
@@ -78,7 +79,7 @@ export function QueueView({
                 </span>
                 <StatusPill status={inspection.status} />
               </span>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-sm text-accent">
                 {canReview ? '查看并审核 →' : '查看详情 →'}
               </span>
             </button>

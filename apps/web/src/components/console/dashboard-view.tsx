@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ClipboardCheck, RotateCcw } from 'lucide-react';
+import {
+  ClipboardCheck,
+  LayoutDashboard,
+  LoaderCircle,
+  RotateCcw,
+} from 'lucide-react';
 import { getDashboard, type DashboardSite } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { ErrorBanner } from './error-banner';
@@ -31,12 +36,10 @@ export function DashboardView({ onQueue }: { onQueue: () => void }) {
   useEffect(() => load(), [load]);
   return (
     <>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="fw-page-heading">
         <div>
-          <p className="text-sm text-muted-foreground">Northbean 连锁门店</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-            总部看板
-          </h1>
+          <p className="fw-page-eyebrow">Northbean 连锁门店</p>
+          <h1>总部看板</h1>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={onQueue}>
@@ -51,13 +54,19 @@ export function DashboardView({ onQueue }: { onQueue: () => void }) {
       </div>
       <ErrorBanner message={error} />
       {loading ? (
-        <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+        <p className="fw-state" role="status">
+          <LoaderCircle className="animate-spin" aria-hidden="true" />
           正在加载门店数据…
         </p>
+      ) : error && sites.length === 0 ? null : sites.length === 0 ? (
+        <div className="fw-state">
+          <LayoutDashboard aria-hidden="true" />
+          <p>暂无门店数据</p>
+        </div>
       ) : (
-        <div className="overflow-x-auto rounded-md border bg-card">
-          <table className="w-full min-w-[38rem] text-sm">
-            <thead className="border-b bg-muted/50 text-left text-muted-foreground">
+        <div className="overflow-x-auto">
+          <table className="fw-data-table min-w-[38rem]">
+            <thead>
               <tr>
                 <th className="px-4 py-3 font-medium">门店</th>
                 <th className="px-4 py-3 font-medium">最近分数</th>
@@ -66,14 +75,14 @@ export function DashboardView({ onQueue }: { onQueue: () => void }) {
             </thead>
             <tbody>
               {sites.map((entry) => (
-                <tr key={entry.site.id} className="border-b last:border-0">
-                  <td className="px-4 py-3">
+                <tr key={entry.site.id}>
+                  <td>
                     <span className="font-medium">{entry.site.name}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">
+                    <span className="ml-2 font-mono text-xs text-muted-foreground">
                       {entry.site.code}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     {entry.latestScore === null ? (
                       '暂无'
                     ) : (
@@ -82,7 +91,7 @@ export function DashboardView({ onQueue }: { onQueue: () => void }) {
                       </>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     {entry.latestStatus
                       ? statusLabel[entry.latestStatus]
                       : '暂无记录'}

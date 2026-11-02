@@ -6,7 +6,7 @@ import { useToday } from '../../../components/mobile/today-provider';
 
 export default function TodayPage() {
   const { session, expire } = useSession();
-  const { today, loadToday } = useToday();
+  const { today, loadingError, loadToday } = useToday();
   const router = useRouter();
   useFocusEffect(
     useCallback(() => {
@@ -17,6 +17,7 @@ export default function TodayPage() {
   return (
     <TodayScreen
       today={today}
+      todayError={loadingError}
       onRefresh={() => void loadToday()}
       onUnauthorized={expire}
       onOpenInspection={(id) =>

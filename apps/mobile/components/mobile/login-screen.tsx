@@ -4,7 +4,7 @@ import { api, ApiError, userFacingError } from '../../lib/api';
 import { ErrorBanner } from './error-banner';
 import { PrimaryButton } from './primary-button';
 import type { Session } from './session';
-import { styles } from './styles';
+import { classes, styles } from './styles';
 
 export function LoginScreen({
   onLogin,
@@ -37,30 +37,43 @@ export function LoginScreen({
 
   return (
     <ScrollView
+      className={classes.background}
       contentContainerStyle={styles.centered}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={styles.eyebrow}>NORTHBEAN COFFEE · 店员端</Text>
-      <Text accessibilityRole="header" style={styles.title}>
+      <Text className={classes.eyebrow} style={styles.eyebrow}>
+        NORTHBEAN COFFEE · 店员端
+      </Text>
+      <Text
+        accessibilityRole="header"
+        className={classes.foreground}
+        style={styles.title}
+      >
         开始巡检
       </Text>
-      <Text style={styles.description}>
+      <Text className={classes.muted} style={styles.description}>
         登录后查看今日任务、拍照并提交巡检结果。
       </Text>
       <View style={styles.form}>
-        <Text style={styles.label}>邮箱</Text>
+        <Text className={classes.muted} style={styles.label}>
+          邮箱
+        </Text>
         <TextInput
           accessibilityLabel="邮箱"
           autoCapitalize="none"
           keyboardType="email-address"
           onChangeText={setEmail}
+          className={classes.input}
           style={styles.input}
           value={email}
         />
-        <Text style={styles.label}>密码</Text>
+        <Text className={classes.muted} style={styles.label}>
+          密码
+        </Text>
         <TextInput
           accessibilityLabel="密码"
           onChangeText={setPassword}
+          className={classes.input}
           secureTextEntry
           style={styles.input}
           value={password}

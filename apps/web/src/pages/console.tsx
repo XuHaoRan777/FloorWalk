@@ -116,7 +116,10 @@ export function ConsolePage() {
   }, [session?.user.role]);
   if (loading || !session)
     return (
-      <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground">
+      <div
+        role="status"
+        className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground"
+      >
         正在验证登录状态…
       </div>
     );
@@ -125,10 +128,10 @@ export function ConsolePage() {
   const showDashboard = isHq && section === 'dashboard';
   const canManage = user.role === 'supervisor' || isHq;
   return (
-    <SidebarProvider>
+    <SidebarProvider className="fw-console">
       <Sidebar variant="inset">
         <SidebarHeader>
-          <Link to="/" className="px-2 py-3 text-lg font-semibold">
+          <Link to="/" className="px-3 py-3 text-base font-semibold">
             {APP_NAME}
           </Link>
         </SidebarHeader>
@@ -219,39 +222,41 @@ export function ConsolePage() {
           </Button>
         </Header>
         <Main id="main">
-          <ErrorBanner message={error} />
-          {canManage && section === 'sites' ? (
-            <SitesPage />
-          ) : canManage && section === 'templates' ? (
-            <TemplatesPage />
-          ) : user.role === 'inspector' ? (
-            <div className="mx-auto max-w-xl rounded-md border bg-card p-8 text-center">
-              <FileText
-                className="mx-auto size-10 text-muted-foreground"
-                aria-hidden="true"
+          <div className="fw-console-sheet">
+            <ErrorBanner message={error} />
+            {canManage && section === 'sites' ? (
+              <SitesPage />
+            ) : canManage && section === 'templates' ? (
+              <TemplatesPage />
+            ) : user.role === 'inspector' ? (
+              <div className="fw-inspector-notice mx-auto rounded-md border bg-card p-8 text-center">
+                <FileText
+                  className="mx-auto size-10 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <h1 className="mt-4 text-2xl font-semibold">请使用手机端</h1>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  店员巡检请在手机端完成，Web 端不提供操作页面。
+                </p>
+              </div>
+            ) : selected ? (
+              <ReviewDetail
+                initialInspection={selected}
+                canReview={user.role === 'supervisor'}
+                onBack={() => setSelected(null)}
               />
-              <h1 className="mt-4 text-2xl font-semibold">请使用手机端</h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                店员巡检请在手机端完成，Web 端不提供操作页面。
-              </p>
-            </div>
-          ) : selected ? (
-            <ReviewDetail
-              initialInspection={selected}
-              canReview={user.role === 'supervisor'}
-              onBack={() => setSelected(null)}
-            />
-          ) : showDashboard ? (
-            <DashboardView onQueue={() => setSection('queue')} />
-          ) : (
-            <QueueView
-              canReview={user.role === 'supervisor'}
-              onSelect={(inspection) => {
-                setSelected(inspection);
-                setError('');
-              }}
-            />
-          )}
+            ) : showDashboard ? (
+              <DashboardView onQueue={() => setSection('queue')} />
+            ) : (
+              <QueueView
+                canReview={user.role === 'supervisor'}
+                onSelect={(inspection) => {
+                  setSelected(inspection);
+                  setError('');
+                }}
+              />
+            )}
+          </div>
         </Main>
       </SidebarInset>
     </SidebarProvider>

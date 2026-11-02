@@ -1,5 +1,6 @@
 import { Pressable, Text } from 'react-native';
-import { styles } from './styles';
+import { useReducedMotion } from 'react-native-reanimated';
+import { classes, styles } from './styles';
 
 export function PrimaryButton({
   children,
@@ -14,26 +15,32 @@ export function PrimaryButton({
   variant?: 'primary' | 'secondary' | 'danger';
   testID?: string;
 }) {
+  const reduceMotion = useReducedMotion();
+
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
+      className={`${
+        variant === 'secondary'
+          ? classes.secondaryButton
+          : variant === 'danger'
+            ? classes.dangerButton
+            : classes.primaryButton
+      } ${!reduceMotion ? classes.pressMotion : ''}`}
       onPress={onPress}
+      pressRetentionOffset={{ top: 8, right: 8, bottom: 8, left: 8 }}
       testID={testID}
-      style={({ pressed }) => [
-        styles.button,
-        variant === 'secondary' && styles.secondaryButton,
-        variant === 'danger' && styles.dangerButton,
-        disabled && styles.disabledButton,
-        pressed && !disabled && styles.pressedButton,
-      ]}
+      style={[styles.button, disabled && styles.disabledButton]}
     >
       <Text
-        style={[
-          styles.buttonText,
-          variant === 'secondary' && styles.secondaryButtonText,
-        ]}
+        className={
+          variant === 'secondary'
+            ? classes.secondaryButtonText
+            : classes.primaryButtonText
+        }
+        style={[styles.buttonText]}
       >
         {children}
       </Text>

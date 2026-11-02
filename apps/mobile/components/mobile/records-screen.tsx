@@ -10,7 +10,7 @@ import {
 import type { InspectorRecordsResponse } from '@libs/shared';
 import { ApiError, api, userFacingError } from '../../lib/api';
 import { ErrorBanner } from './error-banner';
-import { styles } from './styles';
+import { classes, styles } from './styles';
 
 type RecordItem = InspectorRecordsResponse['items'][number];
 
@@ -109,20 +109,28 @@ export function RecordsScreen({
 
   return (
     <FlatList
+      className={classes.background}
       contentContainerStyle={styles.page}
       data={records}
       keyExtractor={(item) => item.id}
       ListEmptyComponent={
-        <View style={styles.empty}>
+        <View className={classes.empty} style={styles.empty}>
           {loading && <ActivityIndicator accessibilityLabel={emptyMessage} />}
-          <Text style={styles.muted}>{emptyMessage}</Text>
+          <Text className={classes.muted} style={styles.muted}>
+            {emptyMessage}
+          </Text>
           {error && (
             <Pressable
               accessibilityRole="button"
               onPress={() => void loadFirstPage(true)}
-              style={recordStyles.refreshButton}
+              style={({ pressed }) => [
+                recordStyles.refreshButton,
+                pressed && styles.pressedRow,
+              ]}
             >
-              <Text style={styles.link}>重新加载</Text>
+              <Text className={classes.link} style={styles.link}>
+                重新加载
+              </Text>
             </Pressable>
           )}
         </View>
@@ -139,17 +147,28 @@ export function RecordsScreen({
             {loadingMore ? (
               <ActivityIndicator accessibilityLabel="正在加载更多" />
             ) : (
-              <Text style={styles.link}>加载更多</Text>
+              <Text className={classes.link} style={styles.link}>
+                加载更多
+              </Text>
             )}
           </Pressable>
         ) : (
-          <Text style={[styles.muted, recordStyles.endLabel]}>没有更多了</Text>
+          <Text
+            className={classes.muted}
+            style={[styles.muted, recordStyles.endLabel]}
+          >
+            没有更多了
+          </Text>
         )
       }
       ListHeaderComponent={
         <View>
           <View style={recordStyles.headingRow}>
-            <Text accessibilityRole="header" style={styles.heading}>
+            <Text
+              accessibilityRole="header"
+              className={classes.foreground}
+              style={styles.heading}
+            >
               巡检记录
             </Text>
             <Pressable
@@ -160,10 +179,14 @@ export function RecordsScreen({
               style={recordStyles.refreshButton}
               testID="refresh-records"
             >
-              <Text style={styles.link}>{refreshing ? '刷新中…' : '刷新'}</Text>
+              <Text className={classes.link} style={styles.link}>
+                {refreshing ? '刷新中…' : '刷新'}
+              </Text>
             </Pressable>
           </View>
-          <Text style={styles.muted}>本店全部巡检单</Text>
+          <Text className={classes.muted} style={styles.muted}>
+            本店全部巡检单
+          </Text>
           <ErrorBanner message={error} />
         </View>
       }
@@ -177,21 +200,22 @@ export function RecordsScreen({
         <Pressable
           accessibilityRole="button"
           onPress={() => onOpenRecord(item.id)}
-          style={styles.card}
+          className={classes.card}
+          style={({ pressed }) => [styles.card, pressed && styles.pressedRow]}
           testID={`record-row-${item.id}`}
         >
           <View style={recordStyles.rowHeading}>
-            <Text style={styles.cardTitle}>
+            <Text className={classes.foreground} style={styles.cardTitle}>
               状态：{statusLabels[item.status]}
             </Text>
-            <Text style={styles.muted}>
+            <Text className={classes.muted} style={styles.muted}>
               分数：{item.score === null ? '—' : `${item.score} 分`}
             </Text>
           </View>
-          <Text style={styles.muted}>
+          <Text className={classes.muted} style={styles.muted}>
             创建时间：{formatDate(item.createdAt)}
           </Text>
-          <Text style={styles.muted}>
+          <Text className={classes.muted} style={styles.muted}>
             提交时间：{formatDate(item.submittedAt)}
           </Text>
         </Pressable>
@@ -211,7 +235,12 @@ const recordStyles = {
     flexDirection: 'row',
     justifyContent: 'space-between',
   } as const,
-  refreshButton: { alignItems: 'flex-end', padding: 8 } as const,
+  refreshButton: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    minHeight: 44,
+    padding: 8,
+  } as const,
   footerButton: {
     alignItems: 'center',
     minHeight: 48,

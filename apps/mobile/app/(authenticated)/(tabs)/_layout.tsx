@@ -1,18 +1,18 @@
 import Tabs from 'expo-router/tabs';
-import { ErrorBanner } from '../../../components/mobile/error-banner';
-import { useToday } from '../../../components/mobile/today-provider';
+import { useTabColors } from '../../../components/mobile/use-tab-colors';
 
 export default function TabLayout() {
-  const { loadingError } = useToday();
+  const tabColors = useTabColors();
+
   return (
     <>
       <Tabs
         initialRouteName="today"
         screenOptions={{
           headerShown: false,
-          sceneStyle: { backgroundColor: '#f7f5f0' },
-          tabBarActiveTintColor: '#9a3412',
-          tabBarInactiveTintColor: '#78716c',
+          sceneStyle: { backgroundColor: tabColors.background },
+          tabBarActiveTintColor: tabColors.accent,
+          tabBarInactiveTintColor: tabColors.mutedForeground,
           tabBarLabelStyle: { fontSize: 14, fontWeight: '700' },
         }}
       >
@@ -29,7 +29,6 @@ export default function TabLayout() {
           options={{ title: '我的', tabBarAccessibilityLabel: '我的' }}
         />
       </Tabs>
-      {loadingError && <ErrorBanner message={loadingError} />}
     </>
   );
 }

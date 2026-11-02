@@ -5,7 +5,7 @@ import type { InspectionDetail } from '@libs/shared';
 import { ChatPanel } from '../../../components/mobile/chat-panel';
 import { ErrorBanner } from '../../../components/mobile/error-banner';
 import { useSession } from '../../../components/mobile/session-provider';
-import { styles } from '../../../components/mobile/styles';
+import { classes, styles } from '../../../components/mobile/styles';
 import { ApiError, api, userFacingError } from '../../../lib/api';
 import { evidenceUrl } from '../../../lib/api/records';
 
@@ -70,99 +70,146 @@ export default function RecordDetailPage() {
   if (!session) return null;
 
   return (
-    <ScrollView contentContainerStyle={styles.page}>
-      <Text accessibilityRole="header" style={styles.heading}>
+    <ScrollView
+      className={classes.background}
+      contentContainerStyle={styles.page}
+    >
+      <Text
+        accessibilityRole="header"
+        className={classes.foreground}
+        style={styles.heading}
+      >
         巡检记录详情
       </Text>
       <Pressable
         accessibilityRole="button"
         onPress={() => router.back()}
-        style={styles.link}
+        style={styles.touchTarget}
       >
-        <Text style={styles.link}>返回记录</Text>
+        <Text className={classes.link} style={styles.link}>
+          返回记录
+        </Text>
       </Pressable>
-      {loading && <Text style={styles.muted}>正在加载巡检详情…</Text>}
+      {loading && (
+        <Text className={classes.muted} style={styles.muted}>
+          正在加载巡检详情…
+        </Text>
+      )}
       <ErrorBanner message={error} />
       {error && (
-        <Text
+        <Pressable
           accessibilityRole="button"
+          accessibilityLabel="重新加载巡检详情"
           onPress={() => void load()}
-          style={styles.link}
+          style={styles.touchTarget}
         >
-          重新加载
-        </Text>
+          <Text className={classes.link} style={styles.link}>
+            重新加载
+          </Text>
+        </Pressable>
       )}
       {detail && (
         <>
-          <View style={styles.card} testID="record-detail-summary">
-            <Text style={styles.cardTitle}>{detail.site.name}</Text>
-            <Text style={styles.value}>
+          <View
+            className={classes.card}
+            style={styles.card}
+            testID="record-detail-summary"
+          >
+            <Text className={classes.foreground} style={styles.cardTitle}>
+              {detail.site.name}
+            </Text>
+            <Text className={classes.foreground} style={styles.value}>
               状态：{statusLabels[detail.status]}
             </Text>
-            <Text style={styles.value}>
+            <Text className={classes.foreground} style={styles.value}>
               分数：{detail.score === null ? '—' : `${detail.score} 分`}
             </Text>
-            <Text style={styles.muted}>
+            <Text className={classes.muted} style={styles.muted}>
               创建时间：{new Date(detail.createdAt).toLocaleString('zh-CN')}
             </Text>
-            <Text style={styles.muted}>
+            <Text className={classes.muted} style={styles.muted}>
               提交时间：
               {detail.submittedAt
                 ? new Date(detail.submittedAt).toLocaleString('zh-CN')
                 : '—'}
             </Text>
           </View>
-          <Text style={styles.sectionTitle}>检查项</Text>
-          {detail.items.map((item) => (
-            <View
-              key={item.id}
-              style={styles.card}
-              testID={`record-item-${item.position}`}
-            >
-              <Text style={styles.cardTitle}>
-                {item.position}. {item.title}
+          <Text className={classes.foreground} style={styles.sectionTitle}>
+            检查项
+          </Text>
+          {detail.items.length === 0 ? (
+            <View className={classes.empty} style={styles.empty}>
+              <Text className={classes.muted} style={styles.muted}>
+                当前巡检单没有检查项。
               </Text>
-              <Text style={styles.value}>
-                结果：{resultLabels[item.result]}
-              </Text>
-              <Text style={styles.muted}>备注：{item.note || '—'}</Text>
-              {item.evidence.map((evidence) =>
-                photoUrls[evidence.id] ? (
-                  <Image
-                    accessibilityLabel={`${item.title}照片`}
-                    key={evidence.id}
-                    resizeMode="contain"
-                    source={{ uri: photoUrls[evidence.id] }}
-                    style={styles.chatImage}
-                    testID={`record-photo-${evidence.id}`}
-                  />
-                ) : (
-                  <Text key={evidence.id} style={styles.muted}>
-                    正在加载照片…
-                  </Text>
-                ),
-              )}
             </View>
-          ))}
-          <Text style={styles.sectionTitle}>审核历史</Text>
+          ) : (
+            detail.items.map((item) => (
+              <View
+                key={item.id}
+                className={classes.card}
+                style={styles.card}
+                testID={`record-item-${item.position}`}
+              >
+                <Text className={classes.foreground} style={styles.cardTitle}>
+                  {item.position}. {item.title}
+                </Text>
+                <Text className={classes.foreground} style={styles.value}>
+                  结果：{resultLabels[item.result]}
+                </Text>
+                <Text className={classes.muted} style={styles.muted}>
+                  备注：{item.note || '—'}
+                </Text>
+                {item.evidence.map((evidence) =>
+                  photoUrls[evidence.id] ? (
+                    <Image
+                      accessibilityLabel={`${item.title}照片`}
+                      key={evidence.id}
+                      resizeMode="contain"
+                      source={{ uri: photoUrls[evidence.id] }}
+                      className={classes.chatImage}
+                      style={styles.chatImage}
+                      testID={`record-photo-${evidence.id}`}
+                    />
+                  ) : (
+                    <Text
+                      key={evidence.id}
+                      className={classes.muted}
+                      style={styles.muted}
+                    >
+                      正在加载照片…
+                    </Text>
+                  ),
+                )}
+              </View>
+            ))
+          )}
+          <Text className={classes.foreground} style={styles.sectionTitle}>
+            审核历史
+          </Text>
           {detail.reviews.length ? (
             detail.reviews.map((review) => (
               <View
                 key={review.id}
+                className={classes.card}
                 style={styles.card}
                 testID={`review-${review.id}`}
               >
-                <Text style={styles.cardTitle}>
+                <Text className={classes.foreground} style={styles.cardTitle}>
                   {reviewLabels[review.action]}
                 </Text>
-                <Text style={styles.muted}>
+                <Text className={classes.muted} style={styles.muted}>
                   {new Date(review.createdAt).toLocaleString('zh-CN')}
                 </Text>
-                <Text style={styles.value}>意见：{review.comment || '—'}</Text>
+                <Text className={classes.foreground} style={styles.value}>
+                  意见：{review.comment || '—'}
+                </Text>
               </View>
             ))
           ) : (
-            <Text style={styles.muted}>暂无审核记录。</Text>
+            <Text className={classes.muted} style={styles.muted}>
+              暂无审核记录。
+            </Text>
           )}
         </>
       )}

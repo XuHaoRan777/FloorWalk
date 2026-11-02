@@ -5,7 +5,7 @@ import type { InspectionDetail } from '@libs/shared';
 import { api, ApiError, userFacingError } from '../../lib/api';
 import { ErrorBanner } from './error-banner';
 import { PrimaryButton } from './primary-button';
-import { styles } from './styles';
+import { classes, styles } from './styles';
 import { ChatPanel } from './chat-panel';
 
 export function InspectionScreen({
@@ -167,24 +167,47 @@ export function InspectionScreen({
 
   if (!detail)
     return (
-      <View style={styles.centered}>
-        <Text style={styles.description}>正在加载巡检单…</Text>
+      <View className={classes.background} style={styles.centered}>
+        <Text className={classes.muted} style={styles.description}>
+          正在加载巡检单…
+        </Text>
         <ErrorBanner message={error} />
+        {error && (
+          <PrimaryButton onPress={() => void load()} variant="secondary">
+            重新加载
+          </PrimaryButton>
+        )}
       </View>
     );
 
   return (
-    <ScrollView contentContainerStyle={styles.page}>
-      <Pressable accessibilityLabel="返回今日待巡" onPress={onBack}>
-        <Text style={styles.link}>‹ 返回今日待巡</Text>
+    <ScrollView
+      className={classes.background}
+      contentContainerStyle={styles.page}
+    >
+      <Pressable
+        accessibilityLabel="返回今日待巡"
+        accessibilityRole="button"
+        onPress={onBack}
+        style={styles.touchTarget}
+      >
+        <Text className={classes.link} style={styles.link}>
+          ‹ 返回今日待巡
+        </Text>
       </Pressable>
-      <Text accessibilityRole="header" style={styles.heading}>
+      <Text
+        accessibilityRole="header"
+        className={classes.foreground}
+        style={styles.heading}
+      >
         巡检详情
       </Text>
       {latestRework && (
-        <View style={styles.warning}>
-          <Text style={styles.warningTitle}>主管打回</Text>
-          <Text>
+        <View className={classes.warning} style={styles.warning}>
+          <Text className={classes.warningTitle} style={styles.warningTitle}>
+            主管打回
+          </Text>
+          <Text className={classes.warningTitle} style={styles.warningBody}>
             {latestRework.comment || '请修改被标记的检查项后重新提交。'}
           </Text>
         </View>
@@ -195,17 +218,27 @@ export function InspectionScreen({
         return (
           <View
             key={item.id}
+            className={`${classes.card} ${highlighted ? classes.highlightedCard : ''}`}
             style={[styles.card, highlighted && styles.highlightedCard]}
             testID={`inspection-item-${item.position}`}
           >
             <View style={styles.itemHeader}>
-              <Text style={styles.cardTitle}>
+              <Text className={classes.foreground} style={styles.cardTitle}>
                 {item.position}. {item.title}
               </Text>
-              {item.photoRequired && <Text style={styles.required}>必拍</Text>}
+              {item.photoRequired && (
+                <Text className={classes.required} style={styles.required}>
+                  必拍
+                </Text>
+              )}
             </View>
             {highlighted && (
-              <Text style={styles.highlightText}>需要补充或修改</Text>
+              <Text
+                className={classes.highlightText}
+                style={styles.highlightText}
+              >
+                需要补充或修改
+              </Text>
             )}
             <View style={styles.actionRow}>
               <PrimaryButton
@@ -222,7 +255,7 @@ export function InspectionScreen({
                 不合格
               </PrimaryButton>
             </View>
-            <Text style={styles.muted}>
+            <Text className={classes.muted} style={styles.muted}>
               当前结果：
               {item.result === 'pending'
                 ? '未填写'
@@ -235,6 +268,7 @@ export function InspectionScreen({
               onChangeText={(value) =>
                 setNotes((current) => ({ ...current, [item.id]: value }))
               }
+              className={classes.noteInput}
               placeholder="填写现场备注（可选）"
               style={styles.noteInput}
               value={notes[item.id] ?? item.note ?? ''}
@@ -253,10 +287,17 @@ export function InspectionScreen({
           </View>
         );
       })}
+      {detail.items.length === 0 && (
+        <View className={classes.empty} style={styles.empty}>
+          <Text className={classes.muted} style={styles.muted}>
+            当前巡检单没有检查项。
+          </Text>
+        </View>
+      )}
       <ErrorBanner message={error} />
       {submitted && (
-        <View style={styles.success}>
-          <Text>
+        <View className={classes.success} style={styles.success}>
+          <Text className={classes.successText} style={styles.warningBody}>
             已提交：{submitted.status}，分数 {submitted.score ?? '待审核'}
           </Text>
         </View>

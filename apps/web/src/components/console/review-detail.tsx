@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Check, RotateCcw, X } from 'lucide-react';
+import { ArrowLeft, Check, LoaderCircle, RotateCcw, X } from 'lucide-react';
 import {
   reviewInspection,
   type InspectionDetail,
@@ -66,7 +66,7 @@ export function ReviewDetail({
     );
   return (
     <>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <div className="fw-page-heading items-start">
         <div>
           <Button
             variant="ghost"
@@ -77,12 +77,8 @@ export function ReviewDetail({
             <ArrowLeft aria-hidden="true" />
             返回队列
           </Button>
-          <p className="text-sm text-muted-foreground">
-            {inspection.site.code}
-          </p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-            {inspection.site.name}
-          </h1>
+          <p className="fw-page-eyebrow">{inspection.site.code}</p>
+          <h1>{inspection.site.name}</h1>
         </div>
         <div className="flex items-center gap-3">
           <StatusPill status={inspection.status} />
@@ -91,64 +87,80 @@ export function ReviewDetail({
           </span>
         </div>
       </div>
-      <ChatPanel inspectionId={inspection.id} canSend={canReview} />
       <ErrorBanner message={error} />
+      {busy && (
+        <div
+          className="mb-6 flex items-center gap-2 text-sm text-muted-foreground"
+          role="status"
+        >
+          <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+          正在处理审核…
+        </div>
+      )}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <section className="space-y-3" aria-labelledby="items-heading">
           <div className="flex items-center justify-between">
-            <h2 id="items-heading" className="text-lg font-semibold">
+            <h2 id="items-heading" className="fw-section-title">
               检查项
             </h2>
             <span className="text-sm text-muted-foreground">
               提交于 {formatTime(inspection.submittedAt)}
             </span>
           </div>
-          {inspection.items.map((item) => (
-            <article key={item.id} className="rounded-md border bg-card p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <h3 className="font-medium">{item.title}</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {item.critical ? '严重项 · ' : ''}
-                    {item.photoRequired ? '需要照片' : '无需照片'}
+          {inspection.items.length === 0 ? (
+            <div className="fw-state">
+              <p>暂无检查项记录</p>
+            </div>
+          ) : (
+            inspection.items.map((item) => (
+              <article key={item.id} className="fw-list-row py-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h3 className="font-medium">{item.title}</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {item.critical ? '严重项 · ' : ''}
+                      {item.photoRequired ? '需要照片' : '无需照片'}
+                    </p>
+                  </div>
+                  <span
+                    className={`text-sm font-medium ${item.result === 'pass' ? 'text-success' : item.result === 'fail' ? 'text-destructive' : 'text-muted-foreground'}`}
+                  >
+                    {item.result === 'pass'
+                      ? '通过'
+                      : item.result === 'fail'
+                        ? '不通过'
+                        : '未填写'}
+                  </span>
+                </div>
+                {item.note && (
+                  <p className="mt-3 border-l-2 border-accent bg-raised px-3 py-2 text-sm">
+                    备注：{item.note}
                   </p>
-                </div>
-                <span className="text-sm font-medium">
-                  {item.result === 'pass'
-                    ? '通过'
-                    : item.result === 'fail'
-                      ? '不通过'
-                      : '未填写'}
-                </span>
-              </div>
-              {item.note && (
-                <p className="mt-3 rounded bg-muted p-3 text-sm">
-                  备注：{item.note}
-                </p>
-              )}
-              {canReview && reworkPrompt && (
-                <label className="mt-3 flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={selectedItems.includes(item.id)}
-                    onChange={() => toggleItem(item.id)}
-                  />
-                  选择为打回项
-                </label>
-              )}
-              {item.evidence.length > 0 && (
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {item.evidence.map((evidence) => (
-                    <EvidenceImage key={evidence.id} evidence={evidence} />
-                  ))}
-                </div>
-              )}
-            </article>
-          ))}
+                )}
+                {canReview && reworkPrompt && (
+                  <label className="mt-3 flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedItems.includes(item.id)}
+                      onChange={() => toggleItem(item.id)}
+                    />
+                    选择为打回项
+                  </label>
+                )}
+                {item.evidence.length > 0 && (
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {item.evidence.map((evidence) => (
+                      <EvidenceImage key={evidence.id} evidence={evidence} />
+                    ))}
+                  </div>
+                )}
+              </article>
+            ))
+          )}
         </section>
         <aside className="space-y-4">
           {canReview && (
-            <section className="rounded-md border bg-card p-4">
+            <section className="border-t pt-4" aria-busy={busy}>
               <h2 className="font-semibold">审核决定</h2>
               <textarea
                 value={comment}
@@ -161,7 +173,7 @@ export function ReviewDetail({
                   存在严重项不合格，不能通过。
                 </p>
               )}
-              <div className="mt-4 grid gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <Button
                   onClick={() => submitReview('approve')}
                   disabled={busy || criticalFailure}
@@ -200,7 +212,7 @@ export function ReviewDetail({
               </div>
             </section>
           )}
-          <section className="rounded-md border bg-card p-4">
+          <section className="border-t pt-4">
             <h2 className="font-semibold">审核历史</h2>
             <ol className="mt-3 space-y-3">
               {inspection.reviews.length === 0 ? (
@@ -226,6 +238,7 @@ export function ReviewDetail({
           </section>
         </aside>
       </div>
+      <ChatPanel inspectionId={inspection.id} canSend={canReview} />
     </>
   );
 }

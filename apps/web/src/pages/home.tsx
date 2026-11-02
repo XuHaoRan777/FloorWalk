@@ -70,38 +70,33 @@ export function HomePage() {
 
   if (checkingSession)
     return (
-      <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground">
+      <div
+        role="status"
+        className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground"
+      >
         正在验证登录状态…
       </div>
     );
 
   return (
-    <div className="min-h-dvh bg-muted/30">
-      <header className="border-b bg-background">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-          <span className="text-lg font-semibold">{APP_NAME}</span>
-          <span className="text-sm text-muted-foreground">门店巡检平台</span>
-        </div>
+    <div className="fw-login">
+      <header className="fw-login__header">
+        <span className="fw-login__brand">{APP_NAME}</span>
+        <span className="fw-login__meta">门店巡检平台</span>
       </header>
-      <main className="mx-auto grid min-h-[calc(100dvh-73px)] max-w-6xl items-center gap-12 px-6 py-12 lg:grid-cols-[1.2fr_24rem]">
-        <section>
-          <p className="text-sm font-medium text-muted-foreground">
-            连锁门店运营
-          </p>
-          <h1 className="mt-3 max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl">
-            让每一次巡检都有据可循。
-          </h1>
-          <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground">
-            店员现场记录，主管审核，总部掌握每家门店的最近表现。
-          </p>
-          <div className="mt-8 flex items-center gap-2 text-sm text-muted-foreground">
+      <main className="fw-login__body">
+        <div className="fw-login__intro">
+          <p className="fw-page-eyebrow">连锁门店运营</p>
+          <h1>让每一次巡检都有据可循。</h1>
+          <p>店员现场记录，主管审核，总部掌握每家门店的最近表现。</p>
+          <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
             <ShieldCheck className="size-4" aria-hidden="true" />
             账号权限按角色分流
-          </div>
-        </section>
-        <section className="rounded-md border bg-card p-6 shadow-sm">
+          </p>
+        </div>
+        <section className="fw-login__sheet" aria-labelledby="login-heading">
           <div>
-            <h2 className="text-xl font-semibold">登录工作台</h2>
+            <h2 id="login-heading">登录工作台</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               使用企业邮箱和密码继续。
             </p>

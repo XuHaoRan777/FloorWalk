@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, RotateCcw, Save } from 'lucide-react';
+import { LoaderCircle, Plus, RotateCcw, Save, Store } from 'lucide-react';
 import type { Site } from '@libs/shared';
 import { Button } from '@/components/ui/button';
 import {
@@ -86,10 +86,10 @@ export function SitesPage() {
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="fw-page-heading">
         <div>
-          <p className="text-sm text-muted-foreground">门店配置</p>
-          <h1 className="mt-1 text-2xl font-semibold">门店</h1>
+          <p className="fw-page-eyebrow">门店配置</p>
+          <h1>门店</h1>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RotateCcw aria-hidden="true" />
@@ -125,13 +125,19 @@ export function SitesPage() {
         </Button>
       </form>
       {loading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
+        <p className="fw-state" role="status">
+          <LoaderCircle className="animate-spin" aria-hidden="true" />
           正在加载门店…
         </p>
+      ) : error && sites.length === 0 ? null : sites.length === 0 ? (
+        <div className="fw-state">
+          <Store aria-hidden="true" />
+          <p>暂无门店</p>
+        </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[42rem] text-sm">
-            <thead className="border-b text-left text-muted-foreground">
+          <table className="fw-data-table min-w-[42rem]">
+            <thead>
               <tr>
                 <th className="px-3 py-2 font-medium">编码</th>
                 <th className="px-3 py-2 font-medium">名称</th>
@@ -141,9 +147,9 @@ export function SitesPage() {
             </thead>
             <tbody>
               {sites.map((site) => (
-                <tr key={site.id} className="border-b last:border-0">
-                  <td className="px-3 py-3 font-mono text-xs">{site.code}</td>
-                  <td className="px-3 py-3">
+                <tr key={site.id}>
+                  <td className="font-mono text-xs">{site.code}</td>
+                  <td>
                     {editingId === site.id ? (
                       <input
                         aria-label={`门店名称 ${site.code}`}
@@ -155,16 +161,16 @@ export function SitesPage() {
                       <span className="font-medium">{site.name}</span>
                     )}
                   </td>
-                  <td className="px-3 py-3">
+                  <td>
                     {site.active ? (
-                      <span className="text-emerald-700">启用</span>
+                      <span className="text-success">启用</span>
                     ) : (
                       <span className="font-medium text-destructive">
                         已停用
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-3">
+                  <td>
                     <div className="flex justify-end gap-2">
                       {editingId === site.id ? (
                         <>
@@ -208,16 +214,6 @@ export function SitesPage() {
                   </td>
                 </tr>
               ))}
-              {sites.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={4}
-                    className="px-3 py-10 text-center text-muted-foreground"
-                  >
-                    暂无门店
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
