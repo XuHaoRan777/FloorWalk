@@ -307,7 +307,7 @@ describe('inspection contract API', () => {
     return pending;
   };
 
-  it('allows every declared role on protocol stubs and rejects anonymous protected access', async () => {
+  it('allows every declared role on protocol routes and rejects anonymous protected access', async () => {
     expect(Object.keys(protocolRouteBodies)).toHaveLength(7);
     const cookies = {
       inspector: inspectorCookie,
@@ -336,11 +336,21 @@ describe('inspection contract API', () => {
           continue;
         const response = await protocolRequest(routeKey, cookies[role]);
         expect(response.status, `${routeKey} allowed for ${role}`).toBe(
-          routeKey === 'createOrg' ? route.successStatus : 501,
+          routeKey === 'createOrg' || routeKey === 'listAdminUsers'
+            ? route.successStatus
+            : routeKey === 'setSiteSupervisor'
+              ? 404
+              : 501,
         );
         if (routeKey === 'createOrg') {
           route.responseSchema.parse(response.body);
           createdProtocolOrgIds.push(response.body.org.id);
+        } else if (routeKey === 'listAdminUsers') {
+          route.responseSchema.parse(response.body);
+        } else if (routeKey === 'setSiteSupervisor') {
+          expect(errorResponseSchema.parse(response.body).code).toBe(
+            'NOT_FOUND',
+          );
         }
         // 501 checks role admission only, never the future success body.
       }
@@ -2036,16 +2046,33 @@ describe('inspection contract API', () => {
     };
     for (const [routeKey, route] of Object.entries(apiRoutes)) {
       if (Object.hasOwn(protocolRouteBodies, routeKey)) {
-        const response = await protocolRequest(
-          routeKey as keyof typeof protocolRouteBodies,
-          hqCookie,
-        );
+        const response =
+          routeKey === 'setSiteSupervisor'
+            ? await request(app.getHttpServer())
+                .put(
+                  `/api/admin/sites/${adminSiteCreateResponse.body.id}/supervisor`,
+                )
+                .set('Cookie', hqCookie)
+                .send({ userId: null })
+            : await protocolRequest(
+                routeKey as keyof typeof protocolRouteBodies,
+                hqCookie,
+              );
         expect(response.status).toBe(
-          routeKey === 'createOrg' ? route.successStatus : 501,
+          routeKey === 'createOrg' ||
+            routeKey === 'setSiteSupervisor' ||
+            routeKey === 'listAdminUsers'
+            ? route.successStatus
+            : 501,
         );
         if (routeKey === 'createOrg') {
           route.responseSchema.parse(response.body);
           createdProtocolOrgIds.push(response.body.org.id);
+        } else if (
+          routeKey === 'setSiteSupervisor' ||
+          routeKey === 'listAdminUsers'
+        ) {
+          route.responseSchema.parse(response.body);
         }
       } else {
         const response =

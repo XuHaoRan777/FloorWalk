@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { LoaderCircle, Plus, RotateCcw, Save, Store } from 'lucide-react';
-import type { Site } from '@libs/shared';
+import type { AdminSite, AdminUser, Site } from '@libs/shared';
 import { Button } from '@/components/ui/button';
 import {
   createAdminSite,
   getAdminSites,
+  setSiteSupervisor,
   updateAdminSite,
 } from '@/lib/api/admin';
+import { getAdminUsers } from '@/lib/api/users';
+import { readSession } from '@/lib/api/session';
 import { getErrorMessage } from './helpers';
 import { ErrorBanner } from './error-banner';
 
 export function SitesPage() {
-  const [sites, setSites] = useState<Site[]>([]);
+  const canAssign = readSession()?.user.role === 'admin';
+  const [sites, setSites] = useState<AdminSite[]>([]);
+  const [supervisors, setSupervisors] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -23,11 +28,14 @@ export function SitesPage() {
   const load = useCallback(() => {
     setLoading(true);
     setError('');
-    void getAdminSites()
-      .then(setSites)
+    void Promise.all([getAdminSites(), canAssign ? getAdminUsers() : []])
+      .then(([nextSites, users]) => {
+        setSites(nextSites);
+        setSupervisors(users.filter((user) => user.role === 'supervisor'));
+      })
       .catch((reason: unknown) => setError(getErrorMessage(reason)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [canAssign]);
   useEffect(() => load(), [load]);
 
   const create = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -37,7 +45,9 @@ export function SitesPage() {
     try {
       const created = await createAdminSite({ code, name });
       setSites((current) =>
-        [...current, created].sort((a, b) => a.code.localeCompare(b.code)),
+        [...current, { ...created, supervisor: null }].sort((a, b) =>
+          a.code.localeCompare(b.code),
+        ),
       );
       setCode('');
       setName('');
@@ -54,7 +64,9 @@ export function SitesPage() {
     try {
       const updated = await updateAdminSite(site.id, { name: editingName });
       setSites((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
+        current.map((item) =>
+          item.id === updated.id ? { ...item, ...updated } : item,
+        ),
       );
       setEditingId(null);
     } catch (reason) {
@@ -74,6 +86,25 @@ export function SitesPage() {
     setError('');
     try {
       const updated = await updateAdminSite(site.id, { active: !site.active });
+      setSites((current) =>
+        current.map((item) =>
+          item.id === updated.id ? { ...item, ...updated } : item,
+        ),
+      );
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const assignSupervisor = async (site: AdminSite, userId: string) => {
+    setBusy(true);
+    setError('');
+    try {
+      const updated = await setSiteSupervisor(site.id, {
+        userId: userId || null,
+      });
       setSites((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
@@ -121,6 +152,9 @@ export function SitesPage() {
           新建门店
         </Button>
       </form>
+      {canAssign && !loading && !error && supervisors.length === 0 && (
+        <p className="text-sm text-muted-foreground">暂无主管</p>
+      )}
       {loading ? (
         <p className="fw-state" role="status">
           <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -139,6 +173,7 @@ export function SitesPage() {
                 <th className="px-3 py-2 font-medium">编码</th>
                 <th className="px-3 py-2 font-medium">名称</th>
                 <th className="px-3 py-2 font-medium">状态</th>
+                <th className="px-3 py-2 font-medium">主管</th>
                 <th className="px-3 py-2 text-right font-medium">操作</th>
               </tr>
             </thead>
@@ -165,6 +200,28 @@ export function SitesPage() {
                       <span className="font-medium text-destructive">
                         已停用
                       </span>
+                    )}
+                  </td>
+                  <td>
+                    {canAssign ? (
+                      <select
+                        aria-label={`主管 ${site.code}`}
+                        className="h-9 min-w-0 rounded-md border bg-background px-3 font-normal"
+                        value={site.supervisor?.id ?? ''}
+                        disabled={busy || supervisors.length === 0}
+                        onChange={(event) =>
+                          void assignSupervisor(site, event.target.value)
+                        }
+                      >
+                        <option value="">未指派</option>
+                        {supervisors.map((supervisor) => (
+                          <option key={supervisor.id} value={supervisor.id}>
+                            {supervisor.displayName}（{supervisor.email}）
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      (site.supervisor?.displayName ?? '未指派')
                     )}
                   </td>
                   <td>

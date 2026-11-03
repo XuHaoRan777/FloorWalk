@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import {
+  BadRequestException,
   ConflictException,
   Controller,
   Get,
   HttpCode,
   Inject,
   NotFoundException,
-  NotImplementedException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -23,6 +23,8 @@ import {
   adminTemplatesResponseSchema,
   createSiteRequestSchema,
   createTemplateRequestSchema,
+  setSiteSupervisorRequestSchema,
+  setSiteSupervisorResponseSchema,
   siteResponseSchema,
   templateResponseSchema,
   updateSiteRequestSchema,
@@ -39,9 +41,66 @@ export class AdminController {
 
   @UseGuards(AuthGuard)
   @Put(apiRoutePath(apiRoutes.setSiteSupervisor))
-  setSiteSupervisor(@Req() request: AuthedRequest): never {
+  async setSiteSupervisor(
+    @Body() body: unknown,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() request: AuthedRequest,
+  ) {
     assertRole(request.user, ...apiRoutes.setSiteSupervisor.roles);
-    throw new NotImplementedException();
+    const input = setSiteSupervisorRequestSchema.parse(body);
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const sites = await client.query(
+        `SELECT id, code, name, deactivated_at IS NULL AS active,
+           created_at AS "createdAt" FROM floorwalk.sites
+         WHERE id = $1 AND org_id = $2 FOR UPDATE`,
+        [id, request.user.orgId],
+      );
+      const site = sites.rows[0];
+      if (!site)
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '门店不存在。',
+        });
+      let supervisor: { id: string; displayName: string } | null = null;
+      if (input.userId !== null) {
+        const users = await client.query<{ id: string; displayName: string }>(
+          `SELECT id, display_name AS "displayName" FROM floorwalk.users
+           WHERE id = $1 AND org_id = $2 AND role = 'supervisor' FOR SHARE`,
+          [input.userId, request.user.orgId],
+        );
+        supervisor = users.rows[0];
+        if (!supervisor)
+          throw new BadRequestException({
+            code: 'VALIDATION_FAILED',
+            message: '请选择本商家的主管。',
+          });
+        await client.query(
+          `INSERT INTO floorwalk.site_supervisors (site_id, user_id)
+           VALUES ($1, $2) ON CONFLICT (site_id) DO UPDATE
+           SET user_id = EXCLUDED.user_id, assigned_at = now()`,
+          [id, supervisor.id],
+        );
+      } else {
+        await client.query(
+          'DELETE FROM floorwalk.site_supervisors WHERE site_id = $1',
+          [id],
+        );
+      }
+      const result = setSiteSupervisorResponseSchema.parse({
+        ...site,
+        createdAt: iso(site.createdAt),
+        supervisor,
+      });
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   @UseGuards(AuthGuard)

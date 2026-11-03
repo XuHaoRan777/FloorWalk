@@ -60,6 +60,9 @@ test('FW-019 AC-02 首页注册商家，自动进入空看板并刷新保持会�
   await page.screenshot({
     path: 'docs/work/FW-019-org-signup-site-supervisor/evidence/registration-dashboard.png',
   });
+  await page.getByRole('button', { name: '门店', exact: true }).click();
+  await expect(page.getByText('暂无主管', { exact: true })).toBeVisible();
+  await expect(page.getByText('暂无门店', { exact: true })).toBeVisible();
 });
 
 test('FW-019 AC-02 注册失败显示中文提示并保留表单', async ({ page }) => {
