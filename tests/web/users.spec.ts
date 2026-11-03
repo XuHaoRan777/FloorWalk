@@ -38,10 +38,14 @@ test('FW-020 AC-08 管理员创建店员并完成首次改密', async ({ page })
     expect(user).toBeTruthy();
 
     await page.getByRole('button', { name: '退出登录' }).click();
-    await expect(page.getByLabel('邮箱')).toBeVisible();
-    await page.getByLabel('邮箱').fill(email);
-    await page.getByLabel('密码').fill(initialPassword);
-    await page.getByRole('button', { name: '登录', exact: true }).click();
+    await expect(page).toHaveURL('/');
+    const loginForm = page.getByRole('region', { name: '登录工作台' });
+    await expect(loginForm.getByLabel('邮箱')).toBeVisible();
+    await loginForm.getByLabel('邮箱').fill(email);
+    await loginForm.getByLabel('密码').fill(initialPassword);
+    await loginForm
+      .getByRole('button', { name: '登录', exact: true })
+      .click();
     await expect(page).toHaveURL(/\/change-password$/);
     await page.getByLabel('当前密码').fill(initialPassword);
     await page.getByLabel('新密码', { exact: true }).fill(changedPassword);
