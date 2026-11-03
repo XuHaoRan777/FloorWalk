@@ -296,23 +296,41 @@ try {
   let evidence;
   let inspection;
   let chatMessage;
-  // T04 接入新增路由的 501 与角色检查；T03 仅适配既有流程。
-  const pendingProtocolRoutes = new Set([
-    'createOrg',
-    'setSiteSupervisor',
-    'listAdminUsers',
-    'createAdminUser',
-    'updateAdminUser',
-    'resetAdminUserPassword',
-    'changePassword',
-  ]);
+  const protocolRouteBodies = {
+    createOrg: {
+      orgName: 'Snapshot organization',
+      adminName: 'Snapshot admin',
+      email: 'snapshot@example.test',
+      password: 'snapshot-password',
+    },
+    setSiteSupervisor: { userId: null },
+    listAdminUsers: undefined,
+    createAdminUser: {
+      email: 'snapshot@example.test',
+      displayName: 'Snapshot user',
+      role: 'inspector',
+      password: 'snapshot-password',
+    },
+    updateAdminUser: { displayName: 'Snapshot user' },
+    resetAdminUserPassword: { password: 'snapshot-password' },
+    changePassword: {
+      currentPassword: 'northbean-demo',
+      newPassword: 'snapshot-password',
+    },
+  };
   for (const [key, route] of Object.entries(apiRoutes)) {
-    if (
-      key === 'createSession' ||
-      key === 'deleteSession' ||
-      pendingProtocolRoutes.has(key)
-    )
-      continue;
+    if (key === 'createSession' || key === 'deleteSession') continue;
+    const protocolStub = Object.hasOwn(protocolRouteBodies, key);
+    if (protocolStub) {
+      await call(
+        `${key}:anonymous`,
+        route.path.replace(':id', sites[0].id),
+        undefined,
+        route.method,
+        protocolRouteBodies[key],
+        route.roles.length === 0 ? 501 : 401,
+      );
+    }
     if (key === 'submitInspection') {
       for (const item of detail.items) {
         await call(
@@ -337,20 +355,23 @@ try {
       const pathname = route.path
         .replace(
           ':id',
-          key === 'getEvidence'
-            ? evidence.id
-            : key === 'getMessageImageUrl'
-              ? chatMessage.id
-              : key === 'updateAdminSite'
-                ? sites[0].id
-                : ['updateAdminTemplate', 'setCurrentAdminTemplate'].includes(
-                      key,
-                    )
-                  ? templates[0].id
-                  : (inspection?.id ?? ''),
+          protocolStub
+            ? sites[0].id
+            : key === 'getEvidence'
+              ? evidence.id
+              : key === 'getMessageImageUrl'
+                ? chatMessage.id
+                : key === 'updateAdminSite'
+                  ? sites[0].id
+                  : ['updateAdminTemplate', 'setCurrentAdminTemplate'].includes(
+                        key,
+                      )
+                    ? templates[0].id
+                    : (inspection?.id ?? ''),
         )
         .replace(':itemId', detail?.items[0].id ?? '');
       const bodies = {
+        ...protocolRouteBodies,
         createInspection: { templateId: today.template.id },
         updateInspectionItem: { result: 'pass', note: 'snapshot-note' },
         addEvidence: photo(),
@@ -376,16 +397,16 @@ try {
           ],
         },
       };
-      const allowed = route.roles.includes(role);
+      const allowed = route.roles.length === 0 || route.roles.includes(role);
       const result = await call(
         `${key}:${role}`,
         pathname,
         role,
         route.method,
         bodies[key],
-        allowed ? route.successStatus : 403,
+        allowed ? (protocolStub ? 501 : route.successStatus) : 403,
       );
-      if (allowed) {
+      if (allowed && !protocolStub) {
         route.responseSchema.parse(result);
         if (key === 'createInspection') inspection = result;
         if (key === 'getInspection' && !detail) detail = result;
@@ -453,7 +474,7 @@ try {
   await mkdir(path.dirname(path.resolve(output)), { recursive: true });
   await writeFile(output, `${JSON.stringify(normalize(records), null, 2)}\n`);
   console.log(
-    `快照完成：${records.length} 次请求；${Object.keys(apiRoutes).length - pendingProtocolRoutes.size} 个已接入路由 × 3 个角色；${output}`,
+    `快照完成：${records.length} 次请求；${Object.keys(apiRoutes).length} 个已接入路由 × 3 个角色；${output}`,
   );
 } finally {
   try {

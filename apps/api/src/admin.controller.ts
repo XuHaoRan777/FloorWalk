@@ -6,6 +6,7 @@ import {
   HttpCode,
   Inject,
   NotFoundException,
+  NotImplementedException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -35,6 +36,13 @@ import { assertRole, iso, type AuthedRequest } from './inspection-queries.js';
 @Controller('api')
 export class AdminController {
   constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+
+  @UseGuards(AuthGuard)
+  @Put(apiRoutePath(apiRoutes.setSiteSupervisor))
+  setSiteSupervisor(@Req() request: AuthedRequest): never {
+    assertRole(request.user, ...apiRoutes.setSiteSupervisor.roles);
+    throw new NotImplementedException();
+  }
 
   @UseGuards(AuthGuard)
   @Get(apiRoutePath(apiRoutes.listAdminSites))

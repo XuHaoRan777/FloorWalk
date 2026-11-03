@@ -24,6 +24,14 @@
 - AC-05（`用户要求`）：配置检查：`AI_DRIVER=openai` 而 `OPENAI_API_KEY` 或 `OPENAI_MODEL` 缺失时，API 启动失败并报出缺的键名，不打印值。
 - AC-06（`用户要求`）：冒烟测试只在 `FW_AI_SMOKE=1` 时运行：用种子里一张已判定单的真实照片和一段简短的审核标准调用一次真实模型，只断言返回通过 schema 校验（或明确返回 `needs_human` 并记录原因），不断言判得对不对。原始响应的摘要（结论、每项理由前 50 字、耗时、token 用量）写进证据。
 
+## FW-017 探针结论（2026-11-03）
+
+- 读图：不通过，能力未判定。已判定种子单的一张 1×1 JPEG（533 字节）经 base64 发送，HTTP 502 `bad_response_status_code`：`The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overloaded or misconfigured.`，耗时 31961ms。没有模型响应，不能据此认定模型不支持视觉。
+- JSON schema 结构化输出：不通过，未验证。请求带 `response_format.type=json_schema`，但被上述上游错误中断，不能据此选择提示词 JSON 回退。
+- 本地签名链接：不通过。本地读取 200；远端 HTTP 500 `count_token_failed`：`error getting file type: failed to download file from [URL REDACTED] request reject: port 3110 is not allowed`，688ms。该本地链接不能直接给当前模型网关，需读字节转 base64；base64 的模型兼容性仍待验证。
+- 配置地址兼容：探针会剥掉 `OPENAI_BASE_URL` 末尾的 `/chat/completions`，避免 SDK 重复追加路径。原始错误为 HTTP 404 `Invalid URL (POST /v1/chat/completions/chat/completions)`；未修改环境文件。
+- 协议单元依 AC-08 停止，尚不可开组。探针脚本为 `scripts/ai-probe.mjs`；仅输出配置键存在性及脱敏响应，不保存密钥、图片或签名 URL。
+
 ## 验收方式
 
 `B Agent 验收`

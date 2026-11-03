@@ -16,6 +16,28 @@ const isWindows = process.platform === 'win32';
 
 // Ports follow the slot rule in docs/howto/parallel.md: API 31N0, Metro 31N2.
 const services = {
+  api: {
+    port: (slot) => 3100 + slot * 10,
+    cwd: path.join(root, 'apps/api'),
+    args: () => ['--env-file=.env.development', 'dist/main.js'],
+    env: (slot) => {
+      process.loadEnvFile(path.join(root, 'apps/api/.env.development'));
+      const databaseUrl = new URL(process.env.DATABASE_URL ?? '');
+      if (decodeURIComponent(databaseUrl.username) !== 'floorwalk')
+        fail('api 只允许使用 floorwalk 数据库角色。');
+      databaseUrl.pathname = `/floorwalk_e2e_${slot}`;
+      return {
+        FW_SLOT: String(slot),
+        PORT: String(3100 + slot * 10),
+        HOST: '127.0.0.1',
+        NODE_ENV: 'development',
+        DATABASE_URL: databaseUrl.toString(),
+        STORAGE_DIR: path.join(root, `apps/api/.e2e/slot-${slot}/storage`),
+        API_PUBLIC_BASE_URL: `http://127.0.0.1:${3100 + slot * 10}`,
+      };
+    },
+    readyTimeoutMs: 30_000,
+  },
   metro: {
     port: (slot) => 3100 + slot * 10 + 2,
     cwd: path.join(root, 'apps/mobile'),
@@ -125,12 +147,13 @@ async function start(name, slot) {
       `端口 ${port} 已被占用（PID ${listeningOwners(port).join(',') || '未知'}），不是本脚本登记的进程，不处理。`,
     );
   }
+  const serviceEnv = service.env(slot);
   fs.mkdirSync(runDir, { recursive: true });
   const logFile = path.join(runDir, `${name}-slot-${slot}.log`);
   const log = fs.openSync(logFile, 'w');
   const child = spawn(process.execPath, service.args(slot), {
     cwd: service.cwd,
-    env: { ...process.env, ...service.env(slot) },
+    env: { ...process.env, ...serviceEnv },
     detached: true,
     stdio: ['ignore', log, log],
     windowsHide: true,
@@ -154,7 +177,8 @@ async function start(name, slot) {
   while (Date.now() < deadline) {
     if (await isListening(port)) {
       console.log(
-        `started ${name} slot=${slot} pid=${child.pid} port=${port} log=${record.log}`,
+        `started ${name} slot=${slot} pid=${child.pid} port=${port} log=${record.log}` +
+          (name === 'api' ? ` database=floorwalk_e2e_${slot}` : ''),
       );
       return;
     }

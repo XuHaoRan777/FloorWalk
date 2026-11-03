@@ -8,6 +8,8 @@ import {
 import { HomePage } from './pages/home';
 import { ConsolePage } from './pages/console';
 import { DesignSamplesPage } from './pages/design-samples';
+import { RegisterPage } from './pages/register';
+import { ChangePasswordPage } from './pages/change-password';
 
 const rootRoute = createRootRoute({
   component: Outlet,
@@ -33,6 +35,18 @@ const consoleRoute = createRoute({
   component: ConsolePage,
 });
 
+const registerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/register',
+  component: RegisterPage,
+});
+
+const changePasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/change-password',
+  component: ChangePasswordPage,
+});
+
 const designSamplesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/_design-samples',
@@ -43,6 +57,8 @@ export const router = createRouter({
   routeTree: rootRoute.addChildren([
     homeRoute,
     consoleRoute,
+    registerRoute,
+    changePasswordRoute,
     designSamplesRoute,
   ]),
 });

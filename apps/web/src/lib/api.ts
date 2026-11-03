@@ -26,6 +26,8 @@ export { getDashboard } from './api/dashboard';
 export { getChatMessages, sendChatMessage } from './api/chat';
 export { getAdminSites, getAdminTemplates } from './api/admin';
 export { getInspectorRecords } from './api/records';
+export * as orgs from './api/orgs';
+export * as users from './api/users';
 
 import { login, deleteSession, getMe } from './api/auth';
 import { getInspection } from './api/inspection';
@@ -35,8 +37,12 @@ import { getDashboard } from './api/dashboard';
 import { getChatMessages, sendChatMessage } from './api/chat';
 import { getAdminSites, getAdminTemplates } from './api/admin';
 import { getInspectorRecords } from './api/records';
+import * as orgs from './api/orgs';
+import * as users from './api/users';
 
 export const api = {
+  orgs,
+  users,
   login,
   deleteSession,
   getMe,

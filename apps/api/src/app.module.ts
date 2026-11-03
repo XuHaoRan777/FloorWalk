@@ -9,13 +9,22 @@ import { DashboardController } from './dashboard.controller.js';
 import { AdminController } from './admin.controller.js';
 import { RecordsController } from './records.controller.js';
 import { ChatController } from './chat.controller.js';
+import { OrgsController } from './orgs.controller.js';
+import { UsersController } from './users.controller.js';
+import { getStorageDriver } from './storage/index.js';
+import { getAiReviewer } from './ai/index.js';
 import {
   databasePoolProvider,
   DatabasePoolLifecycle,
 } from './db/pool.provider.js';
 
 @Module({
-  providers: [databasePoolProvider, DatabasePoolLifecycle],
+  providers: [
+    databasePoolProvider,
+    DatabasePoolLifecycle,
+    { provide: 'STORAGE_DRIVER', useFactory: () => getStorageDriver() },
+    { provide: 'AI_REVIEWER', useFactory: () => getAiReviewer() },
+  ],
   controllers: [
     HealthController,
     AuthController,
@@ -27,6 +36,8 @@ import {
     RecordsController,
     ChatController,
     StorageController,
+    OrgsController,
+    UsersController,
   ],
 })
 export class AppModule {}

@@ -4,9 +4,11 @@ import type { StorageDriver } from './types.js';
 export type { StorageDriver } from './types.js';
 export { LocalStorageDriver } from './local.js';
 
-export async function getStorageDriver(): Promise<StorageDriver> {
+export async function getStorageDriver(
+  localStoragePath?: string,
+): Promise<StorageDriver> {
   const driver = process.env.STORAGE_DRIVER ?? 'local';
-  if (driver === 'local') return new LocalStorageDriver();
+  if (driver === 'local') return new LocalStorageDriver(localStoragePath);
   if (driver === 'oss') {
     const modulePath = './oss.js';
     const module = await import(modulePath).catch(

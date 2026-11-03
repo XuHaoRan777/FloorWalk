@@ -8,6 +8,7 @@ import {
   House,
   LayoutDashboard,
   LogOut,
+  Users,
 } from 'lucide-react';
 import { APP_NAME } from '@libs/shared';
 import { Header } from '@/components/layout/header';
@@ -44,6 +45,7 @@ import { QueueView } from '@/components/console/queue-view';
 import { ReviewDetail } from '@/components/console/review-detail';
 import { SitesPage } from '@/components/console/sites-page';
 import { TemplatesPage } from '@/components/console/templates-page';
+import { UsersPage } from '@/components/console/users-page';
 
 function useConsoleSession() {
   const navigate = useNavigate();
@@ -103,7 +105,7 @@ function useConsoleSession() {
   return { session, loading, error, setError, logout };
 }
 
-type ConsoleSection = 'queue' | 'dashboard' | 'sites' | 'templates';
+type ConsoleSection = 'queue' | 'dashboard' | 'sites' | 'templates' | 'users';
 
 export function ConsolePage() {
   const { session, loading, error, setError, logout } = useConsoleSession();
@@ -192,6 +194,18 @@ export function ConsolePage() {
                       <span>模板</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={section === 'users'}
+                      onClick={() => {
+                        setSection('users');
+                        setSelected(null);
+                      }}
+                    >
+                      <Users aria-hidden="true" />
+                      <span>账号</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 </>
               )}
               <SidebarMenuItem>
@@ -228,6 +242,8 @@ export function ConsolePage() {
               <SitesPage />
             ) : canManage && section === 'templates' ? (
               <TemplatesPage />
+            ) : canManage && section === 'users' ? (
+              <UsersPage />
             ) : user.role === 'inspector' ? (
               <div className="fw-inspector-notice mx-auto rounded-md border bg-card p-8 text-center">
                 <FileText

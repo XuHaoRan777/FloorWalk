@@ -10,6 +10,7 @@ export default function AuthenticatedLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="inspection/[id]" />
         <Stack.Screen name="records/[id]" />
+        <Stack.Screen name="change-password" />
       </Stack>
     </TodayProvider>
   );

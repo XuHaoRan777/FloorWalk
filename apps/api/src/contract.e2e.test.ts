@@ -36,16 +36,39 @@ import {
   userRoles,
 } from '@libs/shared';
 
-// T04 covers the seven new protocol routes; T03 retains all 24 existing routes.
-const pendingProtocolRoutes = new Set([
-  'createOrg',
-  'setSiteSupervisor',
-  'listAdminUsers',
-  'createAdminUser',
-  'updateAdminUser',
-  'resetAdminUserPassword',
-  'changePassword',
-]);
+const protocolRouteBodies = {
+  createOrg: {
+    orgName: 'Protocol organization',
+    adminName: 'Protocol admin',
+    email: 'protocol@example.test',
+    password: 'protocol-password',
+  },
+  setSiteSupervisor: { userId: null },
+  listAdminUsers: undefined,
+  createAdminUser: {
+    email: 'protocol@example.test',
+    displayName: 'Protocol user',
+    role: 'inspector',
+    password: 'protocol-password',
+  },
+  updateAdminUser: { displayName: 'Protocol user' },
+  resetAdminUserPassword: { password: 'protocol-password' },
+  changePassword: {
+    currentPassword: 'northbean-demo',
+    newPassword: 'protocol-password',
+  },
+} as const;
+
+// L1 permission expectation table; data-dependent enforcement follows the 501 stubs.
+// Scope / operation                                    Status  Error code
+// Cross-organization resource (all protected resources) 404     NOT_FOUND
+// Supervisor creates/changes/disables/resets admin      403     FORBIDDEN
+// Supervisor creates/changes/disables/resets supervisor 403     FORBIDDEN
+// Supervisor operates outside assigned sites           403     FORBIDDEN
+// Disable the final active admin                       409     INVALID_STATE
+// Login with a disabled account                        401     UNAUTHENTICATED
+// mustChangePassword: protected route other than
+// me / changePassword / deleteSession                  403     FORBIDDEN
 
 describe('inspection contract API', () => {
   let app: NestExpressApplication;
@@ -221,6 +244,54 @@ describe('inspection contract API', () => {
         expect(Number(rows[0].count)).toBe(0);
       } finally {
         await remaining.end();
+      }
+    }
+  });
+
+  const protocolRequest = (
+    routeKey: keyof typeof protocolRouteBodies,
+    cookie?: string,
+  ) => {
+    const route = apiRoutes[routeKey];
+    const pathname = route.path.replace(
+      ':id',
+      '00000000-0000-4000-8000-000000000000',
+    );
+    const pending = request(app.getHttpServer())[
+      route.method.toLowerCase() as 'get' | 'post' | 'put' | 'patch'
+    ](pathname);
+    if (cookie) pending.set('Cookie', cookie);
+    const body = protocolRouteBodies[routeKey];
+    if (body) pending.send(body);
+    return pending;
+  };
+
+  it('allows every declared role on protocol stubs and rejects anonymous protected access', async () => {
+    expect(Object.keys(protocolRouteBodies)).toHaveLength(7);
+    const cookies = {
+      inspector: inspectorCookie,
+      supervisor: supervisorCookie,
+      admin: hqCookie,
+    };
+    for (const routeKey of Object.keys(protocolRouteBodies) as Array<
+      keyof typeof protocolRouteBodies
+    >) {
+      const route = apiRoutes[routeKey];
+      const publicRoute = route.roles.length === 0;
+      const anonymous = await protocolRequest(routeKey);
+      expect(anonymous.status, `${routeKey} anonymous`).toBe(
+        publicRoute ? 501 : 401,
+      );
+      if (!publicRoute)
+        expect(errorResponseSchema.parse(anonymous.body).code).toBe(
+          'UNAUTHENTICATED',
+        );
+      for (const role of userRoles) {
+        if (!publicRoute && !(route.roles as readonly string[]).includes(role))
+          continue;
+        const response = await protocolRequest(routeKey, cookies[role]);
+        expect(response.status, `${routeKey} allowed for ${role}`).toBe(501);
+        // 501 checks role admission only, never the future success body.
       }
     }
   });
@@ -531,11 +602,20 @@ describe('inspection contract API', () => {
       ],
     ]);
     for (const [routeKey, route] of Object.entries(apiRoutes)) {
-      if (pendingProtocolRoutes.has(routeKey)) continue;
       if (route.roles.length === 0) continue;
       for (const role of userRoles) {
         if ((route.roles as readonly string[]).includes(role)) continue;
-        const deniedRequest = deniedByRoute.get(routeKey)?.[role];
+        const deniedRequest = Object.hasOwn(protocolRouteBodies, routeKey)
+          ? () =>
+              protocolRequest(
+                routeKey as keyof typeof protocolRouteBodies,
+                {
+                  inspector: inspectorCookie,
+                  supervisor: supervisorCookie,
+                  admin: hqCookie,
+                }[role],
+              )
+          : deniedByRoute.get(routeKey)?.[role];
         expect(deniedRequest, `${routeKey} denied for ${role}`).toBeDefined();
         if (!deniedRequest) continue;
         const response = await deniedRequest();
@@ -1439,12 +1519,21 @@ describe('inspection contract API', () => {
       setCurrentAdminTemplate: adminTemplateCurrentResponse,
     };
     for (const [routeKey, route] of Object.entries(apiRoutes)) {
-      if (pendingProtocolRoutes.has(routeKey)) continue;
-      const response = routeResponses[routeKey as keyof typeof routeResponses];
-      expect(response.status).toBe(route.successStatus);
-      route.responseSchema.parse(
-        route.successStatus === 204 ? undefined : response.body,
-      );
+      if (Object.hasOwn(protocolRouteBodies, routeKey)) {
+        const response = await protocolRequest(
+          routeKey as keyof typeof protocolRouteBodies,
+          hqCookie,
+        );
+        expect(response.status).toBe(501);
+      } else {
+        const response =
+          routeResponses[routeKey as keyof typeof routeResponses];
+        expect(response, `${routeKey} response coverage`).toBeDefined();
+        expect(response.status).toBe(route.successStatus);
+        route.responseSchema.parse(
+          route.successStatus === 204 ? undefined : response.body,
+        );
+      }
     }
   }, 60000);
 

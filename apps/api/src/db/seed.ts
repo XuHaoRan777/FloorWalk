@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { PoolClient } from 'pg';
-import { LocalStorageDriver } from '../storage/local.js';
+import { getStorageDriver } from '../storage/index.js';
 import type { StorageDriver } from '../storage/types.js';
 import { createPool, getDatabaseUrl } from './client.js';
 
@@ -35,9 +35,9 @@ export async function seedDatabase(
   databaseUrl = getDatabaseUrl(),
   storagePath = process.env.STORAGE_DIR ?? path.join('apps', 'api', '.storage'),
 ) {
+  const storage = await getStorageDriver(path.resolve(storagePath));
   const pool = createPool(databaseUrl);
   const client = await pool.connect();
-  const storage = new LocalStorageDriver(path.resolve(storagePath));
   const writtenKeys: string[] = [];
   let previousKeys: string[];
   try {

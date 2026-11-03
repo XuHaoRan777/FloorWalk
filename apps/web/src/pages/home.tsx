@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { ArrowRight, CircleAlert, ShieldCheck } from 'lucide-react';
 import { APP_NAME } from '@libs/shared';
 import { Button } from '@/components/ui/button';
@@ -155,6 +155,9 @@ export function HomePage() {
               )}
             </Button>
           </form>
+          <Button variant="link" className="mt-4 px-0" asChild>
+            <Link to="/register">注册商家</Link>
+          </Button>
         </section>
       </main>
     </div>
