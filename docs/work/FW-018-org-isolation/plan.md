@@ -4,22 +4,22 @@
 
 ## 当前状态
 
-- 工作单元状态：`in_progress`
+- 工作单元状态：`verified`
 - 归档状态：`active`
 - 并行组：g03，线 L1 第 1 个（上游 FW-017，下游 FW-019），槽位 1
-- 当前任务：T05
+- 当前任务：无
 - 阻塞：无
-- 下一步：完成独立最终代码审查
+- 下一步：提交收尾记录、创建 `g03/done/FW-018` 并释放 L1 分支给 FW-019
 
 ## 任务表
 
-| ID  | 任务                                             | 状态          | 交付的 AC 与证据                               |
-| --- | ------------------------------------------------ | ------------- | ---------------------------------------------- |
-| T01 | 巡检、证据、审核、记录、聊天接口加商家与门店范围 | `done`        | AC-01、AC-02、AC-04（这几类接口）              |
-| T02 | 看板、门店、模板接口加商家范围，查重按商家       | `done`        | AC-01、AC-05（这几类接口）                     |
-| T03 | 主管名下范围与无主管门店只给 admin 审            | `done`        | AC-02、AC-03                                   |
-| T04 | Web 范围 e2e，现有 e2e 回绿                      | `done`        | AC-06                                          |
-| T05 | 最终代码审查                                     | `in_progress` | 独立 Subagent，按 `docs/howto/final-review.md` |
+| ID  | 任务                                             | 状态   | 交付的 AC 与证据                               |
+| --- | ------------------------------------------------ | ------ | ---------------------------------------------- |
+| T01 | 巡检、证据、审核、记录、聊天接口加商家与门店范围 | `done` | AC-01、AC-02、AC-04（这几类接口）              |
+| T02 | 看板、门店、模板接口加商家范围，查重按商家       | `done` | AC-01、AC-05（这几类接口）                     |
+| T03 | 主管名下范围与无主管门店只给 admin 审            | `done` | AC-02、AC-03                                   |
+| T04 | Web 范围 e2e，现有 e2e 回绿                      | `done` | AC-06                                          |
+| T05 | 最终代码审查                                     | `done` | 独立 Subagent，按 `docs/howto/final-review.md` |
 
 ## 证据
 
@@ -40,6 +40,7 @@
 | T04  | passed  | `pnpm --filter @apps/web typecheck`、`pnpm --filter @apps/web build`、`pnpm --filter @apps/web lint`、`$env:FW_SLOT='1'; pnpm exec playwright test --config=playwright.web.config.ts`、`$env:FW_SLOT='1'; pnpm exec playwright test --config=playwright.web.config.ts tests/web/chat.spec.ts`、`$env:FW_SLOT='1'; pnpm e2e:mobile`、`$env:FW_SLOT='1'; pnpm exec playwright test --config=playwright.mobile.config.ts tests/mobile/protocol.spec.ts`、`$env:FW_SLOT='1'; pnpm e2e:demo`、`pnpm exec prettier --check ...`、`python scripts/validate_docs.py`、`git diff --check` | `tests/web/console.spec.ts`、`tests/web/chat.spec.ts`、`tests/mobile/` | Web 全套 18 项通过、1 项跳过；主管只见名下 6 店，admin 看板为 12 店，admin 审核详情无聊天输入框。Mobile 首轮 16 项通过，1 项既有文本定位因标题与 tab 同名而失败；改为角色定位后对应测试通过，原断言未放宽，合计 17 项通过。演示链 AC-07 通过。Web 类型、构建、lint、格式、文档与差异检查均通过。 |
 | T05  | failed  | 独立 Subagent 按 `docs/howto/final-review.md` 审查 `git diff g03/start..HEAD`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `apps/api/src/inspection.controller.ts`                                | 发现 P2：错误跨商家 `siteId` 绑定时，`/today` 可能返回异商家门店数据，创建巡检也未在锁门店时验证 `org_id`。修复后仅复核此 finding。                                                                                                                                                              |
 | T05  | passed  | `pnpm --filter @apps/api typecheck`、`$env:FW_SLOT='1'; pnpm --filter @apps/api test -- src/contract.e2e.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `apps/api/src/contract.e2e.test.ts`                                    | API 类型检查通过；契约 e2e 16 项全通过。新增错误绑定用例确认 `/today` 与创建巡检均返回 404、无新增巡检，`finally` 恢复用户原门店绑定。                                                                                                                                                           |
+| T05  | passed  | 独立 Subagent 按 `docs/howto/final-review.md` 仅复核 P2（提交 `26f8bd2`）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `apps/api/src/inspection.controller.ts`                                | finding 已关闭；两处门店查询均限定当前用户商家，未发现同路径残留。                                                                                                                                                                                                                               |
 
 ## 回修
 
@@ -51,3 +52,4 @@
 - 2026-11-03 用户原话：“同意：apps/web/src/pages/console.tsx 加入 FW-018 写入范围，只放行主管的看板入口与渲染，不改样式、不改共享契约。在 plan「决策与偏差」记一行，引用这句原话，然后删 g03/blocked/FW-018，继续 T01。”据此仅在该文件开放主管现有看板入口与渲染；不调整样式或共享契约。`g03/blocked/FW-018` 原本不存在；现存 `g03/done/FW-018` 与单元未完成状态冲突，已删除。用户所说 T01 在任务表已完成，按当前状态继续 T04。
 - 2026-11-03 T04 全 Web e2e 在 admin 审核详情聊天只读断言处失败。用户原话：“授权”。据此将 `apps/web/src/components/console/review-detail.tsx` 加入 FW-018 写入范围，只拆分审核权限与聊天发送权限；商家管理员仍可审核，但聊天保持只读。删除 `g03/blocked/FW-018`，恢复 T04。
 - 2026-11-03 T05 最终审查发现错误用户门店绑定可能绕过商家边界；已在 `/today` 门店读取和创建巡检的门店锁查询中同时限定 `org_id`，增加错误绑定 e2e。定向类型检查和契约 API 测试通过，等待该 finding 复核。
+- 2026-11-03 T05 finding 复核通过；独立审查者确认错误绑定 fail-closed，无同路径残留。
