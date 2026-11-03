@@ -260,6 +260,7 @@ export function ConsolePage() {
               <ReviewDetail
                 initialInspection={selected}
                 canReview={user.role === 'supervisor' || user.role === 'admin'}
+                canSendChat={user.role === 'supervisor'}
                 onBack={() => setSelected(null)}
               />
             ) : showDashboard ? (

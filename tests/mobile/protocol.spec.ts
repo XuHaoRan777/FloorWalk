@@ -5,7 +5,7 @@ test('AC-06 手机端改密码空页路由与返回', async ({ page }) => {
   await page.getByLabel('邮箱').fill('inspector@northbean.example');
   await page.getByLabel('密码').fill('northbean-demo');
   await page.getByTestId('login-button').click();
-  await expect(page.getByText('今日待巡')).toBeVisible();
+  await expect(page.getByRole('tab', { name: '今日待巡' })).toBeVisible();
 
   await page.goto('/change-password');
   await expect(page.getByRole('heading', { name: '修改密码' })).toBeVisible();

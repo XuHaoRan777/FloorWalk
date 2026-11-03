@@ -16,10 +16,12 @@ import { ChatPanel } from './chat-panel';
 export function ReviewDetail({
   initialInspection,
   canReview,
+  canSendChat,
   onBack,
 }: {
   initialInspection: InspectionDetail;
   canReview: boolean;
+  canSendChat: boolean;
   onBack: () => void;
 }) {
   const [inspection, setInspection] = useState(initialInspection);
@@ -243,7 +245,7 @@ export function ReviewDetail({
           </section>
         </aside>
       </div>
-      <ChatPanel inspectionId={inspection.id} canSend={canReview} />
+      <ChatPanel inspectionId={inspection.id} canSend={canSendChat} />
     </>
   );
 }
