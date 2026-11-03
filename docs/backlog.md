@@ -36,14 +36,14 @@
 
 只列 `归档状态：active` 的单元，个数上限与状态一致性由 `python scripts/validate_docs.py` 校验。
 
-| ID     | 工作单元                                                                 | 状态          | 依赖                   | 下一步                               |
-| ------ | ------------------------------------------------------------------------ | ------------- | ---------------------- | ------------------------------------ |
-| FW-018 | [多商家隔离与门店范围](work/FW-018-org-isolation/spec.md)                | `in_progress` | FW-017                 | T01 巡检、证据、审核、记录、聊天范围 |
-| FW-019 | [商家注册与门店指派主管](work/FW-019-org-signup-site-supervisor/spec.md) | `approved`    | FW-018                 | 接力                                 |
-| FW-020 | [账号体系与会话续期](work/FW-020-accounts/spec.md)                       | `approved`    | FW-019                 | 接力                                 |
-| FW-021 | [阿里云 OSS 存储驱动](work/FW-021-oss-storage/spec.md)                   | `approved`    | FW-017                 | 开组                                 |
-| FW-022 | [AI 审核适配器](work/FW-022-ai-reviewer/spec.md)                         | `approved`    | FW-017                 | 开组                                 |
-| FW-023 | [并行组 g03 集成](work/FW-023-g03-integration/spec.md)                   | `approved`    | FW-020、FW-021、FW-022 | g03/close                            |
+| ID     | 工作单元                                                                 | 状态          | 依赖                   | 下一步                            |
+| ------ | ------------------------------------------------------------------------ | ------------- | ---------------------- | --------------------------------- |
+| FW-018 | [多商家隔离与门店范围](work/FW-018-org-isolation/spec.md)                | `in_progress` | FW-017                 | T03 主管名下门店范围与 admin 审核 |
+| FW-019 | [商家注册与门店指派主管](work/FW-019-org-signup-site-supervisor/spec.md) | `approved`    | FW-018                 | 接力                              |
+| FW-020 | [账号体系与会话续期](work/FW-020-accounts/spec.md)                       | `approved`    | FW-019                 | 接力                              |
+| FW-021 | [阿里云 OSS 存储驱动](work/FW-021-oss-storage/spec.md)                   | `approved`    | FW-017                 | 开组                              |
+| FW-022 | [AI 审核适配器](work/FW-022-ai-reviewer/spec.md)                         | `approved`    | FW-017                 | 开组                              |
+| FW-023 | [并行组 g03 集成](work/FW-023-g03-integration/spec.md)                   | `approved`    | FW-020、FW-021、FW-022 | g03/close                         |
 
 ## 待开单元（未批准，按建议顺序）
 

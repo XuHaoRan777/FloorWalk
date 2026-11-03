@@ -679,12 +679,17 @@ describe('inspection contract API', () => {
       .expect(200);
     const allSites = adminSitesResponseSchema.parse(sites.body);
     expect(allSites.filter((site) => site.code.startsWith('NB-'))).toHaveLength(
-      12,
+      6,
     );
     expect(allSites.filter((site) => site.code === 'DEMO2-001')).toHaveLength(
       0,
     );
-    expect(allSites).toHaveLength(12);
+    expect(allSites.map((site) => site.code).sort()).toEqual(
+      Array.from(
+        { length: 6 },
+        (_, index) => `NB-${String(index + 1).padStart(3, '0')}`,
+      ),
+    );
 
     const createdSite = await request(app.getHttpServer())
       .post('/api/admin/sites')
@@ -1054,6 +1059,125 @@ describe('inspection contract API', () => {
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('FORBIDDEN'),
       );
+  });
+
+  it('shows supervisors only assigned sites and lets admins review an unassigned site', async () => {
+    const pool = createPool();
+    let unassignedSiteId: string | undefined;
+    let unassignedInspectionId: string | undefined;
+    try {
+      const site = await pool.query<{ id: string }>(
+        `INSERT INTO floorwalk.sites (org_id, code, name)
+         SELECT org_id, 'FW018-UNASSIGNED', '未指派主管门店'
+         FROM floorwalk.users WHERE email = 'hq@northbean.example'
+         RETURNING id`,
+      );
+      unassignedSiteId = site.rows[0].id;
+      const inspection = await pool.query<{ id: string }>(
+        `INSERT INTO floorwalk.inspections
+           (site_id, template_id, inspector_id, status)
+         SELECT $1, $2, id, 'submitted' FROM floorwalk.users
+         WHERE email = 'inspector@northbean.example'
+         RETURNING id`,
+        [unassignedSiteId, templateId],
+      );
+      unassignedInspectionId = inspection.rows[0].id;
+
+      const assignedCodes = Array.from(
+        { length: 6 },
+        (_, index) => `NB-${String(index + 1).padStart(3, '0')}`,
+      );
+      const supervisorSites = await request(app.getHttpServer())
+        .get('/api/admin/sites')
+        .set('Cookie', supervisorCookie)
+        .expect(200);
+      expect(
+        adminSitesResponseSchema
+          .parse(supervisorSites.body)
+          .map((entry) => entry.code)
+          .sort(),
+      ).toEqual(assignedCodes);
+
+      const supervisorDashboard = await request(app.getHttpServer())
+        .get('/api/dashboard/sites')
+        .set('Cookie', supervisorCookie)
+        .expect(200);
+      expect(
+        dashboardSitesResponseSchema
+          .parse(supervisorDashboard.body)
+          .map((entry) => entry.site.code),
+      ).toEqual(assignedCodes);
+
+      const supervisorQueue = await request(app.getHttpServer())
+        .get('/api/review/queue')
+        .set('Cookie', supervisorCookie)
+        .expect(200);
+      expect(
+        reviewQueueResponseSchema
+          .parse(supervisorQueue.body)
+          .every((entry) => assignedCodes.includes(entry.site.code)),
+      ).toBe(true);
+      await request(app.getHttpServer())
+        .get(`/api/inspections/${unassignedInspectionId}`)
+        .set('Cookie', supervisorCookie)
+        .expect(403);
+      await request(app.getHttpServer())
+        .post(`/api/inspections/${unassignedInspectionId}/review`)
+        .set('Cookie', supervisorCookie)
+        .send({ action: 'start' })
+        .expect(403);
+
+      const adminDashboard = await request(app.getHttpServer())
+        .get('/api/dashboard/sites')
+        .set('Cookie', hqCookie)
+        .expect(200);
+      const adminDashboardSites = dashboardSitesResponseSchema.parse(
+        adminDashboard.body,
+      );
+      expect(
+        adminDashboardSites.filter((entry) =>
+          entry.site.code.startsWith('NB-'),
+        ),
+      ).toHaveLength(12);
+      expect(
+        adminDashboardSites.some((entry) => entry.site.id === unassignedSiteId),
+      ).toBe(true);
+      const adminQueue = await request(app.getHttpServer())
+        .get('/api/review/queue')
+        .set('Cookie', hqCookie)
+        .expect(200);
+      expect(
+        reviewQueueResponseSchema
+          .parse(adminQueue.body)
+          .some((entry) => entry.id === unassignedInspectionId),
+      ).toBe(true);
+      await request(app.getHttpServer())
+        .post(`/api/inspections/${unassignedInspectionId}/review`)
+        .set('Cookie', hqCookie)
+        .send({ action: 'start' })
+        .expect(201);
+      const approved = await request(app.getHttpServer())
+        .post(`/api/inspections/${unassignedInspectionId}/review`)
+        .set('Cookie', hqCookie)
+        .send({ action: 'approve' })
+        .expect(201);
+      expect(reviewResponseSchema.parse(approved.body).status).toBe('passed');
+    } finally {
+      if (unassignedInspectionId) {
+        await pool.query(
+          'DELETE FROM floorwalk.reviews WHERE inspection_id = $1',
+          [unassignedInspectionId],
+        );
+        await pool.query('DELETE FROM floorwalk.inspections WHERE id = $1', [
+          unassignedInspectionId,
+        ]);
+      }
+      if (unassignedSiteId)
+        await pool.query('DELETE FROM floorwalk.sites WHERE id = $1', [
+          unassignedSiteId,
+        ]);
+      await pool.end();
+    }
   });
 
   it('paginates records with sub-millisecond timestamp precision', async () => {

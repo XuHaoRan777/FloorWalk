@@ -54,8 +54,9 @@ export class AdminController {
           json_build_object('id', u.id, 'displayName', u.display_name) END AS supervisor
        FROM floorwalk.sites s LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
        LEFT JOIN floorwalk.users u ON u.id = ss.user_id
-       WHERE s.org_id = $1 ORDER BY s.code`,
-      [request.user.orgId],
+       WHERE s.org_id = $1 AND ($2 = 'admin' OR ss.user_id = $3)
+       ORDER BY s.code`,
+      [request.user.orgId, request.user.role, request.user.id],
     );
     return adminSitesResponseSchema.parse(
       result.rows.map((row) => ({ ...row, createdAt: iso(row.createdAt) })),
