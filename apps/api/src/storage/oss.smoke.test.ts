@@ -1,7 +1,9 @@
 import { NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
+import { aiReviewResultSchema, type AiReviewInput } from '@libs/shared';
 import { expect, it } from 'vitest';
+import { OpenAiReviewer } from '../ai/openai.js';
 import { OssStorageDriver } from './oss.js';
 
 const missingKeys = [
@@ -96,6 +98,77 @@ it.skipIf(!enabled || missingKeys.length > 0)(
       }
     }
     if (failure) throw new Error(failure);
+  },
+  180_000,
+);
+
+const missingAiKeys = ['OPENAI_API_KEY', 'OPENAI_MODEL'].filter(
+  (key) => !process.env[key]?.trim(),
+);
+const combinedEnabled =
+  process.env.FW_OSS_SMOKE === '1' && process.env.FW_AI_SMOKE === '1';
+const combinedSkipReason = [...missingKeys, ...missingAiKeys];
+
+it.skipIf(!combinedEnabled || combinedSkipReason.length > 0)(
+  `sends an OSS signed image URL through the real reviewer and removes the object${combinedSkipReason.length ? ` (missing: ${combinedSkipReason.join(', ')})` : ''}`,
+  async () => {
+    const storage = new OssStorageDriver();
+    const key = `smoke/${randomUUID()}.png`;
+    const square = await sharp({
+      create: {
+        width: 200,
+        height: 200,
+        channels: 3,
+        background: { r: 255, g: 0, b: 0 },
+      },
+    })
+      .png()
+      .toBuffer();
+    const image = await sharp({
+      create: {
+        width: 640,
+        height: 480,
+        channels: 3,
+        background: { r: 255, g: 255, b: 255 },
+      },
+    })
+      .composite([{ input: square, left: 220, top: 140 }])
+      .png()
+      .toBuffer();
+    try {
+      await storage.put(key, image, 'image/png');
+      const { url } = await storage.signedUrl(key, 120);
+      const input: AiReviewInput = {
+        reviewPrompt: '照片里应有红色方块。',
+        templateName: 'OSS 签名链接组合冒烟测试',
+        items: [
+          {
+            itemId: '00000000-0000-4000-8000-000000000023',
+            title: '红色方块',
+            photoRequired: true,
+            critical: true,
+            minPhotos: 1,
+            acceptanceCriteria: '照片里应有红色方块。',
+            selfResult: 'pass',
+            photos: [{ kind: 'url', url }],
+          },
+        ],
+      };
+      const result = aiReviewResultSchema.parse(
+        await new OpenAiReviewer().review(input),
+      );
+      const fetchedByReviewer = !('kind' in result);
+      console.log(
+        JSON.stringify({
+          smoke: 'FW-023 OSS signed URL + AI',
+          fetchedByReviewer,
+          verdict: 'kind' in result ? 'needs_human' : result.verdict,
+          reason: 'kind' in result ? result.reason : undefined,
+        }),
+      );
+    } finally {
+      await storage.delete(key);
+    }
   },
   180_000,
 );
