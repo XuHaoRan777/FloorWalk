@@ -213,6 +213,28 @@ describe('g03 forward migration (AC-01)', () => {
         ).rows;
         expect(org).toHaveLength(1);
         expect(org[0].name).toBe('Northbean');
+        if (name === 'empty') {
+          await slotPool.query('BEGIN');
+          try {
+            const secondOrg = (
+              await slotPool.query(
+                "INSERT INTO floorwalk.organizations (name) VALUES ('迁移断言二号') RETURNING id",
+              )
+            ).rows[0].id;
+            await slotPool.query(
+              'INSERT INTO floorwalk.templates (org_id, name, is_current) VALUES ($1, $2, true), ($3, $4, true)',
+              [org[0].id, '迁移断言模板', secondOrg, '迁移断言模板'],
+            );
+            await expect(
+              slotPool.query(
+                'INSERT INTO floorwalk.templates (org_id, name, is_current) VALUES ($1, $2, true)',
+                [org[0].id, '迁移断言模板二'],
+              ),
+            ).rejects.toMatchObject({ code: '23505' });
+          } finally {
+            await slotPool.query('ROLLBACK');
+          }
+        }
         for (const table of ['sites', 'users', 'templates']) {
           expect(
             (

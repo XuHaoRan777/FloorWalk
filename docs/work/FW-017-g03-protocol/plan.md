@@ -4,24 +4,24 @@
 
 ## 当前状态
 
-- 工作单元状态：`in_progress`
-- 归档状态：`active`
+- 工作单元状态：`verified`
+- 归档状态：`archived`
 - 并行组：g03，协议单元（线 L1：FW-018 → FW-019 → FW-020；L2：FW-021；L3：FW-022；集成 FW-023）
 - 当前任务：T07
 - 阻塞：无
-- 下一步：T07 补两处契约（当前模板按商家唯一的迁移、审核放行 admin 与 Web canReview），只复核这两条 finding，再归档并停下等用户开组
+- 下一步：协议单元已归档；等待用户开组
 
 ## 任务表
 
-| ID  | 任务                                                                                                         | 状态          | 交付的 AC 与证据                                      |
-| --- | ------------------------------------------------------------------------------------------------------------ | ------------- | ----------------------------------------------------- |
-| T01 | 迁移、schema、共享契约（角色、商家、账号、路由表、AI schema）；装 `ali-oss`、`openai`、`sharp`（跑一次缩放） | `done`        | 无，机器门                                            |
-| T02 | 迁移实测：空库、开发库副本、槽位库；种子按两个商家重建，存储键改新格式                                       | `done`        | AC-01、AC-02                                          |
-| T03 | `hq` 改 `admin`、存储改走 `LocalStorageDriver`，现有全部测试回绿                                             | `done`        | AC-04                                                 |
-| T04 | 先把 `db/seed.ts` 改走 `getStorageDriver()`（Claude 复核），再做门店范围函数与测试；契约 e2e 遍历新路由      | `done`        | AC-03、AC-05                                          |
-| T05 | 注册行与两端空桩；`FakeAiReviewer` 与 `needs_human` 测试；`proc.mjs` 加 `api`                                | `done`        | AC-06、AC-07、AC-09                                   |
-| T06 | AI 探针（改用生成的已知内容图片，重跑）；环境清单键名核对                                                    | `done`        | AC-08                                                 |
-| T07 | 开组检查与最终代码审查                                                                                       | `in_progress` | AC-10；独立 Subagent，按 `docs/howto/final-review.md` |
+| ID  | 任务                                                                                                         | 状态   | 交付的 AC 与证据                        |
+| --- | ------------------------------------------------------------------------------------------------------------ | ------ | --------------------------------------- |
+| T01 | 迁移、schema、共享契约（角色、商家、账号、路由表、AI schema）；装 `ali-oss`、`openai`、`sharp`（跑一次缩放） | `done` | 无，机器门                              |
+| T02 | 迁移实测：空库、开发库副本、槽位库；种子按两个商家重建，存储键改新格式                                       | `done` | AC-01、AC-02                            |
+| T03 | `hq` 改 `admin`、存储改走 `LocalStorageDriver`，现有全部测试回绿                                             | `done` | AC-04                                   |
+| T04 | 先把 `db/seed.ts` 改走 `getStorageDriver()`（Claude 复核），再做门店范围函数与测试；契约 e2e 遍历新路由      | `done` | AC-03、AC-05                            |
+| T05 | 注册行与两端空桩；`FakeAiReviewer` 与 `needs_human` 测试；`proc.mjs` 加 `api`                                | `done` | AC-06、AC-07、AC-09                     |
+| T06 | AI 探针（改用生成的已知内容图片，重跑）；环境清单键名核对                                                    | `done` | AC-08                                   |
+| T07 | 开组检查与最终代码审查                                                                                       | `done` | AC-01、AC-02、AC-04；只复核两条 finding |
 
 ## 证据
 
@@ -34,7 +34,9 @@
 | T05  | passed | 两端 typecheck、受影响文件 eslint/prettier；`FW_SLOT=1 pnpm exec playwright test --config=playwright.web.config.ts protocol.spec.ts`；同槽位 Mobile 配置 `protocol.spec.ts`；`FW_SLOT=1 pnpm --filter @apps/api test src/ai/fake.test.ts`；API build、`proc.mjs start/stop api --slot 1`、`GET /health`                                                                                                                                                                         | `tests/web/protocol.spec.ts`、`tests/mobile/protocol.spec.ts`、`apps/api/src/ai/`、`scripts/dev/proc.mjs`、`evidence/` | AC-06：Web 4、Mobile 1 测试通过；截图核对 `/register` 注册商家、`/change-password` 修改密码与返回、账号空页标题，角色可见性断言通过；6 个客户端请求走 shared 类型。遵循 ui-skills-root、baseline-ui、expo-overview→expo-router，已核对 SDK 57 Router 文档。AC-07：假适配与三种 needs_human 共 4 测试通过。AC-09：API 槽位 1 `/health` 200，启动脚本核对库名 floorwalk_e2e_1，停止后 3110 释放。沿用槽位种子，无临时写库残留。子 Agent 两端 diff 已核对。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | T06  | passed | `pnpm --filter @apps/api build`；`node --check scripts/ai-probe.mjs`；`proc.mjs start api --slot 1`；`node scripts/ai-probe.mjs`；`proc.mjs stop api --slot 1`                                                                                                                                                                                                                                                                                                                  | `scripts/ai-probe.mjs`、`docs/work/FW-022-ai-reviewer/spec.md`                                                         | AC-08：640×480 白底红方块 JPEG 3653 字节。base64 读图通过，原始描述“图像背景为浅灰白色（接近白色），画面中央有一个纯红色的正方形色块，四边平直、边与画面边缘平行，内部为均匀实心红色，无文字、纹理或其他可辨识物体。”；JSON schema 通过，7076ms，token 用量：输入 443、输出 160、合计 603（image 302）。本地签名读取 200，模型端签名 URL 不通过：HTTP400 `invalid_parameter_error`，`The provided URL does not appear to be valid. Ensure it is correctly formatted.`（313ms）。无自动重试，签名一次、base64 一次；L3 采用 base64+JSON schema，OSS 公网链接留 FW-023 AC-04。配置键存在性同前，STORAGE_DRIVER/AI_DRIVER 缺省 local/fake；无读写库，生成图片经存储接口写入并 finally 删除，不碰种子。API 已停止、3110 释放。旧 1×1 探针的 502 是先前配置问题，非视觉能力结论（见决策）。                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
-| T07 | blocked | `pnpm typecheck`；`pnpm lint`；`pnpm format:check`；`pnpm build`；`FW_SLOT=1 pnpm --filter @apps/api test`；`pnpm e2e:slots`；对照 FW-018～FW-023 spec 与写入范围 | `apps/api/drizzle/meta/0003_snapshot.json`、各线 spec | AC-10：类型、lint、格式、三端构建通过；API 9 文件 56 测试通过，三槽位各 1 e2e 通过。format 首跑只报本单元新增迁移快照 JSON 排版，prettier 修正后通过（内容语义未变）。各线与协议写入范围、空桩和工厂一致，L2/L3 仅加新文件，导出类分别为 OssStorageDriver/OpenAiReviewer；L1 按 FW-018→019→020 串行。API 测试沿用槽位1并清理临时记录；三槽设施套件自行清理。独立最终审查发现两项 P2 阻塞，任务未完成：1）`apps/api/src/db/schema.ts` 的 `templates_single_current_idx` 仍对 `is_current` 全局唯一，FW-018 要求按商家独立当前模板但禁止改 schema/迁移；2）`packages/shared/src/contract/index.ts` 的 `reviewInspection.roles` 仍只有 `supervisor`，FW-018 AC-03 要求 admin 可审核且未指派门店只能 admin 审核，现有 ReviewController 按契约拒绝 admin。审查为新会话/独立 Subagent，七失败域：认证/授权投影命中审核角色 finding；并发/幂等命中当前模板唯一性 finding；越权代理、解码序列化、迁移回滚、敏感日志、范围结构未发现额外问题；旧迁移未改写，JSON 快照仅格式变化。机器门已全绿。按 AGENTS.md 停止，不归档、不打开组。 |
+| T07 | passed | `$env:FW_SLOT='1'; pnpm --filter @apps/api test src/db/migrate.test.ts`; `$env:FW_SLOT='1'; pnpm --filter @apps/api test src/db/seed.test.ts`; `$env:FW_SLOT='1'; pnpm --filter @apps/api test src/contract.e2e.test.ts`; `pnpm typecheck`; `pnpm format:check`; `pnpm exec playwright test --config=playwright.web.config.ts tests/web/console.spec.ts` | `apps/api/drizzle/0004_fw017_template_current_per_org.sql`、`apps/api/src/db/migrate.test.ts`、`apps/api/src/db/seed.test.ts`、`apps/api/src/contract.e2e.test.ts`、`tests/web/console.spec.ts` | AC-01：新迁移将当前模板唯一索引改为 `(org_id) WHERE is_current=true`；迁移断言覆盖两个商家各有一个当前模板、同商家第二个当前模板违反 `23505`。AC-02：演示二号种子模板为当前，种子 6 tests passed。AC-04：共享审核契约放行 admin，API 契约 10 tests passed，admin 可开始审核、重复审核仍为 `409 INVALID_STATE`，inspector 仍拒绝；Web admin 审核队列按钮断言通过。两条 finding 仅复核，不重跑完整最终审查。类型检查和格式检查通过。`0003` 未改写，迁移/种子测试清理槽位并恢复种子。 |
+
+| T07（初始） | passed | `pnpm typecheck`；`pnpm lint`；`pnpm format:check`；`pnpm build`；`FW_SLOT=1 pnpm --filter @apps/api test`；`pnpm e2e:slots`；独立最终审查 | `apps/api/drizzle/meta/0003_snapshot.json`、各线 spec | 初始机器门全绿；独立审查发现两项 P2 finding，已由本任务定向修复并复核。 |
 
 ## 交接
 
@@ -43,8 +45,9 @@
 
 ## 回修
 
-| 日期 | 反馈 | 改动 | 提交 |
-| ---- | ---- | ---- | ---- |
+| 日期       | 反馈                                        | 改动                                                                                                  | 提交       |
+| ---------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------- |
+| 2026-11-03 | Claude 核对两项 finding，用户按建议批准修复 | 新增按商家当前模板迁移与演示二号当前模板；审核契约放行 admin、Web canReview 同步；补 AC-01/02/04 断言 | 待归档提交 |
 
 ## 决策与偏差
 

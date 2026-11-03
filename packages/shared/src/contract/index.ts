@@ -550,7 +550,7 @@ export const apiRoutes = {
   reviewInspection: {
     method: 'POST',
     path: '/api/inspections/:id/review',
-    roles: ['supervisor'],
+    roles: ['supervisor', 'admin'],
     requestSchema: reviewRequestSchema,
     responseSchema: reviewResponseSchema,
     successStatus: 201,

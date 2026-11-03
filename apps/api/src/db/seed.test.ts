@@ -145,7 +145,7 @@ describe('Northbean seed', () => {
        WHERE t.org_id = $1 GROUP BY t.id`,
       [secondOrgId],
     );
-    expect(templates.rows).toEqual([{ is_current: false, items: '8' }]);
+    expect(templates.rows).toEqual([{ is_current: true, items: '8' }]);
     const inspections = await pool.query<{
       status: string;
       score: number;

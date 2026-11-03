@@ -57,6 +57,14 @@ test('AC-01 登录、刷新保持会话、退出和三角色分流', async ({ pa
   await expect(page.getByRole('heading', { name: /总部看板/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '门店' })).toBeVisible();
   await expect(page.getByRole('button', { name: '模板' })).toBeVisible();
+  await page
+    .getByLabel('控制台导航')
+    .getByRole('button', { name: '审核队列' })
+    .click();
+  await expect(page.getByRole('heading', { name: /审核队列/ })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '查看并审核' }).first(),
+  ).toBeVisible();
   await page.getByRole('button', { name: '退出登录' }).click();
 
   await login(page, 'inspector@northbean.example');

@@ -326,7 +326,10 @@ describe('inspection contract API', () => {
       .post(`/api/inspections/${inspectionId}/review`)
       .set('Cookie', hqCookie)
       .send({ action: 'approve' })
-      .expect(403);
+      .expect(409)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('INVALID_STATE'),
+      );
     await request(app.getHttpServer()).get('/api/me').expect(401);
     const deniedByRoute = new Map<
       string,
@@ -1277,7 +1280,7 @@ describe('inspection contract API', () => {
     );
     const reviewed = await request(app.getHttpServer())
       .post(`/api/inspections/${createdInspectionId}/review`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ action: 'start' })
       .expect(201);
     reviewResponseSchema.parse(reviewed.body);
@@ -1297,6 +1300,14 @@ describe('inspection contract API', () => {
       .set('Cookie', supervisorCookie)
       .send({ action: 'approve' })
       .expect(201);
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${createdInspectionId}/review`)
+      .set('Cookie', hqCookie)
+      .send({ action: 'approve' })
+      .expect(409)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('INVALID_STATE'),
+      );
     await request(app.getHttpServer())
       .patch(`/api/inspections/${createdInspectionId}/items/${createdItemId}`)
       .set('Cookie', inspectorCookie)

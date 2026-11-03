@@ -246,7 +246,7 @@ export async function seedDatabase(
       'INSERT INTO floorwalk.site_supervisors (site_id, user_id) VALUES ($1, $2)',
       [secondSiteId, secondOrgUsers.get('supervisor')],
     );
-    const secondTemplateId = await insertTemplate(client, secondOrgId, false);
+    const secondTemplateId = await insertTemplate(client, secondOrgId, true);
     const secondInspectorId = secondOrgUsers.get('inspector');
     const secondReviewerId = secondOrgUsers.get('supervisor');
     if (!secondInspectorId || !secondReviewerId)

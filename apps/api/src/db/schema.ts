@@ -112,7 +112,7 @@ export const templates = floorwalk.table(
   (table) => [
     unique('templates_org_name_unique').on(table.orgId, table.name),
     uniqueIndex('templates_single_current_idx')
-      .on(table.isCurrent)
+      .on(table.orgId)
       .where(sql`${table.isCurrent} = true`),
   ],
 );

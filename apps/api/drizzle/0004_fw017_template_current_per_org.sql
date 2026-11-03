@@ -1,0 +1,2 @@
+DROP INDEX "floorwalk"."templates_single_current_idx";--> statement-breakpoint
+CREATE UNIQUE INDEX "templates_single_current_idx" ON "floorwalk"."templates" USING btree ("org_id") WHERE "floorwalk"."templates"."is_current" = true;

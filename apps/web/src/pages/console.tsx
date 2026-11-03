@@ -258,14 +258,14 @@ export function ConsolePage() {
             ) : selected ? (
               <ReviewDetail
                 initialInspection={selected}
-                canReview={user.role === 'supervisor'}
+                canReview={user.role === 'supervisor' || user.role === 'admin'}
                 onBack={() => setSelected(null)}
               />
             ) : showDashboard ? (
               <DashboardView onQueue={() => setSection('queue')} />
             ) : (
               <QueueView
-                canReview={user.role === 'supervisor'}
+                canReview={user.role === 'supervisor' || user.role === 'admin'}
                 onSelect={(inspection) => {
                   setSelected(inspection);
                   setError('');
