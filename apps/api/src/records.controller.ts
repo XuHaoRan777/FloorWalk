@@ -64,18 +64,20 @@ export class RecordsController {
     }
 
     const rows = await this.pool.query(
-      `SELECT id, status, score, created_at AS "createdAt",
-          to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorCreatedAt",
-          submitted_at AS "submittedAt", decided_at AS "decidedAt"
-       FROM floorwalk.inspections
-       WHERE site_id = $1
-         AND ($2::timestamptz IS NULL OR (created_at, id) < ($2::timestamptz, $3::uuid))
-       ORDER BY created_at DESC, id DESC LIMIT $4`,
+      `SELECT i.id, i.status, i.score, i.created_at AS "createdAt",
+          to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorCreatedAt",
+          i.submitted_at AS "submittedAt", i.decided_at AS "decidedAt"
+       FROM floorwalk.inspections i
+       JOIN floorwalk.sites s ON s.id = i.site_id
+       WHERE i.site_id = $1 AND s.org_id = $5
+         AND ($2::timestamptz IS NULL OR (i.created_at, i.id) < ($2::timestamptz, $3::uuid))
+       ORDER BY i.created_at DESC, i.id DESC LIMIT $4`,
       [
         request.user.siteId,
         boundary?.createdAt ?? null,
         boundary?.id ?? null,
         limit + 1,
+        request.user.orgId,
       ],
     );
     const hasMore = rows.rows.length > limit;

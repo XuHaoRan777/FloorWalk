@@ -1,10 +1,15 @@
 import 'reflect-metadata';
 import { APP_NAME } from '@libs/shared';
 import { Logger } from '@nestjs/common';
+import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface.js';
 import { NestFactory } from '@nestjs/core';
+import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module.js';
 import { getJwtSecret } from './auth-config.js';
+import { getAllowedOrigins } from './cors-config.js';
 import { HttpErrorFilter } from './http-exception.filter.js';
+
+const writeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 async function bootstrap() {
   getJwtSecret();
@@ -24,7 +29,37 @@ async function bootstrap() {
     throw new Error('HOST 不能为空。');
   }
   const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: true, credentials: true });
+  const allowedOrigins = getAllowedOrigins();
+  const corsOptions: CorsOptions = {
+    origin: (
+      origin: string | undefined,
+      callback: (
+        error: Error | null,
+        allow?: boolean | string | RegExp | (string | RegExp)[],
+      ) => void,
+    ) => callback(null, origin === undefined || allowedOrigins.has(origin)),
+    credentials: true,
+  };
+  app.enableCors(corsOptions);
+  app.use((request: Request, response: Response, next: NextFunction) => {
+    const origin = request.headers.origin;
+    const requestedMethod = request.headers['access-control-request-method'];
+    if (
+      (writeMethods.has(request.method) ||
+        (request.method === 'OPTIONS' &&
+          requestedMethod !== undefined &&
+          writeMethods.has(requestedMethod))) &&
+      origin !== undefined &&
+      !allowedOrigins.has(origin)
+    ) {
+      response.status(403).json({
+        code: 'FORBIDDEN',
+        message: '请求来源不在允许列表中。',
+      });
+      return;
+    }
+    next();
+  });
   app.useGlobalFilters(new HttpErrorFilter());
   app.enableShutdownHooks();
   await app.listen(port, host);

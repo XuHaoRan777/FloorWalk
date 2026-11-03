@@ -1,6 +1,4 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { rm } from 'node:fs/promises';
-import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -36,60 +34,6 @@ describe('HttpOnly sessions', () => {
       'UNAUTHENTICATED',
     );
   };
-  const withDraft = async (
-    verify: (draft: {
-      cookie: string;
-      inspectionId: string;
-      itemId: string;
-    }) => Promise<void>,
-  ) => {
-    const response = await request(app.getHttpServer())
-      .post('/api/auth/session')
-      .send({
-        email: 'inspector@northbean.example',
-        password: 'northbean-demo',
-      })
-      .expect(201);
-    const cookie = cookieFrom(response);
-    const template = await pool.query<{ id: string }>(
-      'SELECT id FROM floorwalk.templates LIMIT 1',
-    );
-    const created = await request(app.getHttpServer())
-      .post('/api/inspections')
-      .set('Cookie', cookie)
-      .send({ templateId: template.rows[0].id })
-      .expect(201);
-    const inspectionId = created.body.id as string;
-    try {
-      const item = await pool.query<{ id: string }>(
-        'SELECT id FROM floorwalk.inspection_items WHERE inspection_id = $1 ORDER BY position LIMIT 1',
-        [inspectionId],
-      );
-      await verify({ cookie, inspectionId, itemId: item.rows[0].id });
-    } finally {
-      const evidence = await pool.query<{ storage_key: string }>(
-        `DELETE FROM floorwalk.evidence WHERE inspection_item_id IN
-         (SELECT id FROM floorwalk.inspection_items WHERE inspection_id = $1) RETURNING storage_key`,
-        [inspectionId],
-      );
-      for (const row of evidence.rows)
-        await rm(
-          path.resolve(
-            process.env.STORAGE_DIR ?? path.join('apps', 'api', '.storage'),
-            row.storage_key,
-          ),
-          { force: true },
-        );
-      await pool.query(
-        'DELETE FROM floorwalk.inspection_items WHERE inspection_id = $1',
-        [inspectionId],
-      );
-      await pool.query('DELETE FROM floorwalk.inspections WHERE id = $1', [
-        inspectionId,
-      ]);
-    }
-  };
-
   beforeAll(async () => {
     await runMigrations();
     await seedDatabase();
@@ -201,10 +145,10 @@ describe('HttpOnly sessions', () => {
     );
   });
 
-  it('rejects a session idle for seven days', async () => {
+  it('rejects a session idle for more than seven days', async () => {
     const cookie = cookieFrom(await login().expect(201));
     await pool.query(
-      "UPDATE floorwalk.sessions SET last_seen_at = NOW() - INTERVAL '7 days' WHERE token_hash = $1",
+      "UPDATE floorwalk.sessions SET last_seen_at = NOW() - INTERVAL '7 days 1 second' WHERE token_hash = $1",
       [hash(cookie.slice('fw_session='.length))],
     );
     await unauthenticated(cookie);
@@ -345,68 +289,6 @@ describe('HttpOnly sessions', () => {
 
   it('allows logout without an authenticated session', async () => {
     await request(app.getHttpServer()).delete('/api/auth/session').expect(204);
-  });
-
-  it.each([
-    ['arbitrary', 'http://outside.example'],
-    ['absent', undefined],
-  ])('allows session writes with an %s Origin', async (_label, origin) => {
-    const call = login();
-    if (origin) call.set('Origin', origin);
-    const loginResponse = await call.expect(201);
-    if (origin) {
-      expect(loginResponse.headers['access-control-allow-origin']).toBe(origin);
-      expect(loginResponse.headers['access-control-allow-credentials']).toBe(
-        'true',
-      );
-    }
-    const cookie = cookieFrom(loginResponse);
-    const me = request(app.getHttpServer())
-      .get('/api/me')
-      .set('Cookie', cookie);
-    if (origin) me.set('Origin', origin);
-    await me.expect(200);
-    const logout = request(app.getHttpServer())
-      .delete('/api/auth/session')
-      .set('Cookie', cookie);
-    if (origin) logout.set('Origin', origin);
-    await logout.expect(204);
-    await unauthenticated(cookie);
-  });
-
-  it('accepts a foreign-Origin PATCH and modifies the inspection item', async () => {
-    await withDraft(async ({ cookie, inspectionId, itemId }) => {
-      await request(app.getHttpServer())
-        .patch(`/api/inspections/${inspectionId}/items/${itemId}`)
-        .set('Cookie', cookie)
-        .set('Origin', 'http://outside.example')
-        .send({ result: 'pass' })
-        .expect(200);
-      const item = await pool.query(
-        'SELECT result FROM floorwalk.inspection_items WHERE id = $1',
-        [itemId],
-      );
-      expect(item.rows[0].result).toBe('pass');
-    });
-  });
-
-  it('accepts a foreign-Origin multipart upload', async () => {
-    await withDraft(async ({ cookie, inspectionId, itemId }) => {
-      await request(app.getHttpServer())
-        .post(`/api/inspections/${inspectionId}/items/${itemId}/evidence`)
-        .set('Cookie', cookie)
-        .set('Origin', 'http://outside.example')
-        .attach('file', Buffer.from('origin-test'), {
-          filename: 'origin.jpg',
-          contentType: 'image/jpeg',
-        })
-        .expect(201);
-      const evidence = await pool.query(
-        'SELECT id FROM floorwalk.evidence WHERE inspection_item_id = $1',
-        [itemId],
-      );
-      expect(evidence.rows).toHaveLength(1);
-    });
   });
 
   it('clears all sessions when resetting seed data', async () => {

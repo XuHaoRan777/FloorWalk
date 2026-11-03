@@ -1,11 +1,21 @@
 import type {
   AdminSitesResponse,
   AdminTemplatesResponse,
+  AdminSite,
+  SetSiteSupervisorRequest,
   Site,
 } from '@libs/shared';
 import { request } from './request';
 
 export const getAdminSites = () => request<AdminSitesResponse>('/admin/sites');
+export const setSiteSupervisor = (
+  id: string,
+  input: SetSiteSupervisorRequest,
+) =>
+  request<AdminSite>(`/admin/sites/${id}/supervisor`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
 export const createAdminSite = (input: { code: string; name: string }) =>
   request<Site>('/admin/sites', {
     method: 'POST',

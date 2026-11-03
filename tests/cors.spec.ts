@@ -60,44 +60,32 @@ for (const origin of allowedOrigins) {
   });
 }
 
-test('an arbitrary origin can read and write credentialed API responses', async ({
-  page,
+test('a foreign origin cannot read responses or send writes', async ({
+  request,
 }) => {
   const foreignOrigin = 'http://127.0.0.1:3999';
-  await page.route(`${foreignOrigin}/**`, (route) =>
-    route.fulfill({
-      contentType: 'text/html',
-      body: '<!doctype html><title>CORS origin</title>',
-    }),
-  );
-  await page.goto(foreignOrigin);
-  const result = await page.evaluate(async (baseUrl) => {
-    const login = await fetch(`${baseUrl}/auth/session`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'supervisor@northbean.example',
-        password: 'northbean-demo',
-      }),
-    });
-    const me = await fetch(`${baseUrl}/me`, { credentials: 'include' });
-    const user = await me.json();
-    const logout = await fetch(`${baseUrl}/auth/session`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-    return {
-      loginStatus: login.status,
-      meStatus: me.status,
-      role: user.role,
-      logoutStatus: logout.status,
-    };
-  }, apiUrl);
-  expect(result).toEqual({
-    loginStatus: 201,
-    meStatus: 200,
-    role: 'supervisor',
-    logoutStatus: 204,
+  const get = await request.get(`${apiUrl}/me`, {
+    headers: { Origin: foreignOrigin },
   });
+  expect(get.status()).toBe(401);
+  expect(get.headers()['access-control-allow-origin']).toBeUndefined();
+  const write = await request.post(`${apiUrl}/auth/session`, {
+    headers: { Origin: foreignOrigin },
+    data: {
+      email: 'supervisor@northbean.example',
+      password: 'northbean-demo',
+    },
+  });
+  expect(write.status()).toBe(403);
+  expect(await write.json()).toMatchObject({ code: 'FORBIDDEN' });
+});
+
+test('a write without Origin remains available to native and server clients', async ({
+  request,
+}) => {
+  const response = await request.post(`${apiUrl}/auth/session`, {
+    data: { email: 'supervisor@northbean.example', password: 'northbean-demo' },
+  });
+  expect(response.status()).toBe(201);
+  await request.delete(`${apiUrl}/auth/session`);
 });

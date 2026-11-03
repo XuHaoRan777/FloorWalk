@@ -12,6 +12,10 @@ if (!Number.isInteger(slot) || slot < 1 || slot > 3) {
 const apiPort = 3100 + slot * 10;
 const webPort = apiPort + 1;
 const metroPort = apiPort + 2;
+const corsOrigins = [
+  `http://127.0.0.1:${webPort}`,
+  `http://127.0.0.1:${metroPort}`,
+].join(',');
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('DATABASE_URL 未配置。');
 const slotDatabaseUrl = new URL(databaseUrl);
@@ -24,6 +28,7 @@ const slotEnvironment = {
   DATABASE_URL: slotDatabaseUrl.toString(),
   STORAGE_DIR: path.resolve('apps', 'api', '.e2e', `slot-${slot}`, 'storage'),
   NODE_ENV: 'development',
+  CORS_ORIGINS: corsOrigins,
 };
 
 const noProxy = [

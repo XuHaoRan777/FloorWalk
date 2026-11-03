@@ -183,9 +183,12 @@ export class ChatController {
     assertRole(request.user, ...apiRoutes.getMessageImageUrl.roles);
     const result = await this.pool.query(
       `SELECT m.storage_key AS "storageKey", i.site_id AS "siteId",
-          i.inspector_id AS "inspectorId"
+          i.id, i.inspector_id AS "inspectorId", s.org_id AS "orgId",
+          ss.user_id AS "supervisorUserId"
        FROM floorwalk.chat_messages m
        JOIN floorwalk.inspections i ON i.id = m.inspection_id
+       JOIN floorwalk.sites s ON s.id = i.site_id
+       LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
        WHERE m.id = $1`,
       [id],
     );
@@ -203,7 +206,11 @@ export class ChatController {
 
   private async getInspection(id: string) {
     const result = await this.pool.query(
-      'SELECT id, site_id AS "siteId", inspector_id AS "inspectorId" FROM floorwalk.inspections WHERE id = $1',
+      `SELECT i.id, i.site_id AS "siteId", i.inspector_id AS "inspectorId",
+          s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+       FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
+       LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
+       WHERE i.id = $1`,
       [id],
     );
     if (!result.rows[0])

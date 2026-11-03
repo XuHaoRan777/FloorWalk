@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import {
+  BadRequestException,
   ConflictException,
   Controller,
   Get,
   HttpCode,
   Inject,
   NotFoundException,
-  NotImplementedException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -23,6 +23,8 @@ import {
   adminTemplatesResponseSchema,
   createSiteRequestSchema,
   createTemplateRequestSchema,
+  setSiteSupervisorRequestSchema,
+  setSiteSupervisorResponseSchema,
   siteResponseSchema,
   templateResponseSchema,
   updateSiteRequestSchema,
@@ -39,9 +41,66 @@ export class AdminController {
 
   @UseGuards(AuthGuard)
   @Put(apiRoutePath(apiRoutes.setSiteSupervisor))
-  setSiteSupervisor(@Req() request: AuthedRequest): never {
+  async setSiteSupervisor(
+    @Body() body: unknown,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() request: AuthedRequest,
+  ) {
     assertRole(request.user, ...apiRoutes.setSiteSupervisor.roles);
-    throw new NotImplementedException();
+    const input = setSiteSupervisorRequestSchema.parse(body);
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const sites = await client.query(
+        `SELECT id, code, name, deactivated_at IS NULL AS active,
+           created_at AS "createdAt" FROM floorwalk.sites
+         WHERE id = $1 AND org_id = $2 FOR UPDATE`,
+        [id, request.user.orgId],
+      );
+      const site = sites.rows[0];
+      if (!site)
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '门店不存在。',
+        });
+      let supervisor: { id: string; displayName: string } | null = null;
+      if (input.userId !== null) {
+        const users = await client.query<{ id: string; displayName: string }>(
+          `SELECT id, display_name AS "displayName" FROM floorwalk.users
+           WHERE id = $1 AND org_id = $2 AND role = 'supervisor' FOR SHARE`,
+          [input.userId, request.user.orgId],
+        );
+        supervisor = users.rows[0];
+        if (!supervisor)
+          throw new BadRequestException({
+            code: 'VALIDATION_FAILED',
+            message: '请选择本商家的主管。',
+          });
+        await client.query(
+          `INSERT INTO floorwalk.site_supervisors (site_id, user_id)
+           VALUES ($1, $2) ON CONFLICT (site_id) DO UPDATE
+           SET user_id = EXCLUDED.user_id, assigned_at = now()`,
+          [id, supervisor.id],
+        );
+      } else {
+        await client.query(
+          'DELETE FROM floorwalk.site_supervisors WHERE site_id = $1',
+          [id],
+        );
+      }
+      const result = setSiteSupervisorResponseSchema.parse({
+        ...site,
+        createdAt: iso(site.createdAt),
+        supervisor,
+      });
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   @UseGuards(AuthGuard)
@@ -53,7 +112,10 @@ export class AdminController {
           s.created_at AS "createdAt", CASE WHEN u.id IS NULL THEN NULL ELSE
           json_build_object('id', u.id, 'displayName', u.display_name) END AS supervisor
        FROM floorwalk.sites s LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
-       LEFT JOIN floorwalk.users u ON u.id = ss.user_id ORDER BY s.code`,
+       LEFT JOIN floorwalk.users u ON u.id = ss.user_id
+       WHERE s.org_id = $1 AND ($2 = 'admin' OR ss.user_id = $3)
+       ORDER BY s.code`,
+      [request.user.orgId, request.user.role, request.user.id],
     );
     return adminSitesResponseSchema.parse(
       result.rows.map((row) => ({ ...row, createdAt: iso(row.createdAt) })),
@@ -104,10 +166,10 @@ export class AdminController {
              WHEN $3 THEN NULL
              ELSE COALESCE(deactivated_at, now())
            END
-       WHERE id = $1
+       WHERE id = $1 AND org_id = $4
        RETURNING id, code, name, deactivated_at IS NULL AS active,
          created_at AS "createdAt"`,
-      [id, input.name ?? null, input.active ?? null],
+      [id, input.name ?? null, input.active ?? null, request.user.orgId],
     );
     const site = result.rows[0];
     if (!site)
@@ -127,12 +189,16 @@ export class AdminController {
     assertRole(request.user, ...apiRoutes.listAdminTemplates.roles);
     const templates = await this.pool.query(
       `SELECT id, name, is_current AS "isCurrent", created_at AS "createdAt"
-       FROM floorwalk.templates ORDER BY created_at, id`,
+       FROM floorwalk.templates WHERE org_id = $1 ORDER BY created_at, id`,
+      [request.user.orgId],
     );
     const items = await this.pool.query(
-      `SELECT id, template_id AS "templateId", position, title,
-          photo_required AS "photoRequired", critical, created_at AS "createdAt"
-       FROM floorwalk.template_items ORDER BY template_id, position`,
+      `SELECT ti.id, ti.template_id AS "templateId", ti.position, ti.title,
+          ti.photo_required AS "photoRequired", ti.critical, ti.created_at AS "createdAt"
+       FROM floorwalk.template_items ti
+       JOIN floorwalk.templates t ON t.id = ti.template_id
+       WHERE t.org_id = $1 ORDER BY ti.template_id, ti.position`,
+      [request.user.orgId],
     );
     return adminTemplatesResponseSchema.parse(
       templates.rows.map((template) => ({
@@ -173,7 +239,9 @@ export class AdminController {
     } finally {
       client.release();
     }
-    return templateResponseSchema.parse(await this.getTemplate(id));
+    return templateResponseSchema.parse(
+      await this.getTemplate(id, request.user.orgId),
+    );
   }
 
   @UseGuards(AuthGuard)
@@ -190,8 +258,8 @@ export class AdminController {
     try {
       await client.query('BEGIN');
       const existing = await client.query(
-        'SELECT id FROM floorwalk.templates WHERE id = $1 FOR UPDATE',
-        [id],
+        'SELECT id FROM floorwalk.templates WHERE id = $1 AND org_id = $2 FOR UPDATE',
+        [id, request.user.orgId],
       );
       if (!existing.rowCount)
         throw new NotFoundException({
@@ -199,8 +267,8 @@ export class AdminController {
           message: '模板不存在。',
         });
       await client.query(
-        'UPDATE floorwalk.templates SET name = $2 WHERE id = $1',
-        [id, input.name],
+        'UPDATE floorwalk.templates SET name = $2 WHERE id = $1 AND org_id = $3',
+        [id, input.name, request.user.orgId],
       );
       await client.query(
         'DELETE FROM floorwalk.template_items WHERE template_id = $1',
@@ -220,7 +288,9 @@ export class AdminController {
     } finally {
       client.release();
     }
-    return templateResponseSchema.parse(await this.getTemplate(id));
+    return templateResponseSchema.parse(
+      await this.getTemplate(id, request.user.orgId),
+    );
   }
 
   @UseGuards(AuthGuard)
@@ -236,17 +306,21 @@ export class AdminController {
     try {
       await client.query('BEGIN');
       const templates = await client.query(
-        'SELECT id FROM floorwalk.templates ORDER BY id FOR UPDATE',
+        'SELECT id FROM floorwalk.templates WHERE org_id = $1 ORDER BY id FOR UPDATE',
+        [request.user.orgId],
       );
       if (!templates.rows.some((template) => template.id === id))
         throw new NotFoundException({
           code: 'NOT_FOUND',
           message: '模板不存在。',
         });
-      await client.query('UPDATE floorwalk.templates SET is_current = false');
       await client.query(
-        'UPDATE floorwalk.templates SET is_current = true WHERE id = $1',
-        [id],
+        'UPDATE floorwalk.templates SET is_current = false WHERE org_id = $1',
+        [request.user.orgId],
+      );
+      await client.query(
+        'UPDATE floorwalk.templates SET is_current = true WHERE id = $1 AND org_id = $2',
+        [id, request.user.orgId],
       );
       await client.query('COMMIT');
       committed = true;
@@ -256,7 +330,9 @@ export class AdminController {
     } finally {
       client.release();
     }
-    return templateResponseSchema.parse(await this.getTemplate(id));
+    return templateResponseSchema.parse(
+      await this.getTemplate(id, request.user.orgId),
+    );
   }
 
   private async insertTemplateItems(
@@ -284,11 +360,11 @@ export class AdminController {
       );
   }
 
-  private async getTemplate(id: string) {
+  private async getTemplate(id: string, orgId: string) {
     const result = await this.pool.query(
       `SELECT id, name, is_current AS "isCurrent", created_at AS "createdAt"
-       FROM floorwalk.templates WHERE id = $1`,
-      [id],
+       FROM floorwalk.templates WHERE id = $1 AND org_id = $2`,
+      [id, orgId],
     );
     const template = result.rows[0];
     if (!template)

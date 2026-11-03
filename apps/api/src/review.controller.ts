@@ -40,9 +40,15 @@ export class ReviewController {
   async queue(@Req() request: AuthedRequest) {
     assertRole(request.user, ...apiRoutes.reviewQueue.roles);
     const result = await this.pool.query(
-      `SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId",
-          status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt"
-         FROM floorwalk.inspections WHERE status IN ('submitted', 'in_review') ORDER BY created_at`,
+      `SELECT i.id, i.site_id AS "siteId", i.template_id AS "templateId", i.inspector_id AS "inspectorId",
+          i.status, i.score, i.submitted_at AS "submittedAt", i.decided_at AS "decidedAt", i.created_at AS "createdAt",
+          s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+         FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
+         LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
+         WHERE i.status IN ('submitted', 'in_review') AND s.org_id = $1
+           AND ($2 = 'admin' OR ss.user_id = $3)
+         ORDER BY i.created_at`,
+      [request.user.orgId, request.user.role, request.user.id],
     );
     const details = await Promise.all(
       result.rows.map((row) => loadInspectionDetail(this.pool, row)),
@@ -65,7 +71,12 @@ export class ReviewController {
     try {
       await client.query('BEGIN');
       const inspectionResult = await client.query(
-        'SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt" FROM floorwalk.inspections WHERE id = $1 FOR UPDATE',
+        `SELECT i.id, i.site_id AS "siteId", i.template_id AS "templateId", i.inspector_id AS "inspectorId",
+            i.status, i.score, i.submitted_at AS "submittedAt", i.decided_at AS "decidedAt",
+            i.created_at AS "createdAt", s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+         FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
+         LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
+         WHERE i.id = $1 FOR UPDATE OF i`,
         [id],
       );
       const inspection = inspectionResult.rows[0];

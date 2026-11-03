@@ -108,6 +108,7 @@ function useConsoleSession() {
 type ConsoleSection = 'queue' | 'dashboard' | 'sites' | 'templates' | 'users';
 
 export function ConsolePage() {
+  const navigate = useNavigate();
   const { session, loading, error, setError, logout } = useConsoleSession();
   const [section, setSection] = useState<ConsoleSection>(() =>
     readSession()?.user.role === 'admin' ? 'dashboard' : 'queue',
@@ -116,6 +117,10 @@ export function ConsolePage() {
   useEffect(() => {
     if (session?.user.role === 'admin') setSection('dashboard');
   }, [session?.user.role]);
+  useEffect(() => {
+    if (session?.user.mustChangePassword)
+      void navigate({ to: '/change-password', replace: true });
+  }, [navigate, session?.user.mustChangePassword]);
   if (loading || !session)
     return (
       <div
@@ -126,9 +131,11 @@ export function ConsolePage() {
       </div>
     );
   const { user } = session;
+  if (user.mustChangePassword) return null;
   const isAdmin = user.role === 'admin';
-  const showDashboard = isAdmin && section === 'dashboard';
   const canManage = user.role === 'supervisor' || isAdmin;
+  const canSeeDashboard = user.role === 'supervisor' || isAdmin;
+  const showDashboard = canSeeDashboard && section === 'dashboard';
   return (
     <SidebarProvider className="fw-console">
       <Sidebar variant="inset">
@@ -154,7 +161,7 @@ export function ConsolePage() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
-              {isAdmin && (
+              {canSeeDashboard && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     isActive={showDashboard}
@@ -259,6 +266,7 @@ export function ConsolePage() {
               <ReviewDetail
                 initialInspection={selected}
                 canReview={user.role === 'supervisor' || user.role === 'admin'}
+                canSendChat={user.role === 'supervisor'}
                 onBack={() => setSelected(null)}
               />
             ) : showDashboard ? (

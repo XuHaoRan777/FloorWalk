@@ -195,7 +195,7 @@ test('AC-05 总部看板与 API 返回一致，且没有审核按钮', async ({
     site: { code: string; name: string };
     latestScore: number | null;
   }>;
-  expect(sites).toHaveLength(13);
+  expect(sites).toHaveLength(12);
   expect(
     sites
       .filter((entry) => entry.site.code.startsWith('NB-'))
@@ -208,7 +208,7 @@ test('AC-05 总部看板与 API 返回一致，且没有审核按钮', async ({
     ),
   );
   expect(sites.filter((entry) => entry.site.code === 'DEMO2-001')).toHaveLength(
-    1,
+    0,
   );
 
   await login(page, 'hq@northbean.example');
@@ -224,6 +224,31 @@ test('AC-05 总部看板与 API 返回一致，且没有审核按钮', async ({
   await expect(
     page.getByRole('button', { name: /通过|打回|判不合格/ }),
   ).toHaveCount(0);
+});
+
+test('AC-06 主管看板只显示名下六家门店', async ({ page, request }) => {
+  await apiLogin(request, 'supervisor@northbean.example');
+  const response = await request.get(`${apiBase}/api/dashboard/sites`);
+  expect(response.ok()).toBeTruthy();
+  const sites = (await response.json()) as Array<{
+    site: { code: string; name: string };
+  }>;
+  expect(sites.map((entry) => entry.site.code)).toEqual([
+    'NB-001',
+    'NB-002',
+    'NB-003',
+    'NB-004',
+    'NB-005',
+    'NB-006',
+  ]);
+
+  await login(page, 'supervisor@northbean.example');
+  await page.getByRole('button', { name: '总部看板' }).click();
+  await expect(page.getByRole('heading', { name: '总部看板' })).toBeVisible();
+  await expect(page.getByRole('row')).toHaveCount(7);
+  await expect(page.getByText('NB-006', { exact: true })).toBeVisible();
+  await expect(page.getByText('NB-007', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('DEMO2-001', { exact: true })).toHaveCount(0);
 });
 
 test('AC-06 网络、403、409、422 显示中文提示；任意接口 401 回登录', async ({

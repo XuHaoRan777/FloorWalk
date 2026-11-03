@@ -1,4 +1,4 @@
-import { login, logout, me } from './api/auth';
+import { login, logout, me, changePassword } from './api/auth';
 import { uploadEvidence } from './api/evidence';
 import {
   inspection,
@@ -16,6 +16,7 @@ export const api = {
   login,
   logout,
   me,
+  changePassword,
   today,
   createInspection,
   inspection,

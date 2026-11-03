@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { Test } from '@nestjs/testing';
@@ -54,12 +55,12 @@ const protocolRouteBodies = {
   updateAdminUser: { displayName: 'Protocol user' },
   resetAdminUserPassword: { password: 'protocol-password' },
   changePassword: {
-    currentPassword: 'northbean-demo',
+    currentPassword: 'wrong-password',
     newPassword: 'protocol-password',
   },
 } as const;
 
-// L1 permission expectation table; data-dependent enforcement follows the 501 stubs.
+// L1 permission expectation table; account operations have focused tests in users.test.ts.
 // Scope / operation                                    Status  Error code
 // Cross-organization resource (all protected resources) 404     NOT_FOUND
 // Supervisor creates/changes/disables/resets admin      403     FORBIDDEN
@@ -76,17 +77,24 @@ describe('inspection contract API', () => {
   let supervisorCookie: string;
   let hqCookie: string;
   let inspectionId: string;
+  let northbeanSiteId: string;
   let otherSiteInspectionId: string;
+  let otherSupervisorInspectionId: string;
   let seedEvidenceId: string;
   let templateId: string;
+  let demo2TemplateId: string;
   let chatInspectionId: string;
   let chatImageMessageId: string;
   let nb002InspectorCookie: string;
+  let demo2InspectorCookie: string;
+  let demo2SupervisorCookie: string;
+  let demo2AdminCookie: string;
   let createdInspectionId: string | undefined;
   let createdEvidenceId: string | undefined;
   let createdEvidenceStorageKey: string | undefined;
   const createdChatMessageIds: string[] = [];
   const createdAdminSiteIds: string[] = [];
+  const createdProtocolOrgIds: string[] = [];
   const createdAdminTemplateIds: string[] = [];
   const createdChatStorageKeys: string[] = [];
 
@@ -115,13 +123,28 @@ describe('inspection contract API', () => {
     nb002InspectorCookie = await login('inspector+nb-002@northbean.example');
     supervisorCookie = await login('supervisor@northbean.example');
     hqCookie = await login('hq@northbean.example');
+    demo2InspectorCookie = await login('inspector@demo2.example');
+    demo2SupervisorCookie = await login('supervisor@demo2.example');
+    demo2AdminCookie = await login('admin@demo2.example');
 
     const pool = createPool();
     try {
       const template = await pool.query<{ id: string }>(
-        'SELECT id FROM floorwalk.templates LIMIT 1',
+        `SELECT t.id FROM floorwalk.templates t
+         JOIN floorwalk.organizations o ON o.id = t.org_id
+         WHERE o.name = 'Northbean' AND t.is_current`,
       );
       templateId = template.rows[0].id;
+      const demo2Template = await pool.query<{ id: string }>(
+        `SELECT t.id FROM floorwalk.templates t
+         JOIN floorwalk.organizations o ON o.id = t.org_id
+         WHERE o.name = '演示二号' AND t.is_current`,
+      );
+      demo2TemplateId = demo2Template.rows[0].id;
+      const northbeanSite = await pool.query<{ id: string }>(
+        "SELECT id FROM floorwalk.sites WHERE code = 'NB-001'",
+      );
+      northbeanSiteId = northbeanSite.rows[0].id;
       const chatInspection = await pool.query<{ id: string }>(
         `SELECT i.id FROM floorwalk.inspections i
          JOIN floorwalk.sites s ON s.id = i.site_id
@@ -140,6 +163,9 @@ describe('inspection contract API', () => {
       inspectionId = result.rows.find((row) => row.code === 'NB-001')!.id;
       otherSiteInspectionId = result.rows.find(
         (row) => row.code !== 'NB-001',
+      )!.id;
+      otherSupervisorInspectionId = result.rows.find(
+        (row) => row.code === 'NB-007',
       )!.id;
       const evidence = await pool.query<{ id: string }>(
         `SELECT e.id FROM floorwalk.evidence e
@@ -188,7 +214,9 @@ describe('inspection contract API', () => {
       try {
         await cleanup.query('BEGIN');
         await cleanup.query(
-          'UPDATE floorwalk.templates SET is_current = false WHERE is_current',
+          `UPDATE floorwalk.templates SET is_current = false
+           WHERE org_id = (SELECT org_id FROM floorwalk.templates WHERE id = $1)`,
+          [templateId],
         );
         await cleanup.query(
           'UPDATE floorwalk.templates SET is_current = true WHERE id = $1',
@@ -214,6 +242,14 @@ describe('inspection contract API', () => {
         cleanup.release();
       }
       await pool.query('DELETE FROM floorwalk.sessions');
+      await pool.query(
+        'DELETE FROM floorwalk.users WHERE org_id = ANY($1::uuid[])',
+        [createdProtocolOrgIds],
+      );
+      await pool.query(
+        'DELETE FROM floorwalk.organizations WHERE id = ANY($1::uuid[])',
+        [createdProtocolOrgIds],
+      );
       if (createdEvidenceStorageKey) {
         await rm(
           path.resolve(
@@ -262,11 +298,16 @@ describe('inspection contract API', () => {
     ](pathname);
     if (cookie) pending.set('Cookie', cookie);
     const body = protocolRouteBodies[routeKey];
-    if (body) pending.send(body);
+    if (body)
+      pending.send(
+        routeKey === 'createOrg'
+          ? { ...body, email: `protocol-${randomUUID()}@example.test` }
+          : body,
+      );
     return pending;
   };
 
-  it('allows every declared role on protocol stubs and rejects anonymous protected access', async () => {
+  it('allows every declared role on protocol routes and rejects anonymous protected access', async () => {
     expect(Object.keys(protocolRouteBodies)).toHaveLength(7);
     const cookies = {
       inspector: inspectorCookie,
@@ -280,8 +321,12 @@ describe('inspection contract API', () => {
       const publicRoute = route.roles.length === 0;
       const anonymous = await protocolRequest(routeKey);
       expect(anonymous.status, `${routeKey} anonymous`).toBe(
-        publicRoute ? 501 : 401,
+        publicRoute ? route.successStatus : 401,
       );
+      if (routeKey === 'createOrg') {
+        route.responseSchema.parse(anonymous.body);
+        createdProtocolOrgIds.push(anonymous.body.org.id);
+      }
       if (!publicRoute)
         expect(errorResponseSchema.parse(anonymous.body).code).toBe(
           'UNAUTHENTICATED',
@@ -290,8 +335,31 @@ describe('inspection contract API', () => {
         if (!publicRoute && !(route.roles as readonly string[]).includes(role))
           continue;
         const response = await protocolRequest(routeKey, cookies[role]);
-        expect(response.status, `${routeKey} allowed for ${role}`).toBe(501);
-        // 501 checks role admission only, never the future success body.
+        expect(response.status, `${routeKey} allowed for ${role}`).toBe(
+          routeKey === 'createOrg' || routeKey === 'listAdminUsers'
+            ? route.successStatus
+            : routeKey === 'setSiteSupervisor'
+              ? 404
+              : routeKey === 'createAdminUser'
+                ? 400
+                : routeKey === 'updateAdminUser' ||
+                    routeKey === 'resetAdminUserPassword'
+                  ? 404
+                  : routeKey === 'changePassword'
+                    ? 401
+                    : 501,
+        );
+        if (routeKey === 'createOrg') {
+          route.responseSchema.parse(response.body);
+          createdProtocolOrgIds.push(response.body.org.id);
+        } else if (routeKey === 'listAdminUsers') {
+          route.responseSchema.parse(response.body);
+        } else if (routeKey === 'setSiteSupervisor') {
+          expect(errorResponseSchema.parse(response.body).code).toBe(
+            'NOT_FOUND',
+          );
+        }
+        // Empty implemented writes may fail validation after role admission.
       }
     }
   });
@@ -302,6 +370,69 @@ describe('inspection contract API', () => {
       expect(route.path.startsWith('/api/')).toBe(true);
       expect(route.responseSchema).toBeDefined();
       expect([200, 201, 204]).toContain(route.successStatus);
+    }
+  });
+
+  it('returns the current inspection template from the authenticated inspector organization', async () => {
+    const today = await request(app.getHttpServer())
+      .get('/api/inspector/today')
+      .set('Cookie', demo2InspectorCookie)
+      .expect(200);
+    expect(todayResponseSchema.parse(today.body).template.id).not.toBe(
+      templateId,
+    );
+  });
+
+  it('fails closed when an inspector is bound to another organization site', async () => {
+    const pool = createPool();
+    const binding = await pool.query<{
+      userId: string;
+      siteId: string;
+      foreignSiteId: string;
+    }>(
+      `SELECT u.id AS "userId", u.site_id AS "siteId", foreign_site.id AS "foreignSiteId"
+       FROM floorwalk.users u
+       JOIN floorwalk.sites foreign_site ON foreign_site.org_id <> u.org_id
+       WHERE u.email = 'inspector@northbean.example' LIMIT 1`,
+    );
+    const { userId, siteId, foreignSiteId } = binding.rows[0];
+    try {
+      await pool.query(
+        'UPDATE floorwalk.users SET site_id = $1 WHERE id = $2',
+        [foreignSiteId, userId],
+      );
+      const inspectionsBefore = await pool.query<{ count: string }>(
+        'SELECT count(*)::text AS count FROM floorwalk.inspections WHERE inspector_id = $1',
+        [userId],
+      );
+      await request(app.getHttpServer())
+        .get('/api/inspector/today')
+        .set('Cookie', inspectorCookie)
+        .expect(404)
+        .expect(({ body }) =>
+          expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+        );
+      await request(app.getHttpServer())
+        .post('/api/inspections')
+        .set('Cookie', inspectorCookie)
+        .send({ templateId })
+        .expect(404)
+        .expect(({ body }) =>
+          expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+        );
+      const inspectionsAfter = await pool.query<{ count: string }>(
+        'SELECT count(*)::text AS count FROM floorwalk.inspections WHERE inspector_id = $1',
+        [userId],
+      );
+      expect(inspectionsAfter.rows[0].count).toBe(
+        inspectionsBefore.rows[0].count,
+      );
+    } finally {
+      await pool.query(
+        'UPDATE floorwalk.users SET site_id = $1 WHERE id = $2',
+        [siteId, userId],
+      );
+      await pool.end();
     }
   });
 
@@ -643,12 +774,17 @@ describe('inspection contract API', () => {
       .expect(200);
     const allSites = adminSitesResponseSchema.parse(sites.body);
     expect(allSites.filter((site) => site.code.startsWith('NB-'))).toHaveLength(
-      12,
+      6,
     );
     expect(allSites.filter((site) => site.code === 'DEMO2-001')).toHaveLength(
-      1,
+      0,
     );
-    expect(allSites).toHaveLength(13);
+    expect(allSites.map((site) => site.code).sort()).toEqual(
+      Array.from(
+        { length: 6 },
+        (_, index) => `NB-${String(index + 1).padStart(3, '0')}`,
+      ),
+    );
 
     const createdSite = await request(app.getHttpServer())
       .post('/api/admin/sites')
@@ -662,7 +798,7 @@ describe('inspection contract API', () => {
       .get('/api/admin/templates')
       .set('Cookie', supervisorCookie)
       .expect(200);
-    expect(adminTemplatesResponseSchema.parse(templates.body)).toHaveLength(2);
+    expect(adminTemplatesResponseSchema.parse(templates.body)).toHaveLength(1);
 
     const createdTemplate = await request(app.getHttpServer())
       .post('/api/admin/templates')
@@ -754,6 +890,391 @@ describe('inspection contract API', () => {
       .expect(403);
   });
 
+  it('keeps dashboard, site, and template administration within the tenant', async () => {
+    const dashboard = await request(app.getHttpServer())
+      .get('/api/dashboard/sites')
+      .set('Cookie', demo2AdminCookie)
+      .expect(200);
+    const demoDashboard = dashboardSitesResponseSchema.parse(dashboard.body);
+    expect(demoDashboard).toHaveLength(1);
+    expect(demoDashboard[0].site.code).toBe('DEMO2-001');
+
+    const sites = await request(app.getHttpServer())
+      .get('/api/admin/sites')
+      .set('Cookie', demo2AdminCookie)
+      .expect(200);
+    expect(
+      adminSitesResponseSchema.parse(sites.body).map((site) => site.code),
+    ).toEqual(['DEMO2-001']);
+
+    const templates = await request(app.getHttpServer())
+      .get('/api/admin/templates')
+      .set('Cookie', demo2AdminCookie)
+      .expect(200);
+    expect(adminTemplatesResponseSchema.parse(templates.body)).toHaveLength(1);
+
+    await request(app.getHttpServer())
+      .patch(`/api/admin/sites/${northbeanSiteId}`)
+      .set('Cookie', demo2AdminCookie)
+      .send({ name: '不得跨商家修改' })
+      .expect(404);
+    await request(app.getHttpServer())
+      .put(`/api/admin/templates/${templateId}`)
+      .set('Cookie', demo2AdminCookie)
+      .send({
+        name: '不得跨商家修改',
+        items: [
+          {
+            position: 1,
+            title: '项',
+            photoRequired: false,
+            critical: false,
+          },
+        ],
+      })
+      .expect(404);
+    await request(app.getHttpServer())
+      .post(`/api/admin/templates/${templateId}/current`)
+      .set('Cookie', demo2AdminCookie)
+      .expect(404);
+
+    const duplicateSiteCodeAcrossTenants = await request(app.getHttpServer())
+      .post('/api/admin/sites')
+      .set('Cookie', demo2AdminCookie)
+      .send({ code: 'NB-001', name: '演示二号同编码门店' })
+      .expect(201);
+    createdAdminSiteIds.push(duplicateSiteCodeAcrossTenants.body.id);
+    await request(app.getHttpServer())
+      .post('/api/admin/sites')
+      .set('Cookie', demo2AdminCookie)
+      .send({ code: 'NB-001', name: '重复编码门店' })
+      .expect(409);
+
+    const northbeanTemplateName = 'FW-018-跨商家同名模板';
+    const northbeanTemplate = await request(app.getHttpServer())
+      .post('/api/admin/templates')
+      .set('Cookie', hqCookie)
+      .send({
+        name: northbeanTemplateName,
+        items: [
+          { title: 'Northbean 项', photoRequired: false, critical: false },
+        ],
+      })
+      .expect(201);
+    createdAdminTemplateIds.push(northbeanTemplate.body.id);
+
+    const duplicateTemplateNameAcrossTenants = await request(
+      app.getHttpServer(),
+    )
+      .post('/api/admin/templates')
+      .set('Cookie', demo2AdminCookie)
+      .send({
+        name: northbeanTemplateName,
+        items: [{ title: '演示项', photoRequired: false, critical: false }],
+      })
+      .expect(201);
+    createdAdminTemplateIds.push(duplicateTemplateNameAcrossTenants.body.id);
+    await request(app.getHttpServer())
+      .post('/api/admin/templates')
+      .set('Cookie', demo2AdminCookie)
+      .send({
+        name: northbeanTemplateName,
+        items: [{ title: '重复项', photoRequired: false, critical: false }],
+      })
+      .expect(409);
+
+    await request(app.getHttpServer())
+      .post(
+        `/api/admin/templates/${duplicateTemplateNameAcrossTenants.body.id}/current`,
+      )
+      .set('Cookie', demo2AdminCookie)
+      .expect(200);
+    const northbeanTemplates = await request(app.getHttpServer())
+      .get('/api/admin/templates')
+      .set('Cookie', hqCookie)
+      .expect(200);
+    expect(
+      adminTemplatesResponseSchema
+        .parse(northbeanTemplates.body)
+        .find((template) => template.id === templateId)?.isCurrent,
+    ).toBe(true);
+    await request(app.getHttpServer())
+      .post(`/api/admin/templates/${demo2TemplateId}/current`)
+      .set('Cookie', demo2AdminCookie)
+      .expect(200);
+    await request(app.getHttpServer())
+      .post('/api/admin/templates/00000000-0000-4000-8000-000000000000/current')
+      .set('Cookie', demo2AdminCookie)
+      .expect(404);
+  });
+
+  it('hides Northbean inspection, evidence, and chat resources from every demo tenant role', async () => {
+    for (const cookie of [
+      demo2InspectorCookie,
+      demo2SupervisorCookie,
+      demo2AdminCookie,
+    ]) {
+      await request(app.getHttpServer())
+        .get(`/api/inspections/${inspectionId}`)
+        .set('Cookie', cookie)
+        .expect(404)
+        .expect(({ body }) =>
+          expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+        );
+      await request(app.getHttpServer())
+        .get(`/api/evidence/${seedEvidenceId}`)
+        .set('Cookie', cookie)
+        .expect(404)
+        .expect(({ body }) =>
+          expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+        );
+      await request(app.getHttpServer())
+        .get(`/api/inspections/${chatInspectionId}/messages`)
+        .set('Cookie', cookie)
+        .expect(404)
+        .expect(({ body }) =>
+          expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+        );
+      await request(app.getHttpServer())
+        .get(`/api/messages/${chatImageMessageId}/image-url`)
+        .set('Cookie', cookie)
+        .expect(404)
+        .expect(({ body }) =>
+          expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+        );
+    }
+
+    for (const cookie of [demo2InspectorCookie]) {
+      await request(app.getHttpServer())
+        .post(
+          `/api/inspections/${chatInspectionId}/items/00000000-0000-4000-8000-000000000000/evidence`,
+        )
+        .set('Cookie', cookie)
+        .attach(
+          'file',
+          Buffer.from(
+            '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAgCAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAgBAQABPyF//9oADAMBAAIAAwAAABAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAgBAQABPxB//9oADAMBAAIAAwAAABAf/9k=',
+            'base64',
+          ),
+          { filename: 'cross-org.jpg', contentType: 'image/jpeg' },
+        )
+        .expect(404)
+        .expect(({ body }) =>
+          expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+        );
+      await request(app.getHttpServer())
+        .post(`/api/inspections/${chatInspectionId}/messages`)
+        .set('Cookie', cookie)
+        .field('text', '跨商家消息不应写入')
+        .expect(404)
+        .expect(({ body }) =>
+          expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+        );
+    }
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${chatInspectionId}/messages`)
+      .set('Cookie', demo2SupervisorCookie)
+      .field('text', '跨商家消息不应写入')
+      .expect(404)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+      );
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${inspectionId}/review`)
+      .set('Cookie', demo2AdminCookie)
+      .send({ action: 'start' })
+      .expect(404)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+      );
+    for (const cookie of [demo2SupervisorCookie, demo2AdminCookie]) {
+      await request(app.getHttpServer())
+        .get('/api/review/queue')
+        .set('Cookie', cookie)
+        .expect(200)
+        .expect(({ body }) => expect(body).toEqual([]));
+    }
+
+    await request(app.getHttpServer())
+      .post('/api/inspections')
+      .set('Cookie', demo2InspectorCookie)
+      .send({ templateId })
+      .expect(404)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+      );
+    await request(app.getHttpServer())
+      .patch(
+        `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000`,
+      )
+      .set('Cookie', demo2InspectorCookie)
+      .send({ result: 'pass' })
+      .expect(404)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+      );
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${inspectionId}/submit`)
+      .set('Cookie', demo2InspectorCookie)
+      .expect(404)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+      );
+    const records = await request(app.getHttpServer())
+      .get('/api/inspector/inspections')
+      .set('Cookie', demo2InspectorCookie)
+      .expect(200);
+    expect(
+      inspectorRecordsResponseSchema
+        .parse(records.body)
+        .items.some((item) => item.id === inspectionId),
+    ).toBe(false);
+  });
+
+  it('limits supervisor inspection access to their assigned sites', async () => {
+    await request(app.getHttpServer())
+      .get(`/api/inspections/${otherSupervisorInspectionId}`)
+      .set('Cookie', supervisorCookie)
+      .expect(403)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('FORBIDDEN'),
+      );
+    await request(app.getHttpServer())
+      .get(`/api/inspections/${otherSupervisorInspectionId}/messages`)
+      .set('Cookie', supervisorCookie)
+      .expect(403)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('FORBIDDEN'),
+      );
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${otherSupervisorInspectionId}/review`)
+      .set('Cookie', supervisorCookie)
+      .send({ action: 'start' })
+      .expect(403)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('FORBIDDEN'),
+      );
+  });
+
+  it('shows supervisors only assigned sites and lets admins review an unassigned site', async () => {
+    const pool = createPool();
+    let unassignedSiteId: string | undefined;
+    let unassignedInspectionId: string | undefined;
+    try {
+      const site = await pool.query<{ id: string }>(
+        `INSERT INTO floorwalk.sites (org_id, code, name)
+         SELECT org_id, 'FW018-UNASSIGNED', '未指派主管门店'
+         FROM floorwalk.users WHERE email = 'hq@northbean.example'
+         RETURNING id`,
+      );
+      unassignedSiteId = site.rows[0].id;
+      const inspection = await pool.query<{ id: string }>(
+        `INSERT INTO floorwalk.inspections
+           (site_id, template_id, inspector_id, status)
+         SELECT $1, $2, id, 'submitted' FROM floorwalk.users
+         WHERE email = 'inspector@northbean.example'
+         RETURNING id`,
+        [unassignedSiteId, templateId],
+      );
+      unassignedInspectionId = inspection.rows[0].id;
+
+      const assignedCodes = Array.from(
+        { length: 6 },
+        (_, index) => `NB-${String(index + 1).padStart(3, '0')}`,
+      );
+      const supervisorSites = await request(app.getHttpServer())
+        .get('/api/admin/sites')
+        .set('Cookie', supervisorCookie)
+        .expect(200);
+      expect(
+        adminSitesResponseSchema
+          .parse(supervisorSites.body)
+          .map((entry) => entry.code)
+          .sort(),
+      ).toEqual(assignedCodes);
+
+      const supervisorDashboard = await request(app.getHttpServer())
+        .get('/api/dashboard/sites')
+        .set('Cookie', supervisorCookie)
+        .expect(200);
+      expect(
+        dashboardSitesResponseSchema
+          .parse(supervisorDashboard.body)
+          .map((entry) => entry.site.code),
+      ).toEqual(assignedCodes);
+
+      const supervisorQueue = await request(app.getHttpServer())
+        .get('/api/review/queue')
+        .set('Cookie', supervisorCookie)
+        .expect(200);
+      expect(
+        reviewQueueResponseSchema
+          .parse(supervisorQueue.body)
+          .every((entry) => assignedCodes.includes(entry.site.code)),
+      ).toBe(true);
+      await request(app.getHttpServer())
+        .get(`/api/inspections/${unassignedInspectionId}`)
+        .set('Cookie', supervisorCookie)
+        .expect(403);
+      await request(app.getHttpServer())
+        .post(`/api/inspections/${unassignedInspectionId}/review`)
+        .set('Cookie', supervisorCookie)
+        .send({ action: 'start' })
+        .expect(403);
+
+      const adminDashboard = await request(app.getHttpServer())
+        .get('/api/dashboard/sites')
+        .set('Cookie', hqCookie)
+        .expect(200);
+      const adminDashboardSites = dashboardSitesResponseSchema.parse(
+        adminDashboard.body,
+      );
+      expect(
+        adminDashboardSites.filter((entry) =>
+          entry.site.code.startsWith('NB-'),
+        ),
+      ).toHaveLength(12);
+      expect(
+        adminDashboardSites.some((entry) => entry.site.id === unassignedSiteId),
+      ).toBe(true);
+      const adminQueue = await request(app.getHttpServer())
+        .get('/api/review/queue')
+        .set('Cookie', hqCookie)
+        .expect(200);
+      expect(
+        reviewQueueResponseSchema
+          .parse(adminQueue.body)
+          .some((entry) => entry.id === unassignedInspectionId),
+      ).toBe(true);
+      await request(app.getHttpServer())
+        .post(`/api/inspections/${unassignedInspectionId}/review`)
+        .set('Cookie', hqCookie)
+        .send({ action: 'start' })
+        .expect(201);
+      const approved = await request(app.getHttpServer())
+        .post(`/api/inspections/${unassignedInspectionId}/review`)
+        .set('Cookie', hqCookie)
+        .send({ action: 'approve' })
+        .expect(201);
+      expect(reviewResponseSchema.parse(approved.body).status).toBe('passed');
+    } finally {
+      if (unassignedInspectionId) {
+        await pool.query(
+          'DELETE FROM floorwalk.reviews WHERE inspection_id = $1',
+          [unassignedInspectionId],
+        );
+        await pool.query('DELETE FROM floorwalk.inspections WHERE id = $1', [
+          unassignedInspectionId,
+        ]);
+      }
+      if (unassignedSiteId)
+        await pool.query('DELETE FROM floorwalk.sites WHERE id = $1', [
+          unassignedSiteId,
+        ]);
+      await pool.end();
+    }
+  });
+
   it('paginates records with sub-millisecond timestamp precision', async () => {
     const pool = createPool();
     let recordIds: string[] = [];
@@ -766,6 +1287,7 @@ describe('inspection contract API', () => {
          CROSS JOIN floorwalk.users inspector
          CROSS JOIN generate_series(1, 3)
          WHERE site.code = 'NB-001'
+           AND site.org_id = (SELECT org.id FROM floorwalk.organizations org WHERE org.name = 'Northbean')
            AND inspector.email = 'inspector@northbean.example'
          RETURNING id`,
         [templateId, '2099-10-29T12:00:00.123456Z'],
@@ -1531,11 +2053,41 @@ describe('inspection contract API', () => {
     };
     for (const [routeKey, route] of Object.entries(apiRoutes)) {
       if (Object.hasOwn(protocolRouteBodies, routeKey)) {
-        const response = await protocolRequest(
-          routeKey as keyof typeof protocolRouteBodies,
-          hqCookie,
+        const response =
+          routeKey === 'setSiteSupervisor'
+            ? await request(app.getHttpServer())
+                .put(
+                  `/api/admin/sites/${adminSiteCreateResponse.body.id}/supervisor`,
+                )
+                .set('Cookie', hqCookie)
+                .send({ userId: null })
+            : await protocolRequest(
+                routeKey as keyof typeof protocolRouteBodies,
+                hqCookie,
+              );
+        expect(response.status).toBe(
+          routeKey === 'createOrg' ||
+            routeKey === 'setSiteSupervisor' ||
+            routeKey === 'listAdminUsers'
+            ? route.successStatus
+            : routeKey === 'createAdminUser'
+              ? 400
+              : routeKey === 'updateAdminUser' ||
+                  routeKey === 'resetAdminUserPassword'
+                ? 404
+                : routeKey === 'changePassword'
+                  ? 401
+                  : 501,
         );
-        expect(response.status).toBe(501);
+        if (routeKey === 'createOrg') {
+          route.responseSchema.parse(response.body);
+          createdProtocolOrgIds.push(response.body.org.id);
+        } else if (
+          routeKey === 'setSiteSupervisor' ||
+          routeKey === 'listAdminUsers'
+        ) {
+          route.responseSchema.parse(response.body);
+        }
       } else {
         const response =
           routeResponses[routeKey as keyof typeof routeResponses];
