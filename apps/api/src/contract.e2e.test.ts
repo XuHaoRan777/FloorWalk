@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { Test } from '@nestjs/testing';
@@ -93,6 +94,7 @@ describe('inspection contract API', () => {
   let createdEvidenceStorageKey: string | undefined;
   const createdChatMessageIds: string[] = [];
   const createdAdminSiteIds: string[] = [];
+  const createdProtocolOrgIds: string[] = [];
   const createdAdminTemplateIds: string[] = [];
   const createdChatStorageKeys: string[] = [];
 
@@ -240,6 +242,14 @@ describe('inspection contract API', () => {
         cleanup.release();
       }
       await pool.query('DELETE FROM floorwalk.sessions');
+      await pool.query(
+        'DELETE FROM floorwalk.users WHERE org_id = ANY($1::uuid[])',
+        [createdProtocolOrgIds],
+      );
+      await pool.query(
+        'DELETE FROM floorwalk.organizations WHERE id = ANY($1::uuid[])',
+        [createdProtocolOrgIds],
+      );
       if (createdEvidenceStorageKey) {
         await rm(
           path.resolve(
@@ -288,7 +298,12 @@ describe('inspection contract API', () => {
     ](pathname);
     if (cookie) pending.set('Cookie', cookie);
     const body = protocolRouteBodies[routeKey];
-    if (body) pending.send(body);
+    if (body)
+      pending.send(
+        routeKey === 'createOrg'
+          ? { ...body, email: `protocol-${randomUUID()}@example.test` }
+          : body,
+      );
     return pending;
   };
 
@@ -306,8 +321,12 @@ describe('inspection contract API', () => {
       const publicRoute = route.roles.length === 0;
       const anonymous = await protocolRequest(routeKey);
       expect(anonymous.status, `${routeKey} anonymous`).toBe(
-        publicRoute ? 501 : 401,
+        publicRoute ? route.successStatus : 401,
       );
+      if (routeKey === 'createOrg') {
+        route.responseSchema.parse(anonymous.body);
+        createdProtocolOrgIds.push(anonymous.body.org.id);
+      }
       if (!publicRoute)
         expect(errorResponseSchema.parse(anonymous.body).code).toBe(
           'UNAUTHENTICATED',
@@ -316,7 +335,13 @@ describe('inspection contract API', () => {
         if (!publicRoute && !(route.roles as readonly string[]).includes(role))
           continue;
         const response = await protocolRequest(routeKey, cookies[role]);
-        expect(response.status, `${routeKey} allowed for ${role}`).toBe(501);
+        expect(response.status, `${routeKey} allowed for ${role}`).toBe(
+          routeKey === 'createOrg' ? route.successStatus : 501,
+        );
+        if (routeKey === 'createOrg') {
+          route.responseSchema.parse(response.body);
+          createdProtocolOrgIds.push(response.body.org.id);
+        }
         // 501 checks role admission only, never the future success body.
       }
     }
@@ -2015,7 +2040,13 @@ describe('inspection contract API', () => {
           routeKey as keyof typeof protocolRouteBodies,
           hqCookie,
         );
-        expect(response.status).toBe(501);
+        expect(response.status).toBe(
+          routeKey === 'createOrg' ? route.successStatus : 501,
+        );
+        if (routeKey === 'createOrg') {
+          route.responseSchema.parse(response.body);
+          createdProtocolOrgIds.push(response.body.org.id);
+        }
       } else {
         const response =
           routeResponses[routeKey as keyof typeof routeResponses];

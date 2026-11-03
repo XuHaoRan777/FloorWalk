@@ -1,11 +1,14 @@
 import { expect, test } from '@playwright/test';
 
-test('AC-06 注册入口与注册、改密码空页路由', async ({ page }) => {
+test('AC-06 注册入口与注册、改密码路由', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('link', { name: '注册商家' }).click();
   await expect(page).toHaveURL(/\/register$/);
   await expect(page.getByRole('heading', { name: '注册商家' })).toBeVisible();
-  await expect(page.getByRole('textbox')).toHaveCount(0);
+  await expect(page.getByLabel('商家名称')).toBeVisible();
+  await expect(page.getByLabel('管理员姓名')).toBeVisible();
+  await expect(page.getByLabel('邮箱')).toBeVisible();
+  await expect(page.getByLabel('密码')).toBeVisible();
   await page.screenshot({
     path: 'docs/work/FW-017-g03-protocol/evidence/register.png',
   });
