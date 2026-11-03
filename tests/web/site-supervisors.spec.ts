@@ -86,3 +86,88 @@ test('FW-019 AC-04 主管只读当前主管，无指派控件', async ({ page })
     ).toContainText(site.supervisor?.displayName ?? '未指派');
   }
 });
+
+test('FW-019 AC-05 改指派后甲乙现有会话刷新队列立即切换门店范围', async ({
+  browser,
+}) => {
+  const contexts = await Promise.all(
+    [0, 1, 2].map(() =>
+      browser.newContext({ baseURL: `http://127.0.0.1:${3101 + slot * 10}` }),
+    ),
+  );
+  const [admin, first, second] = await Promise.all(
+    contexts.map((context) => context.newPage()),
+  );
+  let target: { id: string; supervisor: { id: string } | null } | undefined;
+  try {
+    await login(admin, 'hq@northbean.example');
+    await login(first, 'supervisor@northbean.example');
+    await login(second, 'supervisor+2@northbean.example');
+    const firstEntry = first.getByRole('button').filter({ hasText: 'NB-004' });
+    const secondEntry = second
+      .getByRole('button')
+      .filter({ hasText: 'NB-004' });
+    await expect(firstEntry).toHaveCount(1);
+    await expect(
+      second.getByRole('heading', { name: '审核队列', exact: true }),
+    ).toBeVisible();
+    await expect(secondEntry).toHaveCount(0);
+    const sitesResponse = await admin.request.get(`${apiBase}/admin/sites`);
+    expect(sitesResponse.ok()).toBeTruthy();
+    target = (await sitesResponse.json()).find(
+      (site: { code: string }) => site.code === 'NB-004',
+    );
+    expect(target).toBeTruthy();
+    const usersResponse = await admin.request.get(`${apiBase}/admin/users`);
+    expect(usersResponse.ok()).toBeTruthy();
+    const secondSupervisor = (await usersResponse.json()).find(
+      (user: { email: string }) =>
+        user.email === 'supervisor+2@northbean.example',
+    );
+    await admin.getByRole('button', { name: '门店', exact: true }).click();
+    const assigned = admin.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/admin/sites/${target!.id}/supervisor`) &&
+        response.request().method() === 'PUT',
+    );
+    await admin
+      .getByLabel('主管 NB-004', { exact: true })
+      .selectOption(secondSupervisor.id);
+    expect((await assigned).ok()).toBeTruthy();
+    const firstRefreshed = first.waitForResponse((response) =>
+      response.url().endsWith('/review/queue'),
+    );
+    await first.getByRole('button', { name: '刷新队列', exact: true }).click();
+    expect((await firstRefreshed).ok()).toBeTruthy();
+    await expect(firstEntry).toHaveCount(0);
+    const secondRefreshed = second.waitForResponse((response) =>
+      response.url().endsWith('/review/queue'),
+    );
+    await second.getByRole('button', { name: '刷新队列', exact: true }).click();
+    expect((await secondRefreshed).ok()).toBeTruthy();
+    await expect(secondEntry).toHaveCount(1);
+    await first.screenshot({
+      path: 'docs/work/FW-019-org-signup-site-supervisor/evidence/queue-first-after-assignment.png',
+    });
+    await second.screenshot({
+      path: 'docs/work/FW-019-org-signup-site-supervisor/evidence/queue-second-after-assignment.png',
+    });
+  } finally {
+    try {
+      if (target) {
+        const restored = await admin.request.put(
+          `${apiBase}/admin/sites/${target.id}/supervisor`,
+          {
+            data: { userId: target.supervisor?.id ?? null },
+          },
+        );
+        expect(restored.ok()).toBeTruthy();
+      }
+    } finally {
+      for (const context of contexts) {
+        await context.request.delete(`${apiBase}/auth/session`);
+        await context.close();
+      }
+    }
+  }
+});
