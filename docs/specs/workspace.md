@@ -20,6 +20,10 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 
 独立 Web 的 `/` 是公开首页占位；`/console` 按角色显示主管审核队列与详情，或总部只读看板，登录与审核行为见 [Web 控制台](web-console.md)。两页可相互导航，支持直接访问和刷新，控制台侧边栏可开关。开发及构建后 preview 已验证，上游许可与来源见 [本地开发说明](../howto/local-development.md#上游来源)。
 
+## 共享设计系统
+
+Web 控制台与 Mobile 店员端统一使用 Framed sheet 视觉方向。颜色、字体、字号、间距、圆角与阴影的唯一来源为 [`packages/tokens/tokens.css`](../../packages/tokens/tokens.css)；Web Tailwind 主题和 Mobile NativeWind 主题从该文件消费。NativeWind 无法在 React Native 静态样式中直接解析的字号映射、圆角与间距由 `packages/tokens/generate-native.mjs` 生成 `packages/tokens/native.json`，不得手改生成文件；维护命令见[本地开发说明](../howto/local-development.md#设计-token)。
+
 ## Mobile 运行
 
 店员可在 Expo Web 和 Mobile 应用中完成巡检主链、聊天和本店历史记录查看；行为见 [Mobile 店员巡检](mobile-inspector.md)。
@@ -41,6 +45,7 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 | API              | /health、会话、巡检/审核/证据/看板、聊天、管理与记录接口    | [控制器](../../apps/api/src/health.controller.ts)、[认证接口](../../apps/api/src/auth.controller.ts)、[巡检](../../apps/api/src/inspection.controller.ts)、[证据](../../apps/api/src/evidence.controller.ts)、[审核](../../apps/api/src/review.controller.ts)、[看板](../../apps/api/src/dashboard.controller.ts)、[共用查询](../../apps/api/src/inspection-queries.ts)、[认证](../../apps/api/src/auth.ts)、[连接池生命周期](../../apps/api/src/db/pool.provider.ts)、[启动](../../apps/api/src/main.ts) |
 | Web              | /、/console、HttpOnly 登录会话、审核/看板/聊天/管理 API、生产 CSP | [路由](../../apps/web/src/router.tsx)、[客户端](../../apps/web/src/lib/api.ts)、[构建配置](../../apps/web/vite.config.ts)                                                                                                                                                                                                                                                                                                                                                                                 |
 | Mobile           | 登录、巡检、检查项与证据上传、聊天、记录              | [导航](../../apps/mobile/app/_layout.tsx)、[屏幕](../../apps/mobile/components/mobile/)、[API](../../apps/mobile/lib/api.ts)、[功能客户端](../../apps/mobile/lib/api/)                                                                                                                                                                                                                                                                                                                                    |
+| 共享设计系统     | 两端主题及原生字体、尺寸映射                            | [CSS token 源](../../packages/tokens/tokens.css)、[Native 生成器](../../packages/tokens/generate-native.mjs)、[Native 映射](../../packages/tokens/native.json)                                                                                                                                                                                                                                                                                                                                            |
 
 ## 修订记录
 
@@ -55,3 +60,4 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 | 2026-10-27 | FW-009 三端改用 HttpOnly 服务端会话；Web 生产构建和 preview 增加 CSP。                                                                   |
 | 2026-10-28 | FW-010 API 进程共用一个数据库连接池，应用关闭时释放；接口行为不变。                                                                      |
 | 2026-10-29 | g02 集成聊天、门店与模板管理和 Mobile 记录页；真实跨端演示链及 Android 原生相册回归通过。 |
+| 2026-11-03 | FW-016 统一 Web 与 Mobile 的 Framed sheet 设计系统；共享 token 驱动主题与原生字体、间距、圆角映射，完成登录、巡检、审核、门店、模板、记录与看板的统一样式。 |

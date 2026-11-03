@@ -189,7 +189,10 @@ export function InspectionScreen({
         accessibilityLabel="返回今日待巡"
         accessibilityRole="button"
         onPress={onBack}
-        style={styles.touchTarget}
+        style={({ pressed }) => [
+          styles.touchTarget,
+          pressed && styles.pressedRow,
+        ]}
       >
         <Text className={classes.link} style={styles.link}>
           ‹ 返回今日待巡
@@ -265,6 +268,7 @@ export function InspectionScreen({
             </Text>
             <TextInput
               accessibilityLabel={`${item.title}备注`}
+              hitSlop={{ top: 1, bottom: 1, left: 0, right: 0 }}
               onChangeText={(value) =>
                 setNotes((current) => ({ ...current, [item.id]: value }))
               }

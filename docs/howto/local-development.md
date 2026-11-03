@@ -19,6 +19,17 @@ foreach ($app in 'api', 'web', 'mobile') {
 
 本机这六份实际环境文件已创建。模板只包含本轮所需的非敏感默认配置；实际文件不提交到 Git。
 
+## 设计 token
+
+`packages/tokens/tokens.css` 是 Web 与 Mobile 共享的设计 token 源。修改其中的字体、间距或圆角后，重新生成 Mobile 原生映射并检查其与源文件一致：
+
+```powershell
+node packages/tokens/generate-native.mjs
+node packages/tokens/generate-native.mjs --check
+```
+
+生成器将 NativeWind 的 `rem` 按 `apps/mobile/metro.config.cjs` 中的 `inlineRem: 16` 转为 React Native 数值，并从共享字体族 token 选择已加载的原生字体注册名；`native.json` 是生成产物，不手工编辑。
+
 然后安装并检查：
 
 ```powershell

@@ -78,8 +78,12 @@ export function TodayScreen({
         <Pressable
           accessibilityLabel="刷新今日任务"
           accessibilityRole="button"
+          hitSlop={{ top: 0, bottom: 0, left: 2, right: 2 }}
           onPress={onRefresh}
-          style={styles.touchTarget}
+          style={({ pressed }) => [
+            styles.touchTarget,
+            pressed && styles.pressedRow,
+          ]}
         >
           <Text className={classes.link} style={styles.link}>
             刷新

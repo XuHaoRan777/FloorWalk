@@ -69,7 +69,7 @@ export function DashboardView({ onQueue }: { onQueue: () => void }) {
             <thead>
               <tr>
                 <th className="px-4 py-3 font-medium">门店</th>
-                <th className="px-4 py-3 font-medium">最近分数</th>
+                <th className="px-4 py-3 text-right font-medium">最近分数</th>
                 <th className="px-4 py-3 font-medium">状态</th>
               </tr>
             </thead>
@@ -82,7 +82,7 @@ export function DashboardView({ onQueue }: { onQueue: () => void }) {
                       {entry.site.code}
                     </span>
                   </td>
-                  <td>
+                  <td className="text-right">
                     {entry.latestScore === null ? (
                       '暂无'
                     ) : (

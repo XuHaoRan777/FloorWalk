@@ -84,3 +84,13 @@
 - 规避方式：按角色和名称定位，如 `getByRole('tab', { name: '今日待巡' })`；FW-010 已改 NB-002（`66172ac`）。写 spec 时不要一刀切"不改 tests/"：允许只改定位、不放宽断言，改动在证据里写明。
 - 验证方式：`FW_SLOT=1 pnpm e2e:mobile` 整套连续跑两次都通过。
 - 失效条件：Mobile 页面标题与 Tab 文字不再重复。
+
+### 残留的开发进程让槽位套件卡在 bundle
+
+- 触发条件：本机还有之前留下的 `vite preview`（3019）、开发 Metro（3020）或没经 `scripts/dev/proc.mjs` 起的槽位 Metro 在跑，同时运行带 `expo start --web --clear` 的界面套件（如 `pnpm e2e:demo-ui`）；Expo SDK 57。
+- 现象：Playwright trace 显示 `GET /` 成功，`entry.bundle` 请求一直没有响应，180 秒超时，用例停在第一次导航。
+- 根因：几个 Metro 共用 `apps/mobile` 的缓存和文件监听，`--clear` 在别的 Metro 还在用时清缓存；端口不冲突，所以端口检查发现不了。停掉残留进程后同一命令通过，未改代码。
+- 规避方式：开跑界面套件前先 `node scripts/dev/proc.mjs status`，再查 3018～3020、31N0～31N2 无监听；有不是自己起的进程就停下告诉用户，不替用户杀。常驻进程只用 `proc.mjs` 起停。
+- 验证方式：FW-016 停掉三个残留进程后，`FW_SLOT=3 pnpm e2e:demo-ui` 34 秒 1 passed。
+- 失效条件：界面套件不再带 `--clear`，或各槽位 Metro 使用独立缓存目录。
+- 首次记录：`FW-016`

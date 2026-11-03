@@ -23,7 +23,7 @@ export function PrimaryButton({
       accessibilityState={{ disabled }}
       disabled={disabled}
       className={`${
-        variant === 'secondary'
+        disabled || variant === 'secondary'
           ? classes.secondaryButton
           : variant === 'danger'
             ? classes.dangerButton
@@ -32,13 +32,15 @@ export function PrimaryButton({
       onPress={onPress}
       pressRetentionOffset={{ top: 8, right: 8, bottom: 8, left: 8 }}
       testID={testID}
-      style={[styles.button, disabled && styles.disabledButton]}
+      style={styles.button}
     >
       <Text
         className={
-          variant === 'secondary'
-            ? classes.secondaryButtonText
-            : classes.primaryButtonText
+          disabled
+            ? classes.muted
+            : variant === 'secondary'
+              ? classes.secondaryButtonText
+              : classes.primaryButtonText
         }
         style={[styles.buttonText]}
       >

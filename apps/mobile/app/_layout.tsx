@@ -1,3 +1,4 @@
+import tokens from '../../../packages/tokens/native.json';
 import '../global.css';
 import Stack from 'expo-router/stack';
 import { useFonts } from 'expo-font';
@@ -41,10 +42,10 @@ function Routes() {
 }
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    IBMPlexMono_400Regular,
-    IBMPlexSans_400Regular,
-    IBMPlexSans_500Medium,
-    IBMPlexSans_600SemiBold,
+    [tokens.font.mono.regular]: IBMPlexMono_400Regular,
+    [tokens.font.sans.regular]: IBMPlexSans_400Regular,
+    [tokens.font.sans.medium]: IBMPlexSans_500Medium,
+    [tokens.font.sans.semibold]: IBMPlexSans_600SemiBold,
   });
 
   if (!fontsLoaded) return null;

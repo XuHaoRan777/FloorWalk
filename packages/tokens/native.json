@@ -1,0 +1,26 @@
+{
+  "font": {
+    "sans": {
+      "regular": "IBMPlexSans_400Regular",
+      "medium": "IBMPlexSans_500Medium",
+      "semibold": "IBMPlexSans_600SemiBold"
+    },
+    "mono": {
+      "regular": "IBMPlexMono_400Regular"
+    }
+  },
+  "radius": {
+    "control": 6,
+    "card": 8,
+    "sheet": 16
+  },
+  "space": {
+    "unit": 4,
+    "xs": 4,
+    "sm": 8,
+    "md": 16,
+    "lg": 24,
+    "xl": 32,
+    "xxl": 48
+  }
+}

@@ -1,3 +1,4 @@
+import tokens from '../../../packages/tokens/native.json';
 import { useFonts } from 'expo-font';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -23,10 +24,10 @@ const checklistItems = [
 export default function DesignSamplesPage() {
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
-    IBMPlexMono_400Regular,
-    IBMPlexSans_400Regular,
-    IBMPlexSans_500Medium,
-    IBMPlexSans_600SemiBold,
+    [tokens.font.mono.regular]: IBMPlexMono_400Regular,
+    [tokens.font.sans.regular]: IBMPlexSans_400Regular,
+    [tokens.font.sans.medium]: IBMPlexSans_500Medium,
+    [tokens.font.sans.semibold]: IBMPlexSans_600SemiBold,
   });
 
   if (!fontsLoaded) return null;
@@ -41,13 +42,13 @@ export default function DesignSamplesPage() {
       <View className="h-12 flex-row items-center justify-between px-lg">
         <Text
           className="text-foreground"
-          style={{ fontFamily: 'IBMPlexSans_600SemiBold', fontSize: 16 }}
+          style={{ fontFamily: tokens.font.sans.semibold, fontSize: 16 }}
         >
           FloorWalk
         </Text>
         <Text
           className="text-muted-foreground"
-          style={{ fontFamily: 'IBMPlexSans_400Regular', fontSize: 13 }}
+          style={{ fontFamily: tokens.font.sans.regular, fontSize: 13 }}
         >
           Northbean Coffee
         </Text>
@@ -60,20 +61,20 @@ export default function DesignSamplesPage() {
         <View className="gap-sm">
           <Text
             className="text-muted-foreground"
-            style={{ fontFamily: 'IBMPlexMono_400Regular', fontSize: 12 }}
+            style={{ fontFamily: tokens.font.mono.regular, fontSize: 12 }}
           >
             NB-001 · 店员端
           </Text>
           <Text
             accessibilityRole="header"
             className="text-foreground text-2xl"
-            style={{ fontFamily: 'IBMPlexSans_600SemiBold' }}
+            style={{ fontFamily: tokens.font.sans.semibold }}
           >
             今日待巡
           </Text>
           <Text
             className="text-muted-foreground"
-            style={{ fontFamily: 'IBMPlexSans_400Regular', fontSize: 14 }}
+            style={{ fontFamily: tokens.font.sans.regular, fontSize: 14 }}
           >
             今天应先完成什么？
           </Text>
@@ -83,20 +84,20 @@ export default function DesignSamplesPage() {
           <View className="gap-xs">
             <Text
               className="text-muted-foreground"
-              style={{ fontFamily: 'IBMPlexSans_500Medium', fontSize: 12 }}
+              style={{ fontFamily: tokens.font.sans.medium, fontSize: 12 }}
             >
               检查模板
             </Text>
             <View className="flex-row items-center justify-between">
               <Text
                 className="text-foreground text-xl"
-                style={{ fontFamily: 'IBMPlexSans_600SemiBold' }}
+                style={{ fontFamily: tokens.font.sans.semibold }}
               >
                 开店检查
               </Text>
               <Text
                 className="text-accent"
-                style={{ fontFamily: 'IBMPlexMono_400Regular', fontSize: 12 }}
+                style={{ fontFamily: tokens.font.mono.regular, fontSize: 12 }}
               >
                 {checklistItems.length} 项
               </Text>
@@ -116,7 +117,7 @@ export default function DesignSamplesPage() {
                 />
                 <Text
                   className="flex-1 text-foreground"
-                  style={{ fontFamily: 'IBMPlexSans_400Regular', fontSize: 14 }}
+                  style={{ fontFamily: tokens.font.sans.regular, fontSize: 14 }}
                 >
                   {item}
                 </Text>
@@ -124,7 +125,7 @@ export default function DesignSamplesPage() {
                   <Text
                     className="text-success"
                     style={{
-                      fontFamily: 'IBMPlexSans_500Medium',
+                      fontFamily: tokens.font.sans.medium,
                       fontSize: 12,
                     }}
                   >
@@ -137,7 +138,7 @@ export default function DesignSamplesPage() {
 
           <Text
             className="text-muted-foreground"
-            style={{ fontFamily: 'IBMPlexSans_400Regular', fontSize: 12 }}
+            style={{ fontFamily: tokens.font.sans.regular, fontSize: 12 }}
           >
             其余 {checklistItems.length - previewItems.length} 项
           </Text>
@@ -150,7 +151,7 @@ export default function DesignSamplesPage() {
         >
           <Text
             className="text-primary-foreground"
-            style={{ fontFamily: 'IBMPlexSans_600SemiBold', fontSize: 15 }}
+            style={{ fontFamily: tokens.font.sans.semibold, fontSize: 15 }}
           >
             开始巡检
           </Text>
@@ -173,8 +174,8 @@ export default function DesignSamplesPage() {
                 className={active ? 'text-accent' : 'text-muted-foreground'}
                 style={{
                   fontFamily: active
-                    ? 'IBMPlexSans_500Medium'
-                    : 'IBMPlexSans_400Regular',
+                    ? tokens.font.sans.medium
+                    : tokens.font.sans.regular,
                   fontSize: 12,
                 }}
               >

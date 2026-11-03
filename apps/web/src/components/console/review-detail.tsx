@@ -167,6 +167,7 @@ export function ReviewDetail({
             <section className="border-t pt-4" aria-busy={busy}>
               <h2 className="font-semibold">审核决定</h2>
               <textarea
+                aria-label="审核意见（可选）"
                 value={comment}
                 onChange={(event) => setComment(event.target.value)}
                 placeholder="填写审核意见（可选）"

@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ClipboardCheck, LoaderCircle, RotateCcw } from 'lucide-react';
+import {
+  ArrowRight,
+  ClipboardCheck,
+  LoaderCircle,
+  RotateCcw,
+} from 'lucide-react';
 import { getReviewQueue, type InspectionDetail } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { ErrorBanner } from './error-banner';
@@ -79,8 +84,9 @@ export function QueueView({
                 </span>
                 <StatusPill status={inspection.status} />
               </span>
-              <span className="text-sm text-accent">
-                {canReview ? '查看并审核 →' : '查看详情 →'}
+              <span className="inline-flex items-center gap-1 text-sm text-accent">
+                {canReview ? '查看并审核' : '查看详情'}
+                <ArrowRight className="size-4" aria-hidden="true" />
               </span>
             </button>
           ))}

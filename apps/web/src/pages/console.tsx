@@ -141,7 +141,7 @@ export function ConsolePage() {
               {(user.role === 'supervisor' || user.role === 'hq') && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    isActive={!showDashboard}
+                    isActive={section === 'queue'}
                     onClick={() => {
                       setSection('queue');
                       setSelected(null);

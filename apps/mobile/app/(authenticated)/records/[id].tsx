@@ -84,7 +84,10 @@ export default function RecordDetailPage() {
       <Pressable
         accessibilityRole="button"
         onPress={() => router.back()}
-        style={styles.touchTarget}
+        style={({ pressed }) => [
+          styles.touchTarget,
+          pressed && styles.pressedRow,
+        ]}
       >
         <Text className={classes.link} style={styles.link}>
           返回记录
@@ -101,7 +104,10 @@ export default function RecordDetailPage() {
           accessibilityRole="button"
           accessibilityLabel="重新加载巡检详情"
           onPress={() => void load()}
-          style={styles.touchTarget}
+          style={({ pressed }) => [
+            styles.touchTarget,
+            pressed && styles.pressedRow,
+          ]}
         >
           <Text className={classes.link} style={styles.link}>
             重新加载

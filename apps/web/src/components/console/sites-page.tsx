@@ -97,14 +97,11 @@ export function SitesPage() {
         </Button>
       </div>
       <ErrorBanner message={error} />
-      <form
-        onSubmit={create}
-        className="grid gap-3 border-y py-4 sm:grid-cols-[minmax(9rem,0.7fr)_minmax(12rem,1.3fr)_auto] sm:items-end"
-      >
+      <form onSubmit={create} className="fw-site-form grid gap-3 border-y py-4">
         <label className="grid gap-1.5 text-sm font-medium">
           门店编码
           <input
-            className="h-9 rounded-md border bg-background px-3 font-normal"
+            className="h-9 min-w-0 rounded-md border bg-background px-3 font-normal"
             value={code}
             onChange={(event) => setCode(event.target.value)}
             required
@@ -113,7 +110,7 @@ export function SitesPage() {
         <label className="grid gap-1.5 text-sm font-medium">
           门店名称
           <input
-            className="h-9 rounded-md border bg-background px-3 font-normal"
+            className="h-9 min-w-0 rounded-md border bg-background px-3 font-normal"
             value={name}
             onChange={(event) => setName(event.target.value)}
             required

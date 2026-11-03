@@ -362,6 +362,7 @@ export function ChatPanel({
         <>
           <TextInput
             accessibilityLabel="聊天内容"
+            hitSlop={{ top: 1, bottom: 1, left: 0, right: 0 }}
             editable={!busy}
             multiline
             onChangeText={setText}

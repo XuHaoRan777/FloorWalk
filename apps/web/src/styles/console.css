@@ -24,6 +24,12 @@
   box-shadow: none;
 }
 
+.fw-console [data-sidebar='menu-button']:hover,
+.fw-console [data-sidebar='menu-button']:active {
+  background: var(--fw-raised);
+  color: var(--fw-accent);
+}
+
 .fw-console [data-slot='sidebar-inset'] {
   min-width: 0;
   background: var(--fw-ground);
@@ -47,11 +53,59 @@
 }
 
 .fw-console-sheet {
+  container-type: inline-size;
   min-height: calc(100dvh - 88px);
   padding: 24px;
   border: 1px solid var(--fw-border);
   border-radius: var(--fw-radius-sheet);
   background: var(--fw-surface);
+}
+
+@container (min-width: 36rem) {
+  .fw-site-form {
+    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr) auto;
+    align-items: end;
+  }
+}
+
+.fw-console,
+.fw-login {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-console :is(input:not([type='checkbox']), textarea),
+.fw-login :is(input, textarea) {
+  border-color: var(--fw-input);
+}
+
+.fw-console input[type='checkbox'] {
+  accent-color: var(--fw-accent);
+}
+
+.fw-console ::placeholder,
+.fw-login ::placeholder {
+  color: var(--fw-muted-foreground);
+  opacity: 1;
+}
+
+.fw-console :is([data-slot='button'], .fw-list-row[type='button']),
+.fw-login [data-slot='button'] {
+  transition:
+    transform 120ms ease,
+    opacity 120ms ease;
+}
+
+.fw-console :is(button, a):active:not(:disabled),
+.fw-login :is(button, a):active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.fw-console [data-slot='button']:disabled,
+.fw-login [data-slot='button']:disabled {
+  opacity: 1;
+  background: var(--fw-raised);
+  color: var(--fw-muted-foreground);
+  border-color: var(--fw-input);
 }
 
 .fw-inspector-notice {
@@ -139,8 +193,22 @@
   border-bottom: 0;
 }
 
-.fw-data-table tbody tr:hover {
+.fw-data-table tbody tr:hover,
+.fw-data-table tbody tr:focus-within {
   background: var(--fw-raised);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fw-console *,
+  .fw-login * {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .fw-console :is(button, a):active,
+  .fw-login :is(button, a):active {
+    transform: none;
+  }
 }
 
 .fw-list-row {

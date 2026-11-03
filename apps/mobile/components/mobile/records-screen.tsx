@@ -139,9 +139,15 @@ export function RecordsScreen({
         records.length === 0 ? null : nextCursor ? (
           <Pressable
             accessibilityRole="button"
+            accessibilityState={{
+              disabled: loadingMore || refreshing || loading,
+            }}
             disabled={loadingMore || refreshing || loading}
             onPress={() => void loadMore()}
-            style={recordStyles.footerButton}
+            style={({ pressed }) => [
+              recordStyles.footerButton,
+              pressed && styles.pressedRow,
+            ]}
             testID="load-more-records"
           >
             {loadingMore ? (
@@ -174,9 +180,13 @@ export function RecordsScreen({
             <Pressable
               accessibilityLabel="刷新记录"
               accessibilityRole="button"
+              accessibilityState={{ disabled: refreshing }}
               disabled={refreshing}
               onPress={() => void loadFirstPage(true)}
-              style={recordStyles.refreshButton}
+              style={({ pressed }) => [
+                recordStyles.refreshButton,
+                pressed && styles.pressedRow,
+              ]}
               testID="refresh-records"
             >
               <Text className={classes.link} style={styles.link}>
