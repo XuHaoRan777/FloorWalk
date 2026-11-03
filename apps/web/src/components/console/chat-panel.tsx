@@ -13,7 +13,7 @@ import { formatTime, getErrorMessage } from './helpers';
 const roleLabels = {
   inspector: '店员',
   supervisor: '主管',
-  hq: '总部',
+  admin: '商家管理员',
 } as const;
 const maxFileSize = 10 * 1024 * 1024;
 

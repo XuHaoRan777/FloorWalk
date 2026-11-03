@@ -11,7 +11,7 @@ const apiBase = `http://127.0.0.1:${apiPort}`;
 const demoPassword = 'northbean-demo';
 
 type LoginResponse = {
-  user: { role: 'inspector' | 'supervisor' | 'hq' };
+  user: { role: 'inspector' | 'supervisor' | 'admin' };
 };
 
 async function apiLogin(
@@ -184,10 +184,24 @@ test('AC-05 总部看板与 API 返回一致，且没有审核按钮', async ({
   const response = await request.get(`${apiBase}/api/dashboard/sites`);
   expect(response.ok()).toBeTruthy();
   const sites = (await response.json()) as Array<{
-    site: { name: string };
+    site: { code: string; name: string };
     latestScore: number | null;
   }>;
-  expect(sites).toHaveLength(12);
+  expect(sites).toHaveLength(13);
+  expect(
+    sites
+      .filter((entry) => entry.site.code.startsWith('NB-'))
+      .map((entry) => entry.site.code)
+      .sort(),
+  ).toEqual(
+    Array.from(
+      { length: 12 },
+      (_, index) => `NB-${String(index + 1).padStart(3, '0')}`,
+    ),
+  );
+  expect(sites.filter((entry) => entry.site.code === 'DEMO2-001')).toHaveLength(
+    1,
+  );
 
   await login(page, 'hq@northbean.example');
   await expect(page.getByRole('heading', { name: /总部看板/ })).toBeVisible();

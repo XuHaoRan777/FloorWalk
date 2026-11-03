@@ -7,7 +7,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { DATABASE_POOL } from './db/pool.provider.js';
 import type { Pool } from 'pg';
 
@@ -15,15 +15,10 @@ export type AuthUser = {
   id: string;
   email: string;
   displayName: string;
-  role: 'inspector' | 'supervisor' | 'hq';
+  role: 'inspector' | 'supervisor' | 'admin';
+  orgId: string;
   siteId: string | null;
 };
-
-export function getJwtSecret() {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error('JWT_SECRET 未配置。');
-  return secret;
-}
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -41,14 +36,21 @@ export class AuthGuard implements CanActivate {
       });
     try {
       const result = await this.pool.query<AuthUser>(
-        `SELECT u.id, u.email, u.display_name AS "displayName", u.role, u.site_id AS "siteId"
-         FROM floorwalk.sessions s JOIN floorwalk.users u ON u.id = s.user_id
-         WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
+        `UPDATE floorwalk.sessions s SET last_seen_at = now()
+         FROM floorwalk.users u
+         WHERE u.id = s.user_id AND s.token_hash = $1 AND s.revoked_at IS NULL
+           AND s.last_seen_at > now() - interval '7 days'
+         RETURNING u.id, u.email, u.display_name AS "displayName", u.role,
+           u.site_id AS "siteId", u.org_id AS "orgId"`,
         [hashSessionId(sessionId)],
       );
       const user = result.rows[0];
-      if (!user || !['inspector', 'supervisor', 'hq'].includes(user.role))
+      if (!user || !['inspector', 'supervisor', 'admin'].includes(user.role))
         throw new Error('unknown user');
+      context
+        .switchToHttp()
+        .getResponse<Response>()
+        .setHeader('Set-Cookie', sessionCookie(sessionId));
       request.user = user;
       return true;
     } catch {
@@ -72,7 +74,7 @@ export function hashSessionId(sessionId: string) {
   return createHash('sha256').update(sessionId).digest('hex');
 }
 
-export function sessionCookie(value: string, maxAge = 3600) {
+export function sessionCookie(value: string, maxAge = 7 * 24 * 60 * 60) {
   return `fw_session=${value}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=${maxAge}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
 }
 

@@ -44,9 +44,11 @@ async function keyboardAudit(page: Page, screen: string) {
   );
 }
 
-async function login(page: Page, role: 'supervisor' | 'hq') {
+async function login(page: Page, role: 'supervisor' | 'admin') {
   await page.goto('/');
-  await page.getByLabel('邮箱').fill(`${role}@northbean.example`);
+  await page
+    .getByLabel('邮箱')
+    .fill(`${role === 'admin' ? 'hq' : role}@northbean.example`);
   await page.getByLabel('密码').fill('northbean-demo');
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -126,7 +128,7 @@ test('FW-016 AC-05 登录后五屏三宽截图', async ({ page }) => {
   await expect(page.getByText('正在加载模板…')).toHaveCount(0);
   await capture(page, 'templates');
   await page.getByRole('button', { name: '退出登录' }).click();
-  await login(page, 'hq');
+  await login(page, 'admin');
   await expect(page.getByRole('heading', { name: '总部看板' })).toBeVisible();
   await expect(page.getByText('正在加载门店数据…')).toHaveCount(0);
   await capture(page, 'dashboard');

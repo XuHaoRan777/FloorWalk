@@ -23,20 +23,18 @@ import {
   maxEvidenceSizeBytes,
   type UserRole,
 } from '@libs/shared';
-import { unlink, mkdir, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import path from 'node:path';
 import type { Pool } from 'pg';
 import { AuthGuard } from './auth.js';
 import { DATABASE_POOL } from './db/pool.provider.js';
 import {
   assertInspectionAccess,
   assertRole,
-  evidenceSignature,
   iso,
   type AuthedRequest,
   type UploadedImage,
 } from './inspection-queries.js';
+import { getStorageDriver } from './storage/index.js';
 
 type ChatRow = {
   id: string;
@@ -97,7 +95,7 @@ export class ChatController {
     const hasExtra = result.rows.length > query.limit;
     const rows = result.rows.slice(0, query.limit);
     if (direction === 'before' || direction === 'latest') rows.reverse();
-    const messages = rows.map((row) => this.toMessage(row));
+    const messages = await Promise.all(rows.map((row) => this.toMessage(row)));
     let hasMoreBefore =
       direction === 'before' || direction === 'latest' ? hasExtra : false;
     if (direction === 'after' && rows[0]) {
@@ -130,17 +128,17 @@ export class ChatController {
     assertInspectionAccess(inspection, request.user);
 
     let storageKey: string | null = null;
-    let target: string | undefined;
-    if (file) {
-      const extension = file.mimetype === 'image/jpeg' ? '.jpg' : '.png';
-      storageKey = `chat/${id}/${randomUUID()}${extension}`;
-      const storageDir = process.env.STORAGE_DIR ?? path.resolve('.storage');
-      target = path.resolve(storageDir, storageKey);
-      await mkdir(path.dirname(target), { recursive: true });
-      await writeFile(target, file.buffer);
-    }
+    const storage = await getStorageDriver();
+    const client = await this.pool.connect();
+    let committed = false;
     try {
-      const result = await this.pool.query<ChatRow>(
+      await client.query('BEGIN');
+      if (file) {
+        const extension = file.mimetype === 'image/jpeg' ? '.jpg' : '.png';
+        storageKey = `org/${request.user.orgId}/chat/${id}/${randomUUID()}${extension}`;
+        await storage.put(storageKey, file.buffer, file.mimetype);
+      }
+      const result = await client.query<ChatRow>(
         `INSERT INTO floorwalk.chat_messages
           (inspection_id, author_id, body, storage_key, mime, size)
          VALUES ($1, $2, $3, $4, $5, $6)
@@ -155,16 +153,24 @@ export class ChatController {
           file?.size ?? null,
         ],
       );
-      return chatMessageSchema.parse(
-        this.toMessage({
+      const response = chatMessageSchema.parse(
+        await this.toMessage({
           ...result.rows[0],
           displayName: request.user.displayName,
           role: request.user.role,
         }),
       );
+      await client.query('COMMIT');
+      committed = true;
+      return response;
     } catch (error) {
-      if (target) await unlink(target).catch(() => undefined);
+      if (!committed) {
+        await client.query('ROLLBACK');
+        if (storageKey) await storage.delete(storageKey).catch(() => undefined);
+      }
       throw error;
+    } finally {
+      client.release();
     }
   }
 
@@ -190,7 +196,9 @@ export class ChatController {
         message: '聊天图片不存在。',
       });
     assertInspectionAccess(message, request.user);
-    return chatImageUrlResponseSchema.parse(this.signImage(message.storageKey));
+    return chatImageUrlResponseSchema.parse(
+      await this.signImage(message.storageKey),
+    );
   }
 
   private async getInspection(id: string) {
@@ -206,8 +214,10 @@ export class ChatController {
     return result.rows[0];
   }
 
-  private toMessage(row: ChatRow) {
-    const image = row.storageKey ? this.signImage(row.storageKey).url : null;
+  private async toMessage(row: ChatRow) {
+    const image = row.storageKey
+      ? (await this.signImage(row.storageKey)).url
+      : null;
     return {
       id: row.id,
       seq: String(row.seq),
@@ -221,15 +231,8 @@ export class ChatController {
     };
   }
 
-  private signImage(storageKey: string) {
-    const baseUrl = (
-      process.env.API_PUBLIC_BASE_URL ??
-      `http://${process.env.HOST ?? '127.0.0.1'}:${process.env.PORT ?? '3018'}`
-    ).replace(/\/$/, '');
-    const expiresAt = Date.now() + 60 * 60 * 1000;
-    return {
-      url: `${baseUrl}/storage/${encodeURIComponent(storageKey)}?expires=${expiresAt}&signature=${evidenceSignature(storageKey, expiresAt)}`,
-      expiresAt: new Date(expiresAt).toISOString(),
-    };
+  private async signImage(storageKey: string) {
+    const storage = await getStorageDriver();
+    return storage.signedUrl(storageKey, 3600);
   }
 }

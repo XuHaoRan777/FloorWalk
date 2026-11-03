@@ -41,9 +41,11 @@ export class AdminController {
   async listSites(@Req() request: AuthedRequest) {
     assertRole(request.user, ...apiRoutes.listAdminSites.roles);
     const result = await this.pool.query(
-      `SELECT id, code, name, deactivated_at IS NULL AS active,
-          created_at AS "createdAt"
-       FROM floorwalk.sites ORDER BY code`,
+      `SELECT s.id, s.code, s.name, s.deactivated_at IS NULL AS active,
+          s.created_at AS "createdAt", CASE WHEN u.id IS NULL THEN NULL ELSE
+          json_build_object('id', u.id, 'displayName', u.display_name) END AS supervisor
+       FROM floorwalk.sites s LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
+       LEFT JOIN floorwalk.users u ON u.id = ss.user_id ORDER BY s.code`,
     );
     return adminSitesResponseSchema.parse(
       result.rows.map((row) => ({ ...row, createdAt: iso(row.createdAt) })),
@@ -57,11 +59,11 @@ export class AdminController {
     const input = createSiteRequestSchema.parse(body);
     try {
       const result = await this.pool.query(
-        `INSERT INTO floorwalk.sites (code, name)
-         VALUES ($1, $2)
+        `INSERT INTO floorwalk.sites (code, name, org_id)
+         VALUES ($1, $2, $3)
          RETURNING id, code, name, deactivated_at IS NULL AS active,
            created_at AS "createdAt"`,
-        [input.code, input.name],
+        [input.code, input.name, request.user.orgId],
       );
       return siteResponseSchema.parse({
         ...result.rows[0],
@@ -146,8 +148,8 @@ export class AdminController {
     try {
       await client.query('BEGIN');
       await client.query(
-        'INSERT INTO floorwalk.templates (id, name) VALUES ($1, $2)',
-        [id, input.name],
+        'INSERT INTO floorwalk.templates (id, name, org_id) VALUES ($1, $2, $3)',
+        [id, input.name, request.user.orgId],
       );
       await this.insertTemplateItems(client, id, input.items);
       await client.query('COMMIT');

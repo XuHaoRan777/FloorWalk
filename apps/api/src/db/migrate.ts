@@ -1,8 +1,13 @@
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { createDatabase, createPool, getDatabaseUrl } from './client.js';
+import { migrateLocalStorage } from './migrate-storage.js';
 
-export async function runMigrations(databaseUrl = getDatabaseUrl()) {
+export async function runMigrations(
+  databaseUrl = getDatabaseUrl(),
+  storageDir = process.env.STORAGE_DIR ?? path.resolve('.storage'),
+) {
   const pool = createPool(databaseUrl);
   try {
     await migrate(createDatabase(pool), {
@@ -10,6 +15,7 @@ export async function runMigrations(databaseUrl = getDatabaseUrl()) {
         new URL('../../drizzle', import.meta.url),
       ),
     });
+    await migrateLocalStorage(pool, storageDir);
   } finally {
     await pool.end();
   }

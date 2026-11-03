@@ -108,11 +108,11 @@ type ConsoleSection = 'queue' | 'dashboard' | 'sites' | 'templates';
 export function ConsolePage() {
   const { session, loading, error, setError, logout } = useConsoleSession();
   const [section, setSection] = useState<ConsoleSection>(() =>
-    readSession()?.user.role === 'hq' ? 'dashboard' : 'queue',
+    readSession()?.user.role === 'admin' ? 'dashboard' : 'queue',
   );
   const [selected, setSelected] = useState<InspectionDetail | null>(null);
   useEffect(() => {
-    if (session?.user.role === 'hq') setSection('dashboard');
+    if (session?.user.role === 'admin') setSection('dashboard');
   }, [session?.user.role]);
   if (loading || !session)
     return (
@@ -124,9 +124,9 @@ export function ConsolePage() {
       </div>
     );
   const { user } = session;
-  const isHq = user.role === 'hq';
-  const showDashboard = isHq && section === 'dashboard';
-  const canManage = user.role === 'supervisor' || isHq;
+  const isAdmin = user.role === 'admin';
+  const showDashboard = isAdmin && section === 'dashboard';
+  const canManage = user.role === 'supervisor' || isAdmin;
   return (
     <SidebarProvider className="fw-console">
       <Sidebar variant="inset">
@@ -138,7 +138,7 @@ export function ConsolePage() {
         <SidebarContent>
           <nav aria-label="控制台导航" className="p-2">
             <SidebarMenu>
-              {(user.role === 'supervisor' || user.role === 'hq') && (
+              {(user.role === 'supervisor' || user.role === 'admin') && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     isActive={section === 'queue'}
@@ -152,7 +152,7 @@ export function ConsolePage() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
-              {isHq && (
+              {isAdmin && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     isActive={showDashboard}

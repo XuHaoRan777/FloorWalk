@@ -51,8 +51,11 @@ export class AuthController {
       role: AuthUser['role'];
       site_id: string | null;
       created_at: string;
+      org_id: string;
+      org_name: string;
+      must_change_password: boolean;
     }>(
-      'SELECT id, email, password_hash, display_name, role, site_id, created_at FROM floorwalk.users WHERE email = $1',
+      `SELECT u.*, o.name AS org_name FROM floorwalk.users u JOIN floorwalk.organizations o ON o.id = u.org_id WHERE u.email = $1`,
       [input.email],
     );
     const row = result.rows[0];
@@ -67,12 +70,14 @@ export class AuthController {
       displayName: row.display_name,
       role: row.role,
       siteId: row.site_id,
+      org: { id: row.org_id, name: row.org_name },
+      mustChangePassword: row.must_change_password,
       createdAt: new Date(row.created_at).toISOString(),
     });
     const sessionId = randomBytes(32).toString('base64url');
     await this.pool.query(
       `INSERT INTO floorwalk.sessions (token_hash, user_id, expires_at)
-       VALUES ($1, $2, now() + interval '1 hour')`,
+       VALUES ($1, $2, now() + interval '7 days')`,
       [hashSessionId(sessionId), user.id],
     );
     response.setHeader('Set-Cookie', sessionCookie(sessionId));
@@ -105,8 +110,11 @@ export class AuthController {
       role: AuthUser['role'];
       site_id: string | null;
       created_at: string;
+      org_id: string;
+      org_name: string;
+      must_change_password: boolean;
     }>(
-      'SELECT id, email, display_name, role, site_id, created_at FROM floorwalk.users WHERE id = $1',
+      `SELECT u.*, o.name AS org_name FROM floorwalk.users u JOIN floorwalk.organizations o ON o.id = u.org_id WHERE u.id = $1`,
       [request.user.id],
     );
     const row = result.rows[0];
@@ -121,6 +129,8 @@ export class AuthController {
       displayName: row.display_name,
       role: row.role,
       siteId: row.site_id,
+      org: { id: row.org_id, name: row.org_name },
+      mustChangePassword: row.must_change_password,
       createdAt: new Date(row.created_at).toISOString(),
     });
   }

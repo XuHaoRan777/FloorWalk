@@ -1,4 +1,4 @@
-export type Role = 'inspector' | 'supervisor' | 'hq';
+export type Role = 'inspector' | 'supervisor' | 'admin';
 
 export type User = {
   id: string;
@@ -6,6 +6,8 @@ export type User = {
   displayName: string;
   role: Role;
   siteId: string | null;
+  org: { id: string; name: string };
+  mustChangePassword: boolean;
   createdAt: string;
 };
 

@@ -1,9 +1,8 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { createHmac } from 'node:crypto';
 import type { Request } from 'express';
 import { inspectionDetailSchema } from '@libs/shared';
 import { createPool } from './db/client.js';
-import { getJwtSecret, type AuthUser } from './auth.js';
+import { type AuthUser } from './auth.js';
 
 export type AuthedRequest = Request & { user: AuthUser };
 export type UploadedImage = {
@@ -14,11 +13,6 @@ export type UploadedImage = {
 };
 export const iso = (value: unknown) =>
   value instanceof Date ? value.toISOString() : value;
-
-export const evidenceSignature = (storageKey: string, expiresAt: number) =>
-  createHmac('sha256', getJwtSecret())
-    .update(`${storageKey}.${expiresAt}`)
-    .digest('hex');
 
 export function getShanghaiDayBounds(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {

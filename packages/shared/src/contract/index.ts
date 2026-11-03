@@ -1,9 +1,31 @@
 import { z, type ZodTypeAny } from 'zod';
+import {
+  siteSchema,
+  timestamp,
+  userRoleSchema,
+  userRoles,
+  userSchema,
+  uuid,
+  type UserRole,
+} from './identity.js';
+import { createOrgRequestSchema, createOrgResponseSchema } from './orgs.js';
+import {
+  adminSiteSchema,
+  adminUsersResponseSchema,
+  changePasswordRequestSchema,
+  createUserRequestSchema,
+  resetUserPasswordRequestSchema,
+  setSiteSupervisorRequestSchema,
+  setSiteSupervisorResponseSchema,
+  updateUserRequestSchema,
+  userResponseSchema,
+} from './users.js';
 
-const uuid = z.string().uuid();
-const timestamp = z.string().datetime({ offset: true });
+export * from './identity.js';
+export * from './orgs.js';
+export * from './users.js';
+export * from './ai.js';
 
-export const userRoles = ['inspector', 'supervisor', 'hq'] as const;
 export const inspectionStatuses = [
   'draft',
   'submitted',
@@ -24,28 +46,10 @@ export const errorCodes = [
   'NOT_FOUND',
 ] as const;
 
-export const userRoleSchema = z.enum(userRoles);
 export const inspectionStatusSchema = z.enum(inspectionStatuses);
 export const inspectionItemResultSchema = z.enum(inspectionItemResults);
 export const reviewActionSchema = z.enum(reviewActions);
 export const errorCodeSchema = z.enum(errorCodes);
-
-export const siteSchema = z.object({
-  id: uuid,
-  code: z.string().min(1),
-  name: z.string().min(1),
-  active: z.boolean(),
-  createdAt: timestamp,
-});
-
-export const userSchema = z.object({
-  id: uuid,
-  email: z.string().email(),
-  displayName: z.string().min(1),
-  role: userRoleSchema,
-  siteId: uuid.nullable(),
-  createdAt: timestamp,
-});
 
 export const templateSchema = z.object({
   id: uuid,
@@ -206,7 +210,7 @@ export const updateSiteRequestSchema = z
   })
   .refine((value) => value.name !== undefined || value.active !== undefined);
 
-export const adminSitesResponseSchema = z.array(siteSchema);
+export const adminSitesResponseSchema = z.array(adminSiteSchema);
 export const siteResponseSchema = siteSchema;
 
 export const adminTemplateSchema = templateSchema.extend({
@@ -340,7 +344,9 @@ export const evidenceUploadRequestSchema = z.object({
 export const dashboardLatestStatuses = ['passed', 'failed'] as const;
 export const databaseConstraints = {
   unique: [
-    'templates.name',
+    'sites(org_id, code)',
+    'templates(org_id, name)',
+    'users.email',
     'templates.is_current WHERE is_current = true',
     'template_items(template_id, position)',
     'sessions.token_hash',
@@ -354,7 +360,7 @@ export const databaseConstraints = {
     'chat_messages(inspection_id, seq)',
   ],
   checks: [
-    "users.role IN ('inspector', 'supervisor', 'hq')",
+    "users.role IN ('inspector', 'supervisor', 'admin')",
     'users.role = inspector requires site_id; other roles require NULL site_id',
     'template_items.position > 0',
     "inspections.status IN ('draft', 'submitted', 'in_review', 'passed', 'rework', 'failed')",
@@ -390,6 +396,7 @@ export type ApiRouteDefinition = {
   requestSchema: ZodTypeAny | null;
   responseSchema: ZodTypeAny;
   successStatus: 200 | 201 | 204;
+  allowWhilePasswordChangeRequired?: boolean;
 };
 
 export const apiRoutes = {
@@ -408,6 +415,7 @@ export const apiRoutes = {
     requestSchema: null,
     responseSchema: z.undefined(),
     successStatus: 204,
+    allowWhilePasswordChangeRequired: true,
   },
   me: {
     method: 'GET',
@@ -416,6 +424,64 @@ export const apiRoutes = {
     requestSchema: null,
     responseSchema: userSchema,
     successStatus: 200,
+    allowWhilePasswordChangeRequired: true,
+  },
+  createOrg: {
+    method: 'POST',
+    path: '/api/orgs',
+    roles: [],
+    requestSchema: createOrgRequestSchema,
+    responseSchema: createOrgResponseSchema,
+    successStatus: 201,
+  },
+  setSiteSupervisor: {
+    method: 'PUT',
+    path: '/api/admin/sites/:id/supervisor',
+    roles: ['admin'],
+    requestSchema: setSiteSupervisorRequestSchema,
+    responseSchema: setSiteSupervisorResponseSchema,
+    successStatus: 200,
+  },
+  listAdminUsers: {
+    method: 'GET',
+    path: '/api/admin/users',
+    roles: ['admin', 'supervisor'],
+    requestSchema: null,
+    responseSchema: adminUsersResponseSchema,
+    successStatus: 200,
+  },
+  createAdminUser: {
+    method: 'POST',
+    path: '/api/admin/users',
+    roles: ['admin', 'supervisor'],
+    requestSchema: createUserRequestSchema,
+    responseSchema: userResponseSchema,
+    successStatus: 201,
+  },
+  updateAdminUser: {
+    method: 'PATCH',
+    path: '/api/admin/users/:id',
+    roles: ['admin', 'supervisor'],
+    requestSchema: updateUserRequestSchema,
+    responseSchema: userResponseSchema,
+    successStatus: 200,
+  },
+  resetAdminUserPassword: {
+    method: 'POST',
+    path: '/api/admin/users/:id/password',
+    roles: ['admin', 'supervisor'],
+    requestSchema: resetUserPasswordRequestSchema,
+    responseSchema: z.undefined(),
+    successStatus: 204,
+  },
+  changePassword: {
+    method: 'POST',
+    path: '/api/me/password',
+    roles: userRoles,
+    requestSchema: changePasswordRequestSchema,
+    responseSchema: z.undefined(),
+    successStatus: 204,
+    allowWhilePasswordChangeRequired: true,
   },
   today: {
     method: 'GET',
@@ -476,7 +542,7 @@ export const apiRoutes = {
   reviewQueue: {
     method: 'GET',
     path: '/api/review/queue',
-    roles: ['supervisor', 'hq'],
+    roles: ['supervisor', 'admin'],
     requestSchema: null,
     responseSchema: reviewQueueResponseSchema,
     successStatus: 200,
@@ -492,7 +558,7 @@ export const apiRoutes = {
   dashboardSites: {
     method: 'GET',
     path: '/api/dashboard/sites',
-    roles: ['supervisor', 'hq'],
+    roles: ['supervisor', 'admin'],
     requestSchema: null,
     responseSchema: dashboardSitesResponseSchema,
     successStatus: 200,
@@ -549,7 +615,7 @@ export const apiRoutes = {
   listAdminSites: {
     method: 'GET',
     path: '/api/admin/sites',
-    roles: ['supervisor', 'hq'],
+    roles: ['supervisor', 'admin'],
     requestSchema: null,
     responseSchema: adminSitesResponseSchema,
     successStatus: 200,
@@ -557,7 +623,7 @@ export const apiRoutes = {
   createAdminSite: {
     method: 'POST',
     path: '/api/admin/sites',
-    roles: ['supervisor', 'hq'],
+    roles: ['supervisor', 'admin'],
     requestSchema: createSiteRequestSchema,
     responseSchema: siteResponseSchema,
     successStatus: 201,
@@ -565,7 +631,7 @@ export const apiRoutes = {
   updateAdminSite: {
     method: 'PATCH',
     path: '/api/admin/sites/:id',
-    roles: ['supervisor', 'hq'],
+    roles: ['supervisor', 'admin'],
     requestSchema: updateSiteRequestSchema,
     responseSchema: siteResponseSchema,
     successStatus: 200,
@@ -573,7 +639,7 @@ export const apiRoutes = {
   listAdminTemplates: {
     method: 'GET',
     path: '/api/admin/templates',
-    roles: ['supervisor', 'hq'],
+    roles: ['supervisor', 'admin'],
     requestSchema: null,
     responseSchema: adminTemplatesResponseSchema,
     successStatus: 200,
@@ -581,7 +647,7 @@ export const apiRoutes = {
   createAdminTemplate: {
     method: 'POST',
     path: '/api/admin/templates',
-    roles: ['supervisor', 'hq'],
+    roles: ['supervisor', 'admin'],
     requestSchema: createTemplateRequestSchema,
     responseSchema: templateResponseSchema,
     successStatus: 201,
@@ -589,7 +655,7 @@ export const apiRoutes = {
   updateAdminTemplate: {
     method: 'PUT',
     path: '/api/admin/templates/:id',
-    roles: ['supervisor', 'hq'],
+    roles: ['supervisor', 'admin'],
     requestSchema: updateTemplateRequestSchema,
     responseSchema: templateResponseSchema,
     successStatus: 200,
@@ -597,7 +663,7 @@ export const apiRoutes = {
   setCurrentAdminTemplate: {
     method: 'POST',
     path: '/api/admin/templates/:id/current',
-    roles: ['supervisor', 'hq'],
+    roles: ['supervisor', 'admin'],
     requestSchema: null,
     responseSchema: templateResponseSchema,
     successStatus: 200,
@@ -610,13 +676,10 @@ export function apiRoutePath(route: ApiRouteDefinition) {
   return route.path.slice('/api'.length);
 }
 
-export type UserRole = z.infer<typeof userRoleSchema>;
 export type InspectionStatus = z.infer<typeof inspectionStatusSchema>;
 export type InspectionItemResult = z.infer<typeof inspectionItemResultSchema>;
 export type ReviewAction = z.infer<typeof reviewActionSchema>;
 export type ErrorCode = z.infer<typeof errorCodeSchema>;
-export type Site = z.infer<typeof siteSchema>;
-export type User = z.infer<typeof userSchema>;
 export type Template = z.infer<typeof templateSchema>;
 export type TemplateItem = z.infer<typeof templateItemSchema>;
 export type Inspection = z.infer<typeof inspectionSchema>;

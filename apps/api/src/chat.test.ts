@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
@@ -7,6 +7,7 @@ import { createPool } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import { seedDatabase } from './db/seed.js';
 import { HttpErrorFilter } from './http-exception.filter.js';
+import { LocalStorageDriver } from './storage/local.js';
 
 describe('inspection chat authorization', () => {
   let app: NestExpressApplication;
@@ -96,5 +97,39 @@ describe('inspection chat authorization', () => {
       [createdMessageId, passedInspectionId],
     );
     expect(persisted.rows).toHaveLength(1);
+  });
+
+  it('rolls back the message and removes its image when signing fails', async () => {
+    const before = await pool.query(
+      'SELECT id FROM floorwalk.chat_messages WHERE inspection_id = $1 ORDER BY id',
+      [passedInspectionId],
+    );
+    const signing = vi
+      .spyOn(LocalStorageDriver.prototype, 'signedUrl')
+      .mockRejectedValueOnce(new Error('storage signing failed'));
+    const deletion = vi.spyOn(LocalStorageDriver.prototype, 'delete');
+    let writtenKey: string | undefined;
+    try {
+      await request(app.getHttpServer())
+        .post(`/api/inspections/${passedInspectionId}/messages`)
+        .set('Cookie', inspectorCookie)
+        .attach('file', Buffer.from('chat-image'), {
+          filename: 'chat.png',
+          contentType: 'image/png',
+        })
+        .expect(500);
+      writtenKey = deletion.mock.calls[0]?.[0];
+      expect(writtenKey).toContain(`/chat/${passedInspectionId}/`);
+      await expect(new LocalStorageDriver().get(writtenKey!)).rejects.toThrow();
+      const after = await pool.query(
+        'SELECT id FROM floorwalk.chat_messages WHERE inspection_id = $1 ORDER BY id',
+        [passedInspectionId],
+      );
+      expect(after.rows).toEqual(before.rows);
+    } finally {
+      signing.mockRestore();
+      deletion.mockRestore();
+      if (writtenKey) await new LocalStorageDriver().delete(writtenKey);
+    }
   });
 });

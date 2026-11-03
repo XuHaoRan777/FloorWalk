@@ -407,13 +407,17 @@ test('chat history, polling, visibility, sending, images, and HQ read-only', asy
       refreshedImageUrlStatus = response.status();
     if (
       decodeURIComponent(new URL(response.url()).pathname).includes(
-        `/storage/chat/${target.id}/`,
+        `/chat/${target.id}/`,
       )
     )
       chatImageResponseStatus = response.status();
   });
   page.on('request', (browserRequest) => {
-    if (browserRequest.url().includes(`/storage/chat%2F${target.id}%2F`))
+    if (
+      decodeURIComponent(new URL(browserRequest.url()).pathname).includes(
+        `/chat/${target.id}/`,
+      )
+    )
       refreshedImageRequests += 1;
   });
   const chatImageUrl = (url: URL) =>

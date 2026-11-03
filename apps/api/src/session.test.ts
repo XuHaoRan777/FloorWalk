@@ -118,7 +118,7 @@ describe('HttpOnly sessions', () => {
     }
   });
 
-  it('stores only the SHA-256 of a random 32-byte ID with a fixed one-hour expiry', async () => {
+  it('stores only the SHA-256 of a random 32-byte ID with a seven-day idle window', async () => {
     const response = await login().expect(201);
     const body = loginResponseSchema.parse(response.body);
     expect(Object.keys(response.body)).toEqual(['user']);
@@ -130,6 +130,7 @@ describe('HttpOnly sessions', () => {
       user_id: string;
       created_at: Date;
       expires_at: Date;
+      last_seen_at: Date;
       revoked_at: Date | null;
     }>('SELECT * FROM floorwalk.sessions WHERE token_hash = $1', [hash(rawId)]);
     expect(result.rows).toHaveLength(1);
@@ -140,7 +141,7 @@ describe('HttpOnly sessions', () => {
     expect(session.revoked_at).toBeNull();
     expect(
       Math.abs(
-        session.expires_at.getTime() - session.created_at.getTime() - 3600000,
+        session.expires_at.getTime() - session.created_at.getTime() - 604800000,
       ),
     ).toBeLessThan(1000);
     const next = await login().expect(201);
@@ -160,7 +161,7 @@ describe('HttpOnly sessions', () => {
         expect(/; HttpOnly(?:;|$)/i.test(header)).toBe(true);
         expect(/; SameSite=Strict(?:;|$)/i.test(header)).toBe(true);
         expect(/; Path=\/api(?:;|$)/i.test(header)).toBe(true);
-        expect(/; Max-Age=3600(?:;|$)/i.test(header)).toBe(true);
+        expect(/; Max-Age=604800(?:;|$)/i.test(header)).toBe(true);
         expect(/; Secure(?:;|$)/i.test(header)).toBe(nodeEnv === 'production');
       } finally {
         if (initialNodeEnv === undefined) delete process.env.NODE_ENV;
@@ -200,13 +201,32 @@ describe('HttpOnly sessions', () => {
     );
   });
 
-  it('rejects an expired session', async () => {
+  it('rejects a session idle for seven days', async () => {
     const cookie = cookieFrom(await login().expect(201));
     await pool.query(
-      "UPDATE floorwalk.sessions SET expires_at = NOW() - INTERVAL '1 second' WHERE token_hash = $1",
+      "UPDATE floorwalk.sessions SET last_seen_at = NOW() - INTERVAL '7 days' WHERE token_hash = $1",
       [hash(cookie.slice('fw_session='.length))],
     );
     await unauthenticated(cookie);
+  });
+
+  it('refreshes activity and cookie while ignoring the retained expires_at column', async () => {
+    const cookie = cookieFrom(await login().expect(201));
+    const tokenHash = hash(cookie.slice('fw_session='.length));
+    await pool.query(
+      "UPDATE floorwalk.sessions SET last_seen_at = now() - interval '6 days', expires_at = now() - interval '1 hour' WHERE token_hash = $1",
+      [tokenHash],
+    );
+    const response = await request(app.getHttpServer())
+      .get('/api/me')
+      .set('Cookie', cookie)
+      .expect(200);
+    expect(response.headers['set-cookie'][0]).toContain('Max-Age=604800');
+    const result = await pool.query(
+      "SELECT now() - last_seen_at < interval '1 minute' AS refreshed FROM floorwalk.sessions WHERE token_hash = $1",
+      [tokenHash],
+    );
+    expect(result.rows[0].refreshed).toBe(true);
   });
 
   it('rejects a revoked session', async () => {
@@ -220,8 +240,8 @@ describe('HttpOnly sessions', () => {
 
   it('rejects a session after its user has been deleted and cascades all their sessions', async () => {
     const created = await pool.query<{ id: string }>(
-      `INSERT INTO floorwalk.users (email, password_hash, display_name, role)
-       SELECT 'session-deleted@northbean.example', password_hash, 'Session test', 'supervisor'
+      `INSERT INTO floorwalk.users (email, password_hash, display_name, role, org_id)
+       SELECT 'session-deleted@northbean.example', password_hash, 'Session test', 'supervisor', org_id
        FROM floorwalk.users WHERE email = 'supervisor@northbean.example' RETURNING id`,
     );
     const userId = created.rows[0].id;
@@ -282,6 +302,7 @@ describe('HttpOnly sessions', () => {
       { column_name: 'created_at', is_nullable: 'NO' },
       { column_name: 'expires_at', is_nullable: 'NO' },
       { column_name: 'revoked_at', is_nullable: 'YES' },
+      { column_name: 'last_seen_at', is_nullable: 'NO' },
     ]);
     const indexes = await pool.query<{ indexdef: string }>(
       "SELECT indexdef FROM pg_indexes WHERE schemaname = 'floorwalk' AND tablename = 'sessions'",

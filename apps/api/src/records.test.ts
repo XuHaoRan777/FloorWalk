@@ -49,8 +49,8 @@ describe('inspector records API', () => {
         'SELECT id FROM floorwalk.templates LIMIT 1',
       );
       const colleague = await pool.query<{ id: string }>(
-        `INSERT INTO floorwalk.users (email, password_hash, display_name, role, site_id)
-         VALUES ($1, 'test-hash', '同店店员', 'inspector', $2) RETURNING id`,
+        `INSERT INTO floorwalk.users (email, password_hash, display_name, role, site_id, org_id)
+         VALUES ($1, 'test-hash', '同店店员', 'inspector', $2, (SELECT org_id FROM floorwalk.sites WHERE id = $2)) RETURNING id`,
         [`records-${crypto.randomUUID()}@northbean.example`, site.rows[0].id],
       );
       colleagueId = colleague.rows[0].id;

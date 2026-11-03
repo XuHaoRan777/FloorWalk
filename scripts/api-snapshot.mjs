@@ -140,7 +140,7 @@ async function login(role) {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      email: `${role}@northbean.example`,
+      email: `${role === 'admin' ? 'hq' : role}@northbean.example`,
       password: 'northbean-demo',
     }),
   });
@@ -227,10 +227,23 @@ try {
   const templates = await call(
     'seed:templates',
     apiRoutes.listAdminTemplates.path,
-    'hq',
+    'admin',
   );
-  if (sites.length !== 12 || sites.some((site) => !site.active))
-    throw new Error('种子应有 12 家启用门店。');
+  const northbeanCodes = sites
+    .filter((site) => site.code.startsWith('NB-'))
+    .map((site) => site.code)
+    .sort();
+  const expectedNorthbeanCodes = Array.from(
+    { length: 12 },
+    (_, index) => `NB-${String(index + 1).padStart(3, '0')}`,
+  );
+  if (
+    sites.length !== 13 ||
+    JSON.stringify(northbeanCodes) !== JSON.stringify(expectedNorthbeanCodes) ||
+    sites.filter((site) => site.code === 'DEMO2-001').length !== 1 ||
+    sites.some((site) => !site.active)
+  )
+    throw new Error('种子应有 Northbean 的 12 家与演示二号的 1 家启用门店。');
   if (
     templates.filter((template) => template.isCurrent).length !== 1 ||
     !today.site.active ||
@@ -283,8 +296,23 @@ try {
   let evidence;
   let inspection;
   let chatMessage;
+  // T04 接入新增路由的 501 与角色检查；T03 仅适配既有流程。
+  const pendingProtocolRoutes = new Set([
+    'createOrg',
+    'setSiteSupervisor',
+    'listAdminUsers',
+    'createAdminUser',
+    'updateAdminUser',
+    'resetAdminUserPassword',
+    'changePassword',
+  ]);
   for (const [key, route] of Object.entries(apiRoutes)) {
-    if (key === 'createSession' || key === 'deleteSession') continue;
+    if (
+      key === 'createSession' ||
+      key === 'deleteSession' ||
+      pendingProtocolRoutes.has(key)
+    )
+      continue;
     if (key === 'submitInspection') {
       for (const item of detail.items) {
         await call(
@@ -407,7 +435,7 @@ try {
   const dashboard = await call(
     'demo:dashboard',
     apiRoutes.dashboardSites.path,
-    'hq',
+    'admin',
   );
   if (dashboard.find((row) => row.site.code === 'NB-001')?.latestScore !== 100)
     throw new Error('演示链看板应显示 100。');
@@ -425,7 +453,7 @@ try {
   await mkdir(path.dirname(path.resolve(output)), { recursive: true });
   await writeFile(output, `${JSON.stringify(normalize(records), null, 2)}\n`);
   console.log(
-    `快照完成：${records.length} 次请求；${Object.keys(apiRoutes).length} 个路由 × 3 个角色；${output}`,
+    `快照完成：${records.length} 次请求；${Object.keys(apiRoutes).length - pendingProtocolRoutes.size} 个已接入路由 × 3 个角色；${output}`,
   );
 } finally {
   try {

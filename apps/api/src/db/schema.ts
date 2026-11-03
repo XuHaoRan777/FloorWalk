@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   boolean,
   bigserial,
   check,
@@ -18,22 +19,65 @@ export const floorwalk = pgSchema('floorwalk');
 const createdAt = () =>
   timestamp('created_at', { withTimezone: true }).defaultNow().notNull();
 
-export const sites = floorwalk.table('sites', {
+export const organizations = floorwalk.table('organizations', {
   id: uuid('id').defaultRandom().primaryKey(),
-  code: text('code').notNull().unique(),
   name: text('name').notNull(),
-  deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+  timezone: text('timezone').notNull().default('Asia/Shanghai'),
   createdAt: createdAt(),
 });
 
-export const users = floorwalk.table('users', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  email: text('email').notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
-  displayName: text('display_name').notNull(),
-  role: text('role').notNull(),
-  siteId: uuid('site_id').references(() => sites.id),
-  createdAt: createdAt(),
+export const sites = floorwalk.table(
+  'sites',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id),
+    code: text('code').notNull(),
+    name: text('name').notNull(),
+    deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (table) => [unique('sites_org_code_unique').on(table.orgId, table.code)],
+);
+
+export const users = floorwalk.table(
+  'users',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id),
+    email: text('email').notNull().unique(),
+    passwordHash: text('password_hash').notNull(),
+    displayName: text('display_name').notNull(),
+    role: text('role').notNull(),
+    siteId: uuid('site_id').references(() => sites.id),
+    mustChangePassword: boolean('must_change_password')
+      .notNull()
+      .default(false),
+    disabledAt: timestamp('disabled_at', { withTimezone: true }),
+    createdBy: uuid('created_by').references((): AnyPgColumn => users.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    check(
+      'users_role_check',
+      sql`${table.role} IN ('inspector', 'supervisor', 'admin')`,
+    ),
+  ],
+);
+
+export const siteSupervisors = floorwalk.table('site_supervisors', {
+  siteId: uuid('site_id')
+    .primaryKey()
+    .references(() => sites.id),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id),
+  assignedAt: timestamp('assigned_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 export const sessions = floorwalk.table(
@@ -46,6 +90,9 @@ export const sessions = floorwalk.table(
       .references(() => users.id, { onDelete: 'cascade' }),
     createdAt: createdAt(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
   },
   (table) => [index('sessions_user_id_idx').on(table.userId)],
@@ -55,11 +102,15 @@ export const templates = floorwalk.table(
   'templates',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    name: text('name').notNull().unique(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id),
+    name: text('name').notNull(),
     isCurrent: boolean('is_current').notNull().default(false),
     createdAt: createdAt(),
   },
   (table) => [
+    unique('templates_org_name_unique').on(table.orgId, table.name),
     uniqueIndex('templates_single_current_idx')
       .on(table.isCurrent)
       .where(sql`${table.isCurrent} = true`),

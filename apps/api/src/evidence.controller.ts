@@ -15,8 +15,6 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { randomUUID } from 'node:crypto';
-import { mkdir, unlink, writeFile } from 'node:fs/promises';
-import path from 'node:path';
 import {
   apiRoutePath,
   apiRoutes,
@@ -33,10 +31,10 @@ import {
   type AuthedRequest,
   type UploadedImage,
   iso,
-  evidenceSignature,
   assertRole,
   assertInspectionAccess,
 } from './inspection-queries.js';
+import { getStorageDriver } from './storage/index.js';
 
 @Controller('api')
 export class EvidenceController {
@@ -67,8 +65,9 @@ export class EvidenceController {
       },
     });
     const pool = this.pool;
+    const storage = await getStorageDriver();
     const client = await pool.connect();
-    let target: string | undefined;
+    let writtenKey: string | undefined;
     let committed = false;
     try {
       await client.query('BEGIN');
@@ -97,12 +96,10 @@ export class EvidenceController {
           code: 'NOT_FOUND',
           message: '检查项不存在。',
         });
-      const storageDir = process.env.STORAGE_DIR ?? path.resolve('.storage');
       const extension = file.mimetype === 'image/jpeg' ? '.jpg' : '.png';
-      const storageKey = `${id}/${randomUUID()}${extension}`;
-      target = path.resolve(storageDir, storageKey);
-      await mkdir(path.dirname(target), { recursive: true });
-      await writeFile(target, file.buffer);
+      const storageKey = `org/${request.user.orgId}/${id}/${randomUUID()}${extension}`;
+      writtenKey = storageKey;
+      await storage.put(storageKey, file.buffer, file.mimetype);
       const result = await client.query(
         `INSERT INTO floorwalk.evidence (inspection_item_id, storage_key, mime, size)
          VALUES ($1, $2, $3, $4)
@@ -120,7 +117,7 @@ export class EvidenceController {
     } catch (error) {
       if (!committed) {
         await client.query('ROLLBACK');
-        if (target) await unlink(target).catch(() => undefined);
+        if (writtenKey) await storage.delete(writtenKey).catch(() => undefined);
       }
       throw error;
     } finally {
@@ -153,14 +150,9 @@ export class EvidenceController {
         message: '照片不存在。',
       });
     assertInspectionAccess(evidence, request.user);
-    const baseUrl = (
-      process.env.API_PUBLIC_BASE_URL ??
-      `http://${process.env.HOST ?? '127.0.0.1'}:${process.env.PORT ?? '3018'}`
-    ).replace(/\/$/, '');
-    const expiresAt = Date.now() + 60 * 60 * 1000;
-    return signedEvidenceResponseSchema.parse({
-      url: `${baseUrl}/storage/${encodeURIComponent(evidence.storageKey)}?expires=${expiresAt}&signature=${evidenceSignature(evidence.storageKey, expiresAt)}`,
-      expiresAt: new Date(expiresAt).toISOString(),
-    });
+    const storage = await getStorageDriver();
+    return signedEvidenceResponseSchema.parse(
+      await storage.signedUrl(evidence.storageKey, 3600),
+    );
   }
 }

@@ -3,7 +3,7 @@ import { APP_NAME } from '@libs/shared';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
-import { getJwtSecret } from './auth.js';
+import { getJwtSecret } from './auth-config.js';
 import { HttpErrorFilter } from './http-exception.filter.js';
 
 async function bootstrap() {

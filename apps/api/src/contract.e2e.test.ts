@@ -36,6 +36,17 @@ import {
   userRoles,
 } from '@libs/shared';
 
+// T04 covers the seven new protocol routes; T03 retains all 24 existing routes.
+const pendingProtocolRoutes = new Set([
+  'createOrg',
+  'setSiteSupervisor',
+  'listAdminUsers',
+  'createAdminUser',
+  'updateAdminUser',
+  'resetAdminUserPassword',
+  'changePassword',
+]);
+
 describe('inspection contract API', () => {
   let app: NestExpressApplication;
   let inspectorCookie: string;
@@ -215,7 +226,7 @@ describe('inspection contract API', () => {
   });
 
   it('publishes the complete route table under /api', () => {
-    expect(Object.keys(apiRoutes)).toHaveLength(24);
+    expect(Object.keys(apiRoutes)).toHaveLength(31);
     for (const route of Object.values(apiRoutes)) {
       expect(route.path.startsWith('/api/')).toBe(true);
       expect(route.responseSchema).toBeDefined();
@@ -264,7 +275,7 @@ describe('inspection contract API', () => {
               .set('Cookie', supervisorCookie);
             return { status: response.status, body: response.body };
           },
-          hq: async () => {
+          admin: async () => {
             const response = await request(app.getHttpServer())
               .get('/api/inspector/today')
               .set('Cookie', hqCookie);
@@ -282,7 +293,7 @@ describe('inspection contract API', () => {
               .send({ templateId });
             return { status: response.status, body: response.body };
           },
-          hq: async () => {
+          admin: async () => {
             const response = await request(app.getHttpServer())
               .post('/api/inspections')
               .set('Cookie', hqCookie)
@@ -303,7 +314,7 @@ describe('inspection contract API', () => {
               .send({ result: 'pass' });
             return { status: response.status, body: response.body };
           },
-          hq: async () => {
+          admin: async () => {
             const response = await request(app.getHttpServer())
               .patch(
                 `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000`,
@@ -325,7 +336,7 @@ describe('inspection contract API', () => {
               .set('Cookie', supervisorCookie);
             return { status: response.status, body: response.body };
           },
-          hq: async () => {
+          admin: async () => {
             const response = await request(app.getHttpServer())
               .post(
                 `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000/evidence`,
@@ -344,7 +355,7 @@ describe('inspection contract API', () => {
               .set('Cookie', supervisorCookie);
             return { status: response.status, body: response.body };
           },
-          hq: async () => {
+          admin: async () => {
             const response = await request(app.getHttpServer())
               .post(`/api/inspections/${inspectionId}/submit`)
               .set('Cookie', hqCookie);
@@ -373,7 +384,7 @@ describe('inspection contract API', () => {
               .send({ action: 'approve' });
             return { status: response.status, body: response.body };
           },
-          hq: async () => {
+          admin: async () => {
             const response = await request(app.getHttpServer())
               .post(`/api/inspections/${inspectionId}/review`)
               .set('Cookie', hqCookie)
@@ -396,7 +407,7 @@ describe('inspection contract API', () => {
       [
         'createInspectionMessage',
         {
-          hq: async () => {
+          admin: async () => {
             const response = await request(app.getHttpServer())
               .post(`/api/inspections/${inspectionId}/messages`)
               .set('Cookie', hqCookie)
@@ -414,7 +425,7 @@ describe('inspection contract API', () => {
               .set('Cookie', supervisorCookie);
             return { status: response.status, body: response.body };
           },
-          hq: async () => {
+          admin: async () => {
             const response = await request(app.getHttpServer())
               .get('/api/inspector/inspections')
               .set('Cookie', hqCookie);
@@ -520,6 +531,7 @@ describe('inspection contract API', () => {
       ],
     ]);
     for (const [routeKey, route] of Object.entries(apiRoutes)) {
+      if (pendingProtocolRoutes.has(routeKey)) continue;
       if (route.roles.length === 0) continue;
       for (const role of userRoles) {
         if ((route.roles as readonly string[]).includes(role)) continue;
@@ -546,7 +558,14 @@ describe('inspection contract API', () => {
       .get('/api/admin/sites')
       .set('Cookie', supervisorCookie)
       .expect(200);
-    expect(adminSitesResponseSchema.parse(sites.body)).toHaveLength(12);
+    const allSites = adminSitesResponseSchema.parse(sites.body);
+    expect(allSites.filter((site) => site.code.startsWith('NB-'))).toHaveLength(
+      12,
+    );
+    expect(allSites.filter((site) => site.code === 'DEMO2-001')).toHaveLength(
+      1,
+    );
+    expect(allSites).toHaveLength(13);
 
     const createdSite = await request(app.getHttpServer())
       .post('/api/admin/sites')
@@ -560,7 +579,7 @@ describe('inspection contract API', () => {
       .get('/api/admin/templates')
       .set('Cookie', supervisorCookie)
       .expect(200);
-    expect(adminTemplatesResponseSchema.parse(templates.body)).toHaveLength(1);
+    expect(adminTemplatesResponseSchema.parse(templates.body)).toHaveLength(2);
 
     const createdTemplate = await request(app.getHttpServer())
       .post('/api/admin/templates')
@@ -920,7 +939,7 @@ describe('inspection contract API', () => {
     }
   });
 
-  it('exposes every contracted endpoint with its response schema', async () => {
+  it('exposes every existing contracted endpoint with its response schema', async () => {
     const login = await request(app.getHttpServer())
       .post('/api/auth/session')
       .send({
@@ -1420,6 +1439,7 @@ describe('inspection contract API', () => {
       setCurrentAdminTemplate: adminTemplateCurrentResponse,
     };
     for (const [routeKey, route] of Object.entries(apiRoutes)) {
+      if (pendingProtocolRoutes.has(routeKey)) continue;
       const response = routeResponses[routeKey as keyof typeof routeResponses];
       expect(response.status).toBe(route.successStatus);
       route.responseSchema.parse(

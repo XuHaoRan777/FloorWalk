@@ -97,8 +97,9 @@ async function createTestRecords(page: Page) {
   const pool = createPool(slotDatabaseUrl());
   try {
     const colleague = await pool.query<{ id: string }>(
-      `INSERT INTO floorwalk.users (email, password_hash, display_name, role, site_id)
-       VALUES ($1, 'test-hash', '同店测试店员', 'inspector', $2)
+      `INSERT INTO floorwalk.users (email, password_hash, display_name, role, site_id, org_id)
+       SELECT $1, 'test-hash', '同店测试店员', 'inspector', id, org_id
+       FROM floorwalk.sites WHERE id = $2
        RETURNING id`,
       [`records-${randomUUID()}@northbean.example`, today.site.id],
     );

@@ -144,13 +144,17 @@ test('AC-05 模板检查项编辑、排序和设为当前匹配 API', async ({ p
     id: string;
     name: string;
     isCurrent: boolean;
+    items: unknown[];
   }>;
   initialCurrentTemplateId = initialTemplates.find(
     (template) => template.isCurrent,
   )?.id;
   expect(initialCurrentTemplateId).toBeTruthy();
   for (const template of initialTemplates) {
-    const row = page.getByRole('button', { name: new RegExp(template.name) });
+    const row = page.getByRole('button', {
+      name: `${template.name} ${template.items.length} 项${template.isCurrent ? ' 当前模板' : ''}`,
+      exact: true,
+    });
     await expect(row).toBeVisible();
     if (template.isCurrent) await expect(row).toContainText('当前模板');
   }
