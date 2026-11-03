@@ -127,8 +127,9 @@ export function ConsolePage() {
     );
   const { user } = session;
   const isAdmin = user.role === 'admin';
-  const showDashboard = isAdmin && section === 'dashboard';
   const canManage = user.role === 'supervisor' || isAdmin;
+  const canSeeDashboard = user.role === 'supervisor' || isAdmin;
+  const showDashboard = canSeeDashboard && section === 'dashboard';
   return (
     <SidebarProvider className="fw-console">
       <Sidebar variant="inset">
@@ -154,7 +155,7 @@ export function ConsolePage() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
-              {isAdmin && (
+              {canSeeDashboard && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     isActive={showDashboard}

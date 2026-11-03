@@ -4,22 +4,22 @@
 
 ## 当前状态
 
-- 工作单元状态：`in_progress`
+- 工作单元状态：`blocked`
 - 归档状态：`active`
 - 并行组：g03，线 L1 第 1 个（上游 FW-017，下游 FW-019），槽位 1
-- 当前任务：T03
-- 阻塞：无
-- 下一步：收紧主管可访问门店范围，并验证 admin 审核无主管门店
+- 当前任务：T04
+- 阻塞：完整 Web e2e 中 admin 审核详情出现聊天输入框；修复涉及尚未授权的 `apps/web/src/components/console/review-detail.tsx`
+- 下一步：等待是否将 `review-detail.tsx` 加入 FW-018 写入范围
 
 ## 任务表
 
-| ID  | 任务                                             | 状态      | 交付的 AC 与证据                               |
-| --- | ------------------------------------------------ | --------- | ---------------------------------------------- |
-| T01 | 巡检、证据、审核、记录、聊天接口加商家与门店范围 | `done`    | AC-01、AC-02、AC-04（这几类接口）              |
-| T02 | 看板、门店、模板接口加商家范围，查重按商家       | `done`    | AC-01、AC-05（这几类接口）                     |
-| T03 | 主管名下范围与无主管门店只给 admin 审            | `done`    | AC-02、AC-03                                   |
-| T04 | Web 范围 e2e，现有 e2e 回绿                      | `pending` | AC-06                                          |
-| T05 | 最终代码审查                                     | `pending` | 独立 Subagent，按 `docs/howto/final-review.md` |
+| ID  | 任务                                             | 状态          | 交付的 AC 与证据                               |
+| --- | ------------------------------------------------ | ------------- | ---------------------------------------------- |
+| T01 | 巡检、证据、审核、记录、聊天接口加商家与门店范围 | `done`        | AC-01、AC-02、AC-04（这几类接口）              |
+| T02 | 看板、门店、模板接口加商家范围，查重按商家       | `done`        | AC-01、AC-05（这几类接口）                     |
+| T03 | 主管名下范围与无主管门店只给 admin 审            | `done`        | AC-02、AC-03                                   |
+| T04 | Web 范围 e2e，现有 e2e 回绿                      | `blocked`     | AC-06                                          |
+| T05 | 最终代码审查                                     | `pending`     | 独立 Subagent，按 `docs/howto/final-review.md` |
 
 ## 证据
 
@@ -37,6 +37,8 @@
 | T02  | passed  | `pnpm --filter @apps/api typecheck`、`pnpm --filter @apps/api build`、`pnpm --filter @apps/api lint`、`pnpm exec prettier --check ...`、`FW_SLOT=1 pnpm --filter @apps/api test`、`python scripts/validate_docs.py`、`git diff --check` | `apps/api/src/contract.e2e.test.ts`  | API 全套 60 项通过；类型检查、构建、lint、格式检查和文档校验通过。覆盖租户看板/门店/模板过滤、跨租户 404、不同租户可同编码/同名、同租户重复 409、模板当前状态互不影响。                                                      |
 | T03  | failed  | `FW_SLOT=1 pnpm --filter @apps/api test`                                                                                                                                                                                                | `apps/api/src/contract.e2e.test.ts`  | 独立用例固定断言 admin 看板共 13 店；完整套件中前序 AC 测试创建了第二商家的同编码门店，dashboard 实为 14 条。已改为验证 12 家 Northbean 店和无主管门店均出现。                                                               |
 | T03  | passed  | `pnpm --filter @apps/api typecheck`、`pnpm --filter @apps/api build`、`pnpm --filter @apps/api lint`、`pnpm exec prettier --check ...`、`FW_SLOT=1 pnpm --filter @apps/api test`、`python scripts/validate_docs.py`、`git diff --check` | `apps/api/src/contract.e2e.test.ts`  | API 全套 61 项通过；类型、构建、lint、格式和文档门禁通过。主管队列、看板、门店列表仅显示 6 店；主管访问无主管门店为 403，admin 可以审核通过。                                                                                |
+| T04  | passed  | `$env:FW_SLOT='1'; pnpm exec playwright test --config=playwright.web.config.ts tests/web/console.spec.ts`                                                                                                                                | `tests/web/console.spec.ts`           | 控制台专项 8 项通过；主管看板入口显示，且页面只展示名下六家门店。                                                                                                                                                               |
+| T04  | blocked | `$env:FW_SLOT='1'; pnpm exec playwright test --config=playwright.web.config.ts`                                                                                                                                                         | `tests/web/chat.spec.ts`              | 19 项中 17 通过、1 跳过、1 失败；admin 审核详情断言聊天输入框数量为 0，实际为 1（第 480 行）。根因为 `review-detail.tsx` 将审核权限直接用作 `ChatPanel.canSend`；该文件不在已批准写入范围，停止等待授权。 |
 
 ## 回修
 
@@ -45,4 +47,5 @@
 
 ## 决策与偏差
 
-- 2026-11-03 用户原话：“同意：apps/web/src/pages/console.tsx 加入 FW-018 写入范围，只放行主管的看板入口与渲染，不改样式、不改共享契约。”据此仅在该文件开放主管现有看板入口与渲染；不调整样式或共享契约。
+- 2026-11-03 用户原话：“同意：apps/web/src/pages/console.tsx 加入 FW-018 写入范围，只放行主管的看板入口与渲染，不改样式、不改共享契约。在 plan「决策与偏差」记一行，引用这句原话，然后删 g03/blocked/FW-018，继续 T01。”据此仅在该文件开放主管现有看板入口与渲染；不调整样式或共享契约。`g03/blocked/FW-018` 原本不存在；现存 `g03/done/FW-018` 与单元未完成状态冲突，已删除。用户所说 T01 在任务表已完成，按当前状态继续 T04。
+- 2026-11-03 T04 全 Web e2e 在 admin 审核详情聊天只读断言处失败。修复需要改 `review-detail.tsx`，范围超出上述授权；当前等待用户决定是否扩大写入范围。
