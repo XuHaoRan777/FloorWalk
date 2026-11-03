@@ -23,7 +23,7 @@
     "dist"
   ],
   "scripts": {
-    "dev": "tsup --watch",
+    "dev": "tsup --watch --no-clean",
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
