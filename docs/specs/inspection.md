@@ -6,7 +6,7 @@
 
 共享契约以 `packages/shared/src/contract/` 为机器校验形式，覆盖表、枚举、状态迁移、路由与角色、接口 schema、错误码、照片上传约束及规则函数。API 通过 `/api` 前缀提供全部业务接口，路由表是角色检查和 e2e 的共同来源。
 
-角色为 `inspector`、`supervisor`、`admin`。店员只能访问本人所属门店的巡检单，不限创建人；主管和商家管理员可读全部；主管和商家管理员能审核，店员拒绝。聊天消息对有权访问巡检单的店员、主管和商家管理员可读，只有本店店员和主管可发送，商家管理员只读；记录列表仅本店店员可访问。门店与模板管理路由允许主管和商家管理员，店员拒绝。登录成功后服务端创建固定 1 小时会话，客户端只保存 HttpOnly `fw_session` cookie；服务端会话表只保存会话 ID 的 SHA-256。受保护请求校验会话未吊销、未过期且用户与角色绑定仍有效，从数据库读取当前角色与门店绑定。
+角色为 `inspector`、`supervisor`、`admin`。所有业务数据按 `org_id` 隔离；跨商家资源按不可见处理，返回 404。店员只能访问本人所属门店的巡检单，不限创建人；主管只能访问自己被指派门店的队列、看板和门店，主管打开其他门店巡检返回 403；商家管理员可访问本商家全部门店并审核。无主管门店仅商家管理员可审。聊天消息对有权访问巡检单的店员、主管和商家管理员可读，只有本店店员和主管可发送，商家管理员只读；记录列表仅本店店员可访问。门店与模板管理路由允许主管和商家管理员，店员拒绝。首次登录须改密码；强制改密期间仅允许读取当前用户、改密和退出。停用账号立即吊销其全部会话，重新启用后可登录。会话闲置超过 7 天失效，每个受保护请求续期。客户端只保存 HttpOnly `fw_session` cookie；服务端会话表只保存会话 ID 的 SHA-256，并记录 `last_seen_at`。受保护请求读取数据库中的当前角色、商家、门店绑定和停用状态。
 
 ## 巡检规则
 
@@ -14,11 +14,13 @@
 
 提交要求所有检查项均非 `pending`，必拍项至少有一张照片。分数为合格项数除以总项数乘 100，四舍五入取整，并在提交时锁定；重新提交重新计算。存在 `critical` 项不合格时不能通过。看板按每家门店 `decided_at` 最大的 `passed` 或 `failed` 巡检单显示分数。照片上传字段为 `file`，只接受 `image/jpeg`、`image/png`，单张不超过 10 MB；照片链接使用 API 当前访问地址拼接。
 
-统一错误格式为 `{code, message}`：401 `UNAUTHENTICATED`；403 `FORBIDDEN`；409 `INVALID_STATE`；422 `INCOMPLETE`；422 `CRITICAL_FAILED`；400 `VALIDATION_FAILED`；404 `NOT_FOUND`。API 接受任意浏览器来源，CORS 将请求 Origin 回显并启用 credentials；带 Origin 的跨站写请求不做来源白名单校验。会话 Cookie 仍设置 `SameSite=Strict`，但来源不受限意味着同站的其他来源可代表已登录用户调用 API，并读取允许跨域访问的响应；决策背景见 [ADR 0002](../adr/0002-unrestricted-api-cors.md)。
+统一错误格式为 `{code, message}`：401 `UNAUTHENTICATED`；403 `FORBIDDEN`；409 `INVALID_STATE`；422 `INCOMPLETE`；422 `CRITICAL_FAILED`；400 `VALIDATION_FAILED`；404 `NOT_FOUND`。CORS 仅允许配置白名单来源并启用 credentials；带 Origin 的写请求若来源不在白名单返回 403，不带 Origin 的原生与服务端请求不受影响。白名单由 `CORS_ORIGINS` 提供，开发模式补充本机地址。会话 Cookie 设置 `SameSite=Strict`。当前决策见 [ADR 0003](../adr/0003-cors-origin-allowlist.md)，ADR 0002 已被取代。
 
 ## 接口
 
 除登录与退出外，接口使用 `fw_session` cookie 认证；不接受 Bearer token。
+
+`POST /api/orgs` 注册商家及首个 admin，并建立登录会话。账号管理通过 `GET/POST /api/admin/users`、`PATCH /api/admin/users/:id`、`POST /api/admin/users/:id/password` 实现；当前用户使用 `POST /api/me/password` 改密。`PUT /api/admin/sites/:id/supervisor` 由商家 admin 指派或取消主管。账号与主管范围见[门店与模板管理](admin.md)及[Web 控制台](web-console.md)。
 
 | 方法与路径                                         | 说明                                                                                      |
 | -------------------------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -35,12 +37,12 @@
 | `GET /api/review/queue`                            | 审核队列；每张单含门店、检查项、照片与按 `createdAt` 升序的审核记录                       |
 | `POST /api/inspections/:id/review`                 | 开始审核、通过、打回或判不合格                                                            |
 | `GET /api/dashboard/sites`                         | 各店按 `decided_at` 最近的巡检分数                                                        |
-| `GET /storage/*key`                                | 按 `storageKey` 从 `STORAGE_DIR` 读取照片；拒绝任何越出 `STORAGE_DIR` 的路径              |
+| `GET /storage/*key`                                | 由当前存储驱动按 `storageKey` 返回照片；本地驱动拒绝越出 `STORAGE_DIR` 的路径             |
 | `GET /api/inspections/:id/messages`                | 按消息序号读取聊天；`after` 与 `before` 互斥，不带游标读最近消息；默认 50 条，最多 100 条 |
 | `POST /api/inspections/:id/messages`               | 发送 1～1000 字文本和/或 jpeg/png 图片，图片最大 10 MB                                    |
 | `GET /api/messages/:id/image-url`                  | 获取巡检聊天图片的签名链接                                                                |
 | `GET /api/inspector/inspections`                   | 店员读取本店全部状态记录，按创建时间倒序；默认 10 条，最多 50 条，cursor 不透明           |
-| `GET /api/admin/sites`                             | 主管、商家管理员读取全部门店，包含停用门店和 `active`                                     |
+| `GET /api/admin/sites`                             | 商家管理员读取本商家全部门店；主管读取名下门店，包含停用门店和 `active`                   |
 | `POST /api/admin/sites`                            | 新建门店并持久化：请求 `{ code, name }`，响应 201                                         |
 | `PATCH /api/admin/sites/:id`                       | 更新门店并持久化：请求 `{ name?, active? }`，响应 200                                     |
 | `GET /api/admin/templates`                         | 主管、商家管理员读取模板、检查项及 `isCurrent`                                            |
@@ -48,7 +50,7 @@
 | `PUT /api/admin/templates/:id`                     | 事务整体替换检查项，至少一项且位置从 1 连续，响应 200                                     |
 | `POST /api/admin/templates/:id/current`            | 事务设当前模板，响应 200                                                                  |
 
-聊天、记录和管理路由均已接入实际数据；门店与模板的持久化、当前模板与停用规则见[门店与模板管理](admin.md)。`GET /api/inspector/today` 的“今天”按 `Asia/Shanghai` 时区的日历日计算，并返回门店 `active` 与唯一当前模板；停用门店新建巡检返回 409 `INVALID_STATE`；看板门店也带 `active`。提交会校验检查项和必拍照片、锁定分数；审核动作推进状态并保存审核记录。巡检证据照片上传写入 `STORAGE_DIR`，链接签名有效一小时；聊天图片写入 `chat/<inspectionId>/<uuid>.<ext>`，复用签名和文件读取机制。两类图片路由均校验签名后按存储键读取。
+聊天、记录和管理路由均已接入实际数据；门店与模板的持久化、当前模板与停用规则见[门店与模板管理](admin.md)。`GET /api/inspector/today` 的“今天”按 `Asia/Shanghai` 时区的日历日计算，并返回门店 `active` 与唯一当前模板；停用门店新建巡检返回 409 `INVALID_STATE`；看板门店也带 `active`。提交会校验检查项和必拍照片、锁定分数；审核动作推进状态并保存审核记录。巡检证据和聊天图片使用 `STORAGE_DRIVER` 选择的存储驱动；对象键按商家分路径，读取链接有效一小时。当前为本地驱动，配置为 OSS 时使用私有 Bucket 和 OSS 签名 GET 链接。
 
 ## 数据结构
 
@@ -56,18 +58,20 @@ schema 为 `floorwalk`，主键均为 uuid，时间均为 timestamptz，所有�
 
 | 表                 | 字段                                                                                                     |
 | ------------------ | -------------------------------------------------------------------------------------------------------- |
-| `sites`            | `code`（唯一）、`name`、`deactivated_at`（空表示启用）                                                   |
-| `users`            | `email`（唯一）、`password_hash`（argon2）、`display_name`、`role`、`site_id`（仅店员必填）              |
+| `organizations`    | `name`、`timezone`                                                                                       |
+| `sites`            | `org_id`、`code`（商家内唯一）、`name`、`deactivated_at`（空表示启用）、主管指派关系                      |
+| `users`            | `org_id`、`email`（全局唯一）、`password_hash`（argon2）、`display_name`、`role`、`site_id`（仅店员必填）、`must_change_password`、`disabled_at` |
+| `site_supervisors` | `site_id`（主键）、`user_id`、`assigned_at`                                                              |
 | `templates`        | `org_id`、`name`（商家内唯一）、`is_current`（按商家部分唯一索引确保每商家最多一个当前模板）             |
 | `template_items`   | `template_id`、`position`（组合唯一）、`title`、`photo_required`、`critical`                             |
 | `inspections`      | `site_id`、`template_id`、`inspector_id`、`status`、`score`、`submitted_at`、`decided_at`                |
 | `inspection_items` | `inspection_id`、`position`、复制的 `title`、`photo_required`、`critical`、`result`、`note`              |
 | `evidence`         | `inspection_item_id`、`storage_key`、`mime`、`size`                                                      |
 | `reviews`          | `inspection_id`、`reviewer_id`、`action`、`comment`、`rework_item_ids`（仅打回时有值）                   |
-| `sessions`         | `token_hash`（唯一）、`user_id`、`created_at`、`expires_at`、`revoked_at`（可空）                        |
+| `sessions`         | `token_hash`（唯一）、`user_id`、`created_at`、`last_seen_at`、`expires_at`、`revoked_at`（可空）       |
 | `chat_messages`    | `seq`（自增、唯一）、`inspection_id`、`author_id`、`body`（最多 1000 字）、`storage_key`、`mime`、`size` |
 
-`chat_messages` 的 `body` 与 `storage_key` 至少一项非空；图片存储键、MIME 与大小同时为空或同时非空；另有 `(inspection_id, seq)` 索引。`templates.name` 唯一；另有索引 `inspections(site_id, status)`、`inspections(created_at)`、`evidence(inspection_item_id)`、`sessions(user_id)`。角色/状态/结果与照片大小等数据库 CHECK 约束，以及表间完整约束，以共享契约中的 `databaseConstraints` 和现有迁移为准。
+`chat_messages` 的 `body` 与 `storage_key` 至少一项非空；图片存储键、MIME 与大小同时为空或同时非空；另有 `(inspection_id, seq)` 索引。`sites` 的 `(org_id, code)`、`templates` 的 `(org_id, name)` 唯一；`site_supervisors.site_id` 为主键；每个商家最多一个当前模板。另有索引 `inspections(site_id, status)`、`inspections(created_at)`、`evidence(inspection_item_id)`、`sessions(user_id)`。角色/状态/结果与照片大小等数据库 CHECK 约束，以及表间完整约束，以共享契约中的 `databaseConstraints` 和现有迁移为准。
 
 ## 种子数据
 
@@ -90,3 +94,4 @@ Northbean Coffee 有 12 家门店 `NB-001`～`NB-012`，每家店一个店员账
 | 2026-10-29 | FW-011 增加聊天、门店/模板与店员记录 API 契约和存储结构；接入聊天读写、签名图片及记录分页，today、建单和看板补门店/当前模板字段。                             |
 | 2026-10-29 | 门店与模板写接口持久化，停用限制新建，模板修改保留既有巡检快照；详见管理规格。                                                                                |
 | 2026-11-03 | FW-017 完成多商家协议：角色使用 `admin`，模板当前索引按商家唯一，演示二号拥有当前模板；商家管理员可审核，主管权限保持不变。                                   |
+| 2026-11-03 | g03 完成商家数据隔离、主管门店范围、账号停用与首次改密、7 天闲置续期及 CORS 来源白名单；ADR 0003 取代任意来源策略。 |

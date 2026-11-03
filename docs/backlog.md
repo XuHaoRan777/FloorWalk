@@ -8,12 +8,12 @@
 
 | 能力                                                               | 现状 `有\|部分\|无` | 依据 / 缺口                                                                   |
 | ------------------------------------------------------------------ | ------------------- | ----------------------------------------------------------------------------- |
-| 商家注册与多商家数据隔离                                           | 无                  | 只有 Northbean 一个组织，表没有组织边界                                       |
-| 三角色与门店归属（主管可管多店、一店最多一个主管、店员只属一店）   | 部分                | [巡检主链](specs/inspection.md)；主管能读全部门店，没有门店绑定               |
-| 账号分配、初始密码强制修改、上级重置、停用即吊销                   | 无                  | 账号只来自种子                                                                |
-| 会话滑动续期                                                       | 无                  | 固定 1 小时，[巡检主链](specs/inspection.md)                                  |
+| 商家注册与多商家数据隔离                                           | 有                  | [巡检主链](specs/inspection.md)；Web 注册并按商家隔离                          |
+| 三角色与门店归属（主管可管多店、一店最多一个主管、店员只属一店）   | 有                  | [巡检主链](specs/inspection.md)、[门店管理](specs/admin.md)                    |
+| 账号分配、初始密码强制修改、上级重置、停用即吊销                   | 有                  | [巡检主链](specs/inspection.md)、[Web 控制台](specs/web-console.md)             |
+| 会话滑动续期                                                       | 有                  | 闲置超过 7 天失效，[巡检主链](specs/inspection.md)                              |
 | 个人中心（姓名、头像、改密码）                                     | 无                  | Mobile「我的」只能看账号与门店                                                |
-| 门店管理、停用、指派主管                                           | 部分                | [门店与模板管理](specs/admin.md)；不能指派主管                                |
+| 门店管理、停用、指派主管                                           | 有                  | [门店与模板管理](specs/admin.md)                                                |
 | 多模板，检查项含最少张数与验收要点                                 | 部分                | [门店与模板管理](specs/admin.md)；全公司一个当前模板                          |
 | 模板、AI 审核标准、日程的两级归属                                  | 无                  |                                                                               |
 | AI 审核标准库，模板开启 AI                                         | 无                  |                                                                               |
@@ -27,7 +27,7 @@
 | 巡检单聊天                                                         | 有                  | [巡检单聊天](specs/chat.md)                                                   |
 | Mobile 本店记录                                                    | 有                  | [Mobile 店员巡检](specs/mobile-inspector.md)                                  |
 | 站内通知                                                           | 无                  |                                                                               |
-| 照片与头像存阿里云 OSS                                             | 无                  | 本地目录 `STORAGE_DIR`                                                        |
+| 照片与头像存阿里云 OSS                                             | 部分                | 存储驱动支持 OSS；当前头像未实现，[工程骨架](specs/workspace.md)              |
 | 两端统一样式                                                       | 无                  |                                                                               |
 | 演示数据：Northbean 重建为第一个商家                               | 部分                | [巡检主链](specs/inspection.md)；旧结构的种子                                 |
 | 演示说明                                                           | 无                  |                                                                               |
@@ -38,11 +38,6 @@
 
 | ID     | 工作单元                                                                 | 状态       | 依赖                   | 下一步              |
 | ------ | ------------------------------------------------------------------------ | ---------- | ---------------------- | ------------------- |
-| FW-018 | [多商家隔离与门店范围](work/FW-018-org-isolation/spec.md)                | `verified` | FW-017                 | FW-019 可从 L1 接力 |
-| FW-019 | [商家注册与门店指派主管](work/FW-019-org-signup-site-supervisor/spec.md) | `verified` | FW-018                 | FW-020 可从 L1 接力 |
-| FW-020 | [账号体系与会话续期](work/FW-020-accounts/spec.md)                       | `verified` | FW-019                 | L1 已完成；交由 g03 集成单元收尾 |
-| FW-021 | [阿里云 OSS 存储驱动](work/FW-021-oss-storage/spec.md)                   | `verified` | FW-017                 | L2 已完成；交由 g03 集成单元收尾 |
-| FW-022 | [AI 审核适配器](work/FW-022-ai-reviewer/spec.md)                         | `verified` | FW-017                 | L3 已完成；交由 g03 集成单元收尾 |
 | FW-023 | [并行组 g03 集成](work/FW-023-g03-integration/spec.md)                   | `approved` | FW-020、FW-021、FW-022 | g03/close           |
 
 ## 待开单元（未批准，按建议顺序）
@@ -94,3 +89,8 @@
 | FW-015 | [并行组 g02 集成](work/FW-015-g02-integration/spec.md)                              | 2026-10-29 | 本地集成、原生回归、审查及归档提交（见 git log），未推送  |
 | FW-016 | [UI 基础：两端统一设计](work/FW-016-ui-foundation/spec.md)                          | 2026-11-03 | 阶段提交、修正与归档提交（见 git log）                    |
 | FW-017 | [g03 协议：多商家、账号、存储与 AI 接口](work/FW-017-g03-protocol/spec.md)          | 2026-11-03 | T07 定向复核与归档提交（见 git log）                      |
+| FW-018 | [多商家隔离与门店范围](work/FW-018-org-isolation/spec.md)                            | 2026-11-03 | FW-023 T05 Promote 与归档提交                              |
+| FW-019 | [商家注册与门店指派主管](work/FW-019-org-signup-site-supervisor/spec.md)             | 2026-11-03 | FW-023 T05 Promote 与归档提交                              |
+| FW-020 | [账号体系与会话续期](work/FW-020-accounts/spec.md)                                   | 2026-11-03 | FW-023 T05 Promote 与归档提交                              |
+| FW-021 | [阿里云 OSS 存储驱动](work/FW-021-oss-storage/spec.md)                               | 2026-11-03 | FW-023 T05 Promote 与归档提交                              |
+| FW-022 | [AI 审核适配器](work/FW-022-ai-reviewer/spec.md)                                     | 2026-11-03 | FW-023 T05 Promote 与归档提交                              |

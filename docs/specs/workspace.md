@@ -4,7 +4,7 @@
 
 pnpm workspace 包含 `@apps/api`、`@apps/web`、`@apps/mobile` 和 `@libs/shared`，共用根锁文件。API 使用 NestJS，独立 Web 使用 shadcn-admin，Mobile 使用 Expo / React Native 与 gluestack-ui；Web 与 Mobile 不共享 UI。
 
-根入口先构建 shared，再启动应用；统一开发入口同时启动 shared watch 与三个应用，任一进程退出会结束同组。独立入口、端口、依赖版本及验证命令见 [开发环境](../context/dev-environment.md)，安装、环境文件与进程操作见 [本地开发说明](../howto/local-development.md)。三应用各用开发与生产环境文件，实际文件不提交；Mobile 生产构建只导出 JS bundle，不启动服务。
+根入口先构建 shared，再启动应用；统一开发入口同时启动 shared watch 与三个应用，任一进程退出会结束同组。shared watch 保留上次构建产物，避免统一启动时消费者先于新产物启动。独立入口、端口、依赖版本及验证命令见 [开发环境](../context/dev-environment.md)，安装、环境文件与进程操作见 [本地开发说明](../howto/local-development.md)。三应用各用开发与生产环境文件，实际文件不提交；Mobile 生产构建只导出 JS bundle，不启动服务。
 
 业务源文件由 ESLint `max-lines` 检查 400 行上限，不计空行和注释；测试、`components/ui/` 和 `packages/shared/src/contract/` 豁免。
 
@@ -34,7 +34,7 @@ Web 控制台与 Mobile 店员端统一使用 Framed sheet 视觉方向。颜色
 
 ## 没有的
 
-没有用户管理页、缓存、CI/CD、云部署、APK 签名或商店发布。聊天、门店和模板管理见[聊天](chat.md)与[管理](admin.md)，Mobile 历史记录见[店员巡检](mobile-inspector.md#记录)。Web 与 Mobile 使用服务端会话表和 HttpOnly cookie，不把 token 放进脚本可读存储。Web 生产构建与 preview 带 CSP，开发服务器不添加 CSP。
+没有缓存、CI/CD、云部署、APK 签名或商店发布。聊天、门店和模板管理见[聊天](chat.md)与[管理](admin.md)，Mobile 历史记录见[店员巡检](mobile-inspector.md#记录)。Web 与 Mobile 使用服务端会话表和 HttpOnly cookie，不把 token 放进脚本可读存储。存储接口支持本地文件与阿里云 OSS，OSS 配置及切换方式见[开发环境](../context/dev-environment.md)。AI 审核接口支持 fake 和 OpenAI 兼容驱动，默认 fake；模型调用与图片压缩、结构化结果校验规则见[开发环境](../context/dev-environment.md)。Web 生产构建与 preview 带 CSP，开发服务器不添加 CSP。
 
 ## 数据契约（归档时再生成）
 
@@ -42,7 +42,7 @@ Web 控制台与 Mobile 店员端统一使用 Framed sheet 视觉方向。颜色
 | ---------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | workspace 与命令 | 四包编排和根检查入口                                    | [package.json](../../package.json)、[pnpm-workspace.yaml](../../pnpm-workspace.yaml)                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | shared           | APP_NAME 与巡检主链 zod 契约                            | [源码](../../packages/shared/src/index.ts)、[契约](../../packages/shared/src/contract/index.ts)                                                                                                                                                                                                                                                                                                                                                                                                           |
-| API              | /health、会话、巡检/审核/证据/看板、聊天、管理与记录接口    | [控制器](../../apps/api/src/health.controller.ts)、[认证接口](../../apps/api/src/auth.controller.ts)、[巡检](../../apps/api/src/inspection.controller.ts)、[证据](../../apps/api/src/evidence.controller.ts)、[审核](../../apps/api/src/review.controller.ts)、[看板](../../apps/api/src/dashboard.controller.ts)、[共用查询](../../apps/api/src/inspection-queries.ts)、[认证](../../apps/api/src/auth.ts)、[连接池生命周期](../../apps/api/src/db/pool.provider.ts)、[启动](../../apps/api/src/main.ts) |
+| API              | /health、会话、组织注册、账号、巡检/审核/证据/看板、聊天、管理与记录接口 | [控制器](../../apps/api/src/health.controller.ts)、[认证接口](../../apps/api/src/auth.controller.ts)、[组织注册](../../apps/api/src/orgs.controller.ts)、[账号](../../apps/api/src/users.controller.ts)、[巡检](../../apps/api/src/inspection.controller.ts)、[审核](../../apps/api/src/review.controller.ts)、[管理](../../apps/api/src/admin.controller.ts)、[连接池生命周期](../../apps/api/src/db/pool.provider.ts)、[启动](../../apps/api/src/main.ts) |
 | Web              | /、/console、HttpOnly 登录会话、审核/看板/聊天/管理 API、生产 CSP | [路由](../../apps/web/src/router.tsx)、[客户端](../../apps/web/src/lib/api.ts)、[构建配置](../../apps/web/vite.config.ts)                                                                                                                                                                                                                                                                                                                                                                                 |
 | Mobile           | 登录、巡检、检查项与证据上传、聊天、记录              | [导航](../../apps/mobile/app/_layout.tsx)、[屏幕](../../apps/mobile/components/mobile/)、[API](../../apps/mobile/lib/api.ts)、[功能客户端](../../apps/mobile/lib/api/)                                                                                                                                                                                                                                                                                                                                    |
 | 共享设计系统     | 两端主题及原生字体、尺寸映射                            | [CSS token 源](../../packages/tokens/tokens.css)、[Native 生成器](../../packages/tokens/generate-native.mjs)、[Native 映射](../../packages/tokens/native.json)                                                                                                                                                                                                                                                                                                                                            |
@@ -61,3 +61,4 @@ Web 控制台与 Mobile 店员端统一使用 Framed sheet 视觉方向。颜色
 | 2026-10-28 | FW-010 API 进程共用一个数据库连接池，应用关闭时释放；接口行为不变。                                                                      |
 | 2026-10-29 | g02 集成聊天、门店与模板管理和 Mobile 记录页；真实跨端演示链及 Android 原生相册回归通过。 |
 | 2026-11-03 | FW-016 统一 Web 与 Mobile 的 Framed sheet 设计系统；共享 token 驱动主题与原生字体、间距、圆角映射，完成登录、巡检、审核、门店、模板、记录与看板的统一样式。 |
+| 2026-11-03 | g03 接入商家注册、商家/账号/主管范围、7 天会话续期、OSS 与 OpenAI 兼容审核适配器；统一开发入口保留 shared 构建产物。 |
