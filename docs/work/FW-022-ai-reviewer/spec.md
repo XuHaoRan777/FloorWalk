@@ -26,11 +26,11 @@
 
 ## FW-017 探针结论（2026-11-03）
 
-- 读图：不通过，能力未判定。已判定种子单的一张 1×1 JPEG（533 字节）经 base64 发送，HTTP 502 `bad_response_status_code`：`The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overloaded or misconfigured.`，耗时 31961ms。没有模型响应，不能据此认定模型不支持视觉。
-- JSON schema 结构化输出：不通过，未验证。请求带 `response_format.type=json_schema`，但被上述上游错误中断，不能据此选择提示词 JSON 回退。
-- 本地签名链接：不通过。本地读取 200；远端 HTTP 500 `count_token_failed`：`error getting file type: failed to download file from [URL REDACTED] request reject: port 3110 is not allowed`，688ms。该本地链接不能直接给当前模型网关，需读字节转 base64；base64 的模型兼容性仍待验证。
+- 读图：通过。`sharp` 生成 640×480 白底红色正方形 JPEG（3653 字节），base64 发送；模型描述“图像背景为浅灰白色（接近白色），画面中央有一个纯红色的正方形色块，四边平直、边与画面边缘平行，内部为均匀实心红色，无文字、纹理或其他可辨识物体。”。耗时 7076ms，token 用量：输入 443、输出 160、合计 603（image 302）。旧 1×1 图返回的 502 是先前配置问题，不作为视觉能力结论。
+- JSON schema 结构化输出：通过。请求使用 `response_format.type=json_schema`，响应合法且符合探针 schema；L3 按此实现，再用共享 AI 输出 schema 校验。
+- 本地签名链接：不通过。本地读取 200；模型端 HTTP 400 `invalid_parameter_error`：`The provided URL does not appear to be valid. Ensure it is correctly formatted.`（313ms）。此前网关也曾拒绝端口 3110；L3 读字节转 base64。OSS 公网签名 URL 在 FW-023 AC-04 单独验证。
 - 配置地址兼容：探针会剥掉 `OPENAI_BASE_URL` 末尾的 `/chat/completions`，避免 SDK 重复追加路径。原始错误为 HTTP 404 `Invalid URL (POST /v1/chat/completions/chat/completions)`；未修改环境文件。
-- 协议单元依 AC-08 停止，尚不可开组。探针脚本为 `scripts/ai-probe.mjs`；仅输出配置键存在性及脱敏响应，不保存密钥、图片或签名 URL。
+- 探针脚本为 `scripts/ai-probe.mjs`；仅输出配置键存在性及脱敏响应，不保存密钥或签名 URL；临时生成图通过存储接口写入并在 finally 删除，无数据库访问。
 
 ## 验收方式
 
@@ -49,4 +49,4 @@
 
 - 批准依据：用户 2026-11-03 原话"一起批准"（g03 七个单元一起批准）；组的构成与 9 条产品语义见 FW-017 plan「决策与偏差」
 - 批准时间：`2026-11-03`
-- 特殊授权：并行组 g03 线 L3 槽位 3。写入范围见 FW-017 spec「写入范围」L3 一行，只加新文件；冒烟测试调用真实模型一次，发送一张种子照片；在 `g03/L3` 本地提交，不推送；不读、不打印 env 的值。
+- 特殊授权：并行组 g03 线 L3 槽位 3。写入范围见 FW-017 spec「写入范围」L3 一行，只加新文件；冒烟测试调用真实模型一次，发送一张现场生成的 640×480 白底红色方块 JPEG；在 `g03/L3` 本地提交，不推送；不读、不打印 env 的值。

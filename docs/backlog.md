@@ -38,7 +38,7 @@
 
 | ID     | 工作单元                                                                   | 状态          | 依赖                   | 下一步                    |
 | ------ | -------------------------------------------------------------------------- | ------------- | ---------------------- | ------------------------- |
-| FW-017 | [g03 协议：多商家、账号、存储与 AI 接口](work/FW-017-g03-protocol/spec.md) | `in_progress` | 无                     | T06：模型网关 502，待处理 |
+| FW-017 | [g03 协议：多商家、账号、存储与 AI 接口](work/FW-017-g03-protocol/spec.md) | `blocked` | 无                     | T07：协议兼容矛盾待决策 |
 | FW-018 | [多商家隔离与门店范围](work/FW-018-org-isolation/spec.md)                  | `approved`    | FW-017                 | 开组                      |
 | FW-019 | [商家注册与门店指派主管](work/FW-019-org-signup-site-supervisor/spec.md)   | `approved`    | FW-018                 | 接力                      |
 | FW-020 | [账号体系与会话续期](work/FW-020-accounts/spec.md)                         | `approved`    | FW-019                 | 接力                      |

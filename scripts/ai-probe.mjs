@@ -1,6 +1,7 @@
-// FW-017 capability probe. Uses one seeded image, never writes to the database.
+// FW-017 capability probe. Generates a known image; never writes to the database.
 // Build API first, start slot 1 API with proc.mjs, then run from the repo root.
 import { createRequire } from 'node:module';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { getStorageDriver } from '../apps/api/dist/storage/index.js';
@@ -28,11 +29,6 @@ console.log(
 if (required.some((key) => !process.env[key])) {
   throw new Error('AI 探针缺少 OPENAI_* 配置，见键名存在性清单。');
 }
-const databaseUrl = new URL(process.env.DATABASE_URL ?? '');
-if (decodeURIComponent(databaseUrl.username) !== 'floorwalk') {
-  throw new Error('探针只允许 floorwalk 角色。');
-}
-databaseUrl.pathname = '/floorwalk_e2e_1';
 process.env.API_PUBLIC_BASE_URL = 'http://127.0.0.1:3110';
 const require = createRequire(
   new URL('../apps/api/package.json', import.meta.url),
@@ -43,8 +39,6 @@ const { default: OpenAI } = await import(
 const { default: sharp } = await import(
   pathToFileURL(require.resolve('sharp')).href
 );
-const { Pool } = require('pg');
-const pool = new Pool({ connectionString: databaseUrl.toString() });
 const storage = await getStorageDriver(
   path.resolve('apps/api/.e2e/slot-1/storage'),
 );
@@ -117,7 +111,11 @@ async function probe(kind, imageUrl) {
       kind,
       status: 'response',
       structured,
-      imageReadable: structured && parsed.imageReadable,
+      imageReadable:
+        structured &&
+        parsed.imageReadable &&
+        /红/.test(parsed.imageDescription) &&
+        /方形|方块|正方/.test(parsed.imageDescription),
       content: redact(content),
       elapsedMs: Date.now() - started,
       usage: response.usage,
@@ -137,29 +135,41 @@ async function probe(kind, imageUrl) {
     return result;
   }
 }
+const probeKey = `org/00000000-0000-4000-8000-000000000017/probe/${randomUUID()}.jpg`;
 try {
-  const { rows } = await pool.query(`
-    SELECT e.storage_key FROM floorwalk.evidence e
-    JOIN floorwalk.inspection_items ii ON ii.id = e.inspection_item_id
-    JOIN floorwalk.inspections i ON i.id = ii.inspection_id
-    WHERE i.status IN ('passed', 'failed') ORDER BY e.id LIMIT 1
-  `);
-  if (!rows[0]) throw new Error('槽位 1 缺少已判定种子照片。');
-  const { stream } = await storage.get(rows[0].storage_key);
-  const chunks = [];
-  for await (const chunk of stream) chunks.push(chunk);
-  const bytes = Buffer.concat(chunks);
+  const square = await sharp({
+    create: {
+      width: 200,
+      height: 200,
+      channels: 3,
+      background: '#ff0000',
+    },
+  })
+    .png()
+    .toBuffer();
+  const bytes = await sharp({
+    create: {
+      width: 640,
+      height: 480,
+      channels: 3,
+      background: '#ffffff',
+    },
+  })
+    .composite([{ input: square, left: 220, top: 140 }])
+    .jpeg({ quality: 80 })
+    .toBuffer();
   const metadata = await sharp(bytes).metadata();
   console.log(
     JSON.stringify({
-      seedImage: {
+      generatedImage: {
         width: metadata.width,
         height: metadata.height,
         bytes: bytes.length,
       },
     }),
   );
-  const signed = await storage.signedUrl(rows[0].storage_key, 300);
+  await storage.put(probeKey, bytes, 'image/jpeg');
+  const signed = await storage.signedUrl(probeKey, 300);
   const localResponse = await fetch(signed.url);
   console.log(JSON.stringify({ localSignedUrlStatus: localResponse.status }));
   if (!localResponse.ok) throw new Error('本地签名链接自身不可读，停止探针。');
@@ -173,5 +183,5 @@ try {
       );
   if (!result.imageReadable) process.exitCode = 1;
 } finally {
-  await pool.end();
+  await storage.delete(probeKey);
 }
