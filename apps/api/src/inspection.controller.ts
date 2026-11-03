@@ -66,8 +66,8 @@ export class InspectionController {
       [template.rows[0].id],
     );
     const site = await this.pool.query(
-      'SELECT id, code, name, deactivated_at IS NULL AS active, created_at AS "createdAt" FROM floorwalk.sites WHERE id = $1',
-      [request.user.siteId],
+      'SELECT id, code, name, deactivated_at IS NULL AS active, created_at AS "createdAt" FROM floorwalk.sites WHERE id = $1 AND org_id = $2',
+      [request.user.siteId, request.user.orgId],
     );
     if (!site.rows[0])
       throw new NotFoundException({
@@ -133,8 +133,8 @@ export class InspectionController {
     try {
       await client.query('BEGIN');
       const site = await client.query<{ deactivatedAt: Date | null }>(
-        'SELECT deactivated_at AS "deactivatedAt" FROM floorwalk.sites WHERE id = $1 FOR UPDATE',
-        [request.user.siteId],
+        'SELECT deactivated_at AS "deactivatedAt" FROM floorwalk.sites WHERE id = $1 AND org_id = $2 FOR UPDATE',
+        [request.user.siteId, request.user.orgId],
       );
       if (!site.rows[0])
         throw new NotFoundException({

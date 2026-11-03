@@ -341,6 +341,59 @@ describe('inspection contract API', () => {
     );
   });
 
+  it('fails closed when an inspector is bound to another organization site', async () => {
+    const pool = createPool();
+    const binding = await pool.query<{
+      userId: string;
+      siteId: string;
+      foreignSiteId: string;
+    }>(
+      `SELECT u.id AS "userId", u.site_id AS "siteId", foreign_site.id AS "foreignSiteId"
+       FROM floorwalk.users u
+       JOIN floorwalk.sites foreign_site ON foreign_site.org_id <> u.org_id
+       WHERE u.email = 'inspector@northbean.example' LIMIT 1`,
+    );
+    const { userId, siteId, foreignSiteId } = binding.rows[0];
+    try {
+      await pool.query(
+        'UPDATE floorwalk.users SET site_id = $1 WHERE id = $2',
+        [foreignSiteId, userId],
+      );
+      const inspectionsBefore = await pool.query<{ count: string }>(
+        'SELECT count(*)::text AS count FROM floorwalk.inspections WHERE inspector_id = $1',
+        [userId],
+      );
+      await request(app.getHttpServer())
+        .get('/api/inspector/today')
+        .set('Cookie', inspectorCookie)
+        .expect(404)
+        .expect(({ body }) =>
+          expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+        );
+      await request(app.getHttpServer())
+        .post('/api/inspections')
+        .set('Cookie', inspectorCookie)
+        .send({ templateId })
+        .expect(404)
+        .expect(({ body }) =>
+          expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+        );
+      const inspectionsAfter = await pool.query<{ count: string }>(
+        'SELECT count(*)::text AS count FROM floorwalk.inspections WHERE inspector_id = $1',
+        [userId],
+      );
+      expect(inspectionsAfter.rows[0].count).toBe(
+        inspectionsBefore.rows[0].count,
+      );
+    } finally {
+      await pool.query(
+        'UPDATE floorwalk.users SET site_id = $1 WHERE id = $2',
+        [siteId, userId],
+      );
+      await pool.end();
+    }
+  });
+
   it('authenticates roles and enforces site and role access', async () => {
     const me = await request(app.getHttpServer())
       .get('/api/me')
