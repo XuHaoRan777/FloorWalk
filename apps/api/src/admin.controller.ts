@@ -53,7 +53,9 @@ export class AdminController {
           s.created_at AS "createdAt", CASE WHEN u.id IS NULL THEN NULL ELSE
           json_build_object('id', u.id, 'displayName', u.display_name) END AS supervisor
        FROM floorwalk.sites s LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
-       LEFT JOIN floorwalk.users u ON u.id = ss.user_id ORDER BY s.code`,
+       LEFT JOIN floorwalk.users u ON u.id = ss.user_id
+       WHERE s.org_id = $1 ORDER BY s.code`,
+      [request.user.orgId],
     );
     return adminSitesResponseSchema.parse(
       result.rows.map((row) => ({ ...row, createdAt: iso(row.createdAt) })),
@@ -104,10 +106,10 @@ export class AdminController {
              WHEN $3 THEN NULL
              ELSE COALESCE(deactivated_at, now())
            END
-       WHERE id = $1
+       WHERE id = $1 AND org_id = $4
        RETURNING id, code, name, deactivated_at IS NULL AS active,
          created_at AS "createdAt"`,
-      [id, input.name ?? null, input.active ?? null],
+      [id, input.name ?? null, input.active ?? null, request.user.orgId],
     );
     const site = result.rows[0];
     if (!site)
@@ -127,12 +129,16 @@ export class AdminController {
     assertRole(request.user, ...apiRoutes.listAdminTemplates.roles);
     const templates = await this.pool.query(
       `SELECT id, name, is_current AS "isCurrent", created_at AS "createdAt"
-       FROM floorwalk.templates ORDER BY created_at, id`,
+       FROM floorwalk.templates WHERE org_id = $1 ORDER BY created_at, id`,
+      [request.user.orgId],
     );
     const items = await this.pool.query(
-      `SELECT id, template_id AS "templateId", position, title,
-          photo_required AS "photoRequired", critical, created_at AS "createdAt"
-       FROM floorwalk.template_items ORDER BY template_id, position`,
+      `SELECT ti.id, ti.template_id AS "templateId", ti.position, ti.title,
+          ti.photo_required AS "photoRequired", ti.critical, ti.created_at AS "createdAt"
+       FROM floorwalk.template_items ti
+       JOIN floorwalk.templates t ON t.id = ti.template_id
+       WHERE t.org_id = $1 ORDER BY ti.template_id, ti.position`,
+      [request.user.orgId],
     );
     return adminTemplatesResponseSchema.parse(
       templates.rows.map((template) => ({
@@ -173,7 +179,9 @@ export class AdminController {
     } finally {
       client.release();
     }
-    return templateResponseSchema.parse(await this.getTemplate(id));
+    return templateResponseSchema.parse(
+      await this.getTemplate(id, request.user.orgId),
+    );
   }
 
   @UseGuards(AuthGuard)
@@ -190,8 +198,8 @@ export class AdminController {
     try {
       await client.query('BEGIN');
       const existing = await client.query(
-        'SELECT id FROM floorwalk.templates WHERE id = $1 FOR UPDATE',
-        [id],
+        'SELECT id FROM floorwalk.templates WHERE id = $1 AND org_id = $2 FOR UPDATE',
+        [id, request.user.orgId],
       );
       if (!existing.rowCount)
         throw new NotFoundException({
@@ -199,8 +207,8 @@ export class AdminController {
           message: '模板不存在。',
         });
       await client.query(
-        'UPDATE floorwalk.templates SET name = $2 WHERE id = $1',
-        [id, input.name],
+        'UPDATE floorwalk.templates SET name = $2 WHERE id = $1 AND org_id = $3',
+        [id, input.name, request.user.orgId],
       );
       await client.query(
         'DELETE FROM floorwalk.template_items WHERE template_id = $1',
@@ -220,7 +228,9 @@ export class AdminController {
     } finally {
       client.release();
     }
-    return templateResponseSchema.parse(await this.getTemplate(id));
+    return templateResponseSchema.parse(
+      await this.getTemplate(id, request.user.orgId),
+    );
   }
 
   @UseGuards(AuthGuard)
@@ -236,17 +246,21 @@ export class AdminController {
     try {
       await client.query('BEGIN');
       const templates = await client.query(
-        'SELECT id FROM floorwalk.templates ORDER BY id FOR UPDATE',
+        'SELECT id FROM floorwalk.templates WHERE org_id = $1 ORDER BY id FOR UPDATE',
+        [request.user.orgId],
       );
       if (!templates.rows.some((template) => template.id === id))
         throw new NotFoundException({
           code: 'NOT_FOUND',
           message: '模板不存在。',
         });
-      await client.query('UPDATE floorwalk.templates SET is_current = false');
       await client.query(
-        'UPDATE floorwalk.templates SET is_current = true WHERE id = $1',
-        [id],
+        'UPDATE floorwalk.templates SET is_current = false WHERE org_id = $1',
+        [request.user.orgId],
+      );
+      await client.query(
+        'UPDATE floorwalk.templates SET is_current = true WHERE id = $1 AND org_id = $2',
+        [id, request.user.orgId],
       );
       await client.query('COMMIT');
       committed = true;
@@ -256,7 +270,9 @@ export class AdminController {
     } finally {
       client.release();
     }
-    return templateResponseSchema.parse(await this.getTemplate(id));
+    return templateResponseSchema.parse(
+      await this.getTemplate(id, request.user.orgId),
+    );
   }
 
   private async insertTemplateItems(
@@ -284,11 +300,11 @@ export class AdminController {
       );
   }
 
-  private async getTemplate(id: string) {
+  private async getTemplate(id: string, orgId: string) {
     const result = await this.pool.query(
       `SELECT id, name, is_current AS "isCurrent", created_at AS "createdAt"
-       FROM floorwalk.templates WHERE id = $1`,
-      [id],
+       FROM floorwalk.templates WHERE id = $1 AND org_id = $2`,
+      [id, orgId],
     );
     const template = result.rows[0];
     if (!template)

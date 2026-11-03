@@ -76,10 +76,12 @@ describe('inspection contract API', () => {
   let supervisorCookie: string;
   let hqCookie: string;
   let inspectionId: string;
+  let northbeanSiteId: string;
   let otherSiteInspectionId: string;
   let otherSupervisorInspectionId: string;
   let seedEvidenceId: string;
   let templateId: string;
+  let demo2TemplateId: string;
   let chatInspectionId: string;
   let chatImageMessageId: string;
   let nb002InspectorCookie: string;
@@ -131,6 +133,16 @@ describe('inspection contract API', () => {
          WHERE o.name = 'Northbean' AND t.is_current`,
       );
       templateId = template.rows[0].id;
+      const demo2Template = await pool.query<{ id: string }>(
+        `SELECT t.id FROM floorwalk.templates t
+         JOIN floorwalk.organizations o ON o.id = t.org_id
+         WHERE o.name = '演示二号' AND t.is_current`,
+      );
+      demo2TemplateId = demo2Template.rows[0].id;
+      const northbeanSite = await pool.query<{ id: string }>(
+        "SELECT id FROM floorwalk.sites WHERE code = 'NB-001'",
+      );
+      northbeanSiteId = northbeanSite.rows[0].id;
       const chatInspection = await pool.query<{ id: string }>(
         `SELECT i.id FROM floorwalk.inspections i
          JOIN floorwalk.sites s ON s.id = i.site_id
@@ -200,7 +212,9 @@ describe('inspection contract API', () => {
       try {
         await cleanup.query('BEGIN');
         await cleanup.query(
-          'UPDATE floorwalk.templates SET is_current = false WHERE is_current',
+          `UPDATE floorwalk.templates SET is_current = false
+           WHERE org_id = (SELECT org_id FROM floorwalk.templates WHERE id = $1)`,
+          [templateId],
         );
         await cleanup.query(
           'UPDATE floorwalk.templates SET is_current = true WHERE id = $1',
@@ -668,9 +682,9 @@ describe('inspection contract API', () => {
       12,
     );
     expect(allSites.filter((site) => site.code === 'DEMO2-001')).toHaveLength(
-      1,
+      0,
     );
-    expect(allSites).toHaveLength(13);
+    expect(allSites).toHaveLength(12);
 
     const createdSite = await request(app.getHttpServer())
       .post('/api/admin/sites')
@@ -684,7 +698,7 @@ describe('inspection contract API', () => {
       .get('/api/admin/templates')
       .set('Cookie', supervisorCookie)
       .expect(200);
-    expect(adminTemplatesResponseSchema.parse(templates.body)).toHaveLength(2);
+    expect(adminTemplatesResponseSchema.parse(templates.body)).toHaveLength(1);
 
     const createdTemplate = await request(app.getHttpServer())
       .post('/api/admin/templates')
@@ -774,6 +788,124 @@ describe('inspection contract API', () => {
       .get('/api/inspector/inspections')
       .set('Cookie', supervisorCookie)
       .expect(403);
+  });
+
+  it('keeps dashboard, site, and template administration within the tenant', async () => {
+    const dashboard = await request(app.getHttpServer())
+      .get('/api/dashboard/sites')
+      .set('Cookie', demo2AdminCookie)
+      .expect(200);
+    const demoDashboard = dashboardSitesResponseSchema.parse(dashboard.body);
+    expect(demoDashboard).toHaveLength(1);
+    expect(demoDashboard[0].site.code).toBe('DEMO2-001');
+
+    const sites = await request(app.getHttpServer())
+      .get('/api/admin/sites')
+      .set('Cookie', demo2AdminCookie)
+      .expect(200);
+    expect(
+      adminSitesResponseSchema.parse(sites.body).map((site) => site.code),
+    ).toEqual(['DEMO2-001']);
+
+    const templates = await request(app.getHttpServer())
+      .get('/api/admin/templates')
+      .set('Cookie', demo2AdminCookie)
+      .expect(200);
+    expect(adminTemplatesResponseSchema.parse(templates.body)).toHaveLength(1);
+
+    await request(app.getHttpServer())
+      .patch(`/api/admin/sites/${northbeanSiteId}`)
+      .set('Cookie', demo2AdminCookie)
+      .send({ name: '不得跨商家修改' })
+      .expect(404);
+    await request(app.getHttpServer())
+      .put(`/api/admin/templates/${templateId}`)
+      .set('Cookie', demo2AdminCookie)
+      .send({
+        name: '不得跨商家修改',
+        items: [
+          {
+            position: 1,
+            title: '项',
+            photoRequired: false,
+            critical: false,
+          },
+        ],
+      })
+      .expect(404);
+    await request(app.getHttpServer())
+      .post(`/api/admin/templates/${templateId}/current`)
+      .set('Cookie', demo2AdminCookie)
+      .expect(404);
+
+    const duplicateSiteCodeAcrossTenants = await request(app.getHttpServer())
+      .post('/api/admin/sites')
+      .set('Cookie', demo2AdminCookie)
+      .send({ code: 'NB-001', name: '演示二号同编码门店' })
+      .expect(201);
+    createdAdminSiteIds.push(duplicateSiteCodeAcrossTenants.body.id);
+    await request(app.getHttpServer())
+      .post('/api/admin/sites')
+      .set('Cookie', demo2AdminCookie)
+      .send({ code: 'NB-001', name: '重复编码门店' })
+      .expect(409);
+
+    const northbeanTemplateName = 'FW-018-跨商家同名模板';
+    const northbeanTemplate = await request(app.getHttpServer())
+      .post('/api/admin/templates')
+      .set('Cookie', hqCookie)
+      .send({
+        name: northbeanTemplateName,
+        items: [
+          { title: 'Northbean 项', photoRequired: false, critical: false },
+        ],
+      })
+      .expect(201);
+    createdAdminTemplateIds.push(northbeanTemplate.body.id);
+
+    const duplicateTemplateNameAcrossTenants = await request(
+      app.getHttpServer(),
+    )
+      .post('/api/admin/templates')
+      .set('Cookie', demo2AdminCookie)
+      .send({
+        name: northbeanTemplateName,
+        items: [{ title: '演示项', photoRequired: false, critical: false }],
+      })
+      .expect(201);
+    createdAdminTemplateIds.push(duplicateTemplateNameAcrossTenants.body.id);
+    await request(app.getHttpServer())
+      .post('/api/admin/templates')
+      .set('Cookie', demo2AdminCookie)
+      .send({
+        name: northbeanTemplateName,
+        items: [{ title: '重复项', photoRequired: false, critical: false }],
+      })
+      .expect(409);
+
+    await request(app.getHttpServer())
+      .post(
+        `/api/admin/templates/${duplicateTemplateNameAcrossTenants.body.id}/current`,
+      )
+      .set('Cookie', demo2AdminCookie)
+      .expect(200);
+    const northbeanTemplates = await request(app.getHttpServer())
+      .get('/api/admin/templates')
+      .set('Cookie', hqCookie)
+      .expect(200);
+    expect(
+      adminTemplatesResponseSchema
+        .parse(northbeanTemplates.body)
+        .find((template) => template.id === templateId)?.isCurrent,
+    ).toBe(true);
+    await request(app.getHttpServer())
+      .post(`/api/admin/templates/${demo2TemplateId}/current`)
+      .set('Cookie', demo2AdminCookie)
+      .expect(200);
+    await request(app.getHttpServer())
+      .post('/api/admin/templates/00000000-0000-4000-8000-000000000000/current')
+      .set('Cookie', demo2AdminCookie)
+      .expect(404);
   });
 
   it('hides Northbean inspection, evidence, and chat resources from every demo tenant role', async () => {
@@ -936,6 +1068,7 @@ describe('inspection contract API', () => {
          CROSS JOIN floorwalk.users inspector
          CROSS JOIN generate_series(1, 3)
          WHERE site.code = 'NB-001'
+           AND site.org_id = (SELECT org.id FROM floorwalk.organizations org WHERE org.name = 'Northbean')
            AND inspector.email = 'inspector@northbean.example'
          RETURNING id`,
         [templateId, '2099-10-29T12:00:00.123456Z'],

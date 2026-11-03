@@ -25,7 +25,8 @@ export class DashboardController {
            SELECT score, status FROM floorwalk.inspections
            WHERE site_id = s.id AND status IN ('passed', 'failed')
            ORDER BY decided_at DESC NULLS LAST LIMIT 1
-         ) i ON true ORDER BY s.code`,
+         ) i ON true WHERE s.org_id = $1 ORDER BY s.code`,
+      [request.user.orgId],
     );
     return dashboardSitesResponseSchema.parse(
       rows.rows.map((row) => ({
