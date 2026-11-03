@@ -36,7 +36,7 @@ export default defineConfig({
   reporter: [['line']],
   use: {
     baseURL: apiUrl,
-    trace: 'retain-on-failure',
+    trace: 'off',
   },
   webServer: {
     command: 'node scripts/e2e-api.mjs',

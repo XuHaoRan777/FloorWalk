@@ -1,9 +1,9 @@
 import { NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import { aiReviewResultSchema, type AiReviewInput } from '@libs/shared';
+import OpenAI from 'openai';
+import { aiReviewOutputSchema } from '@libs/shared';
 import { expect, it } from 'vitest';
-import { OpenAiReviewer } from '../ai/openai.js';
 import { OssStorageDriver } from './oss.js';
 
 const missingKeys = [
@@ -105,6 +105,28 @@ it.skipIf(!enabled || missingKeys.length > 0)(
 const missingAiKeys = ['OPENAI_API_KEY', 'OPENAI_MODEL'].filter(
   (key) => !process.env[key]?.trim(),
 );
+const directImageSchema = {
+  type: 'object',
+  properties: {
+    verdict: { type: 'string', enum: ['pass', 'fail', 'rework'] },
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          itemId: { type: 'string' },
+          verdict: { type: 'string', enum: ['pass', 'fail'] },
+          reason: { type: 'string', minLength: 1 },
+        },
+        required: ['itemId', 'verdict', 'reason'],
+        additionalProperties: false,
+      },
+    },
+    reworkItemIds: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['verdict', 'items', 'reworkItemIds'],
+  additionalProperties: false,
+};
 const combinedEnabled =
   process.env.FW_OSS_SMOKE === '1' && process.env.FW_AI_SMOKE === '1';
 const combinedSkipReason = [...missingKeys, ...missingAiKeys];
@@ -138,34 +160,91 @@ it.skipIf(!combinedEnabled || combinedSkipReason.length > 0)(
     try {
       await storage.put(key, image, 'image/png');
       const { url } = await storage.signedUrl(key, 120);
-      const input: AiReviewInput = {
-        reviewPrompt: '照片里应有红色方块。',
-        templateName: 'OSS 签名链接组合冒烟测试',
-        items: [
-          {
-            itemId: '00000000-0000-4000-8000-000000000023',
-            title: '红色方块',
-            photoRequired: true,
-            critical: true,
-            minPhotos: 1,
-            acceptanceCriteria: '照片里应有红色方块。',
-            selfResult: 'pass',
-            photos: [{ kind: 'url', url }],
+      const sdk = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+        baseURL: process.env.OPENAI_BASE_URL?.trim().replace(
+          /\/chat\/completions\/?$/,
+          '',
+        ),
+        maxRetries: 0,
+        timeout: 60_000,
+      });
+      const started = Date.now();
+      let response;
+      try {
+        response = await sdk.chat.completions.create({
+          model: process.env.OPENAI_MODEL!,
+          messages: [
+            {
+              role: 'system',
+              content:
+                '按检查标准检查照片，并严格按 JSON schema 返回。理由需简述照片是否可读及是否看到红色方块。',
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: '检查项：红色方块。标准：照片里应有红色方块。',
+                },
+                { type: 'image_url', image_url: { url } },
+              ],
+            },
+          ],
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'floorwalk_review',
+              strict: true,
+              schema: directImageSchema,
+            },
           },
-        ],
-      };
-      const result = aiReviewResultSchema.parse(
-        await new OpenAiReviewer().review(input),
-      );
-      const fetchedByReviewer = !('kind' in result);
+        });
+      } catch (error) {
+        const status =
+          error && typeof error === 'object' && 'status' in error
+            ? String(error.status)
+            : 'unavailable';
+        throw new Error(
+          `Direct OSS image URL model request failed (status=${status}).`,
+        );
+      }
+      const content = response.choices[0]?.message.content ?? '';
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        parsed = undefined;
+      }
+      const responseShape = Array.isArray(parsed)
+        ? `array(${parsed.length})`
+        : typeof parsed;
+      const normalized =
+        Array.isArray(parsed) && parsed.length === 1 ? parsed[0] : parsed;
+      const result = aiReviewOutputSchema.safeParse(normalized);
       console.log(
         JSON.stringify({
-          smoke: 'FW-023 OSS signed URL + AI',
-          fetchedByReviewer,
-          verdict: 'kind' in result ? 'needs_human' : result.verdict,
-          reason: 'kind' in result ? result.reason : undefined,
+          smoke: 'FW-023 OSS signed URL + AI direct URL',
+          responseShape,
+          result: result.success ? result.data : 'invalid schema',
+          validationIssues: !result.success
+            ? result.error.issues.map((issue) => ({
+                path: issue.path.join('.'),
+                message: issue.message,
+              }))
+            : undefined,
+          refusal: response.choices[0]?.message.refusal ?? null,
+          elapsedMs: Date.now() - started,
+          usage: response.usage
+            ? {
+                input: response.usage.prompt_tokens,
+                output: response.usage.completion_tokens,
+                total: response.usage.total_tokens,
+              }
+            : null,
         }),
       );
+      expect(result.success).toBe(true);
     } finally {
       await storage.delete(key);
     }

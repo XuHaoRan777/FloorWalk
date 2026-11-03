@@ -54,22 +54,22 @@
 
 ## 数据结构
 
-schema 为 `floorwalk`，主键均为 uuid，时间均为 timestamptz，所有表有 `created_at`。
+schema 为 `floorwalk`，主键均为 uuid，时间均为 timestamptz。除 `site_supervisors` 外，各表均有 `created_at`；该关系表记录 `assigned_at`。
 
-| 表                 | 字段                                                                                                     |
-| ------------------ | -------------------------------------------------------------------------------------------------------- |
-| `organizations`    | `name`、`timezone`                                                                                       |
-| `sites`            | `org_id`、`code`（商家内唯一）、`name`、`deactivated_at`（空表示启用）、主管指派关系                      |
-| `users`            | `org_id`、`email`（全局唯一）、`password_hash`（argon2）、`display_name`、`role`、`site_id`（仅店员必填）、`must_change_password`、`disabled_at` |
-| `site_supervisors` | `site_id`（主键）、`user_id`、`assigned_at`                                                              |
-| `templates`        | `org_id`、`name`（商家内唯一）、`is_current`（按商家部分唯一索引确保每商家最多一个当前模板）             |
-| `template_items`   | `template_id`、`position`（组合唯一）、`title`、`photo_required`、`critical`                             |
-| `inspections`      | `site_id`、`template_id`、`inspector_id`、`status`、`score`、`submitted_at`、`decided_at`                |
-| `inspection_items` | `inspection_id`、`position`、复制的 `title`、`photo_required`、`critical`、`result`、`note`              |
-| `evidence`         | `inspection_item_id`、`storage_key`、`mime`、`size`                                                      |
-| `reviews`          | `inspection_id`、`reviewer_id`、`action`、`comment`、`rework_item_ids`（仅打回时有值）                   |
-| `sessions`         | `token_hash`（唯一）、`user_id`、`created_at`、`last_seen_at`、`expires_at`、`revoked_at`（可空）       |
-| `chat_messages`    | `seq`（自增、唯一）、`inspection_id`、`author_id`、`body`（最多 1000 字）、`storage_key`、`mime`、`size` |
+| 表                 | 字段                                                                                                                                                           |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `organizations`    | `name`、`timezone`                                                                                                                                             |
+| `sites`            | `org_id`、`code`（商家内唯一）、`name`、`deactivated_at`（空表示启用）、主管指派关系                                                                           |
+| `users`            | `org_id`、`email`（全局唯一）、`password_hash`（argon2）、`display_name`、`role`、`site_id`（仅店员必填）、`must_change_password`、`disabled_at`、`created_by` |
+| `site_supervisors` | `site_id`（主键及 sites 外键）、`user_id`（users 外键）、`assigned_at`                                                                                         |
+| `templates`        | `org_id`、`name`（商家内唯一）、`is_current`（按商家部分唯一索引确保每商家最多一个当前模板）                                                                   |
+| `template_items`   | `template_id`、`position`（组合唯一）、`title`、`photo_required`、`critical`                                                                                   |
+| `inspections`      | `site_id`、`template_id`、`inspector_id`、`status`、`score`、`submitted_at`、`decided_at`                                                                      |
+| `inspection_items` | `inspection_id`、`position`、复制的 `title`、`photo_required`、`critical`、`result`、`note`                                                                    |
+| `evidence`         | `inspection_item_id`、`storage_key`、`mime`、`size`                                                                                                            |
+| `reviews`          | `inspection_id`、`reviewer_id`、`action`、`comment`、`rework_item_ids`（仅打回时有值）                                                                         |
+| `sessions`         | `token_hash`（唯一）、`user_id`、`created_at`、`last_seen_at`、`expires_at`、`revoked_at`（可空）                                                              |
+| `chat_messages`    | `seq`（自增、唯一）、`inspection_id`、`author_id`、`body`（最多 1000 字）、`storage_key`、`mime`、`size`                                                       |
 
 `chat_messages` 的 `body` 与 `storage_key` 至少一项非空；图片存储键、MIME 与大小同时为空或同时非空；另有 `(inspection_id, seq)` 索引。`sites` 的 `(org_id, code)`、`templates` 的 `(org_id, name)` 唯一；`site_supervisors.site_id` 为主键；每个商家最多一个当前模板。另有索引 `inspections(site_id, status)`、`inspections(created_at)`、`evidence(inspection_item_id)`、`sessions(user_id)`。角色/状态/结果与照片大小等数据库 CHECK 约束，以及表间完整约束，以共享契约中的 `databaseConstraints` 和现有迁移为准。
 
@@ -94,4 +94,4 @@ Northbean Coffee 有 12 家门店 `NB-001`～`NB-012`，每家店一个店员账
 | 2026-10-29 | FW-011 增加聊天、门店/模板与店员记录 API 契约和存储结构；接入聊天读写、签名图片及记录分页，today、建单和看板补门店/当前模板字段。                             |
 | 2026-10-29 | 门店与模板写接口持久化，停用限制新建，模板修改保留既有巡检快照；详见管理规格。                                                                                |
 | 2026-11-03 | FW-017 完成多商家协议：角色使用 `admin`，模板当前索引按商家唯一，演示二号拥有当前模板；商家管理员可审核，主管权限保持不变。                                   |
-| 2026-11-03 | g03 完成商家数据隔离、主管门店范围、账号停用与首次改密、7 天闲置续期及 CORS 来源白名单；ADR 0003 取代任意来源策略。 |
+| 2026-11-03 | g03 完成商家数据隔离、主管门店范围、账号停用与首次改密、7 天闲置续期及 CORS 来源白名单；ADR 0003 取代任意来源策略。                                           |
