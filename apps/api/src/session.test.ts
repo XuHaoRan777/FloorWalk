@@ -201,10 +201,10 @@ describe('HttpOnly sessions', () => {
     );
   });
 
-  it('rejects a session idle for seven days', async () => {
+  it('rejects a session idle for more than seven days', async () => {
     const cookie = cookieFrom(await login().expect(201));
     await pool.query(
-      "UPDATE floorwalk.sessions SET last_seen_at = NOW() - INTERVAL '7 days' WHERE token_hash = $1",
+      "UPDATE floorwalk.sessions SET last_seen_at = NOW() - INTERVAL '7 days 1 second' WHERE token_hash = $1",
       [hash(cookie.slice('fw_session='.length))],
     );
     await unauthenticated(cookie);

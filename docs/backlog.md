@@ -40,7 +40,7 @@
 | ------ | ------------------------------------------------------------------------ | ---------- | ---------------------- | ------------------- |
 | FW-018 | [多商家隔离与门店范围](work/FW-018-org-isolation/spec.md)                | `verified` | FW-017                 | FW-019 可从 L1 接力 |
 | FW-019 | [商家注册与门店指派主管](work/FW-019-org-signup-site-supervisor/spec.md) | `verified` | FW-018                 | FW-020 可从 L1 接力 |
-| FW-020 | [账号体系与会话续期](work/FW-020-accounts/spec.md)                       | `approved` | FW-019                 | 接力                |
+| FW-020 | [账号体系与会话续期](work/FW-020-accounts/spec.md)                       | `blocked` | FW-019                 | T01 通过；待补 Mobile 已登录布局写入范围 |
 | FW-021 | [阿里云 OSS 存储驱动](work/FW-021-oss-storage/spec.md)                   | `approved` | FW-017                 | 开组                |
 | FW-022 | [AI 审核适配器](work/FW-022-ai-reviewer/spec.md)                         | `approved` | FW-017                 | 开组                |
 | FW-023 | [并行组 g03 集成](work/FW-023-g03-integration/spec.md)                   | `approved` | FW-020、FW-021、FW-022 | g03/close           |
