@@ -72,7 +72,11 @@ export class EvidenceController {
     try {
       await client.query('BEGIN');
       const inspectionResult = await client.query(
-        'SELECT id, site_id AS "siteId", inspector_id AS "inspectorId", status FROM floorwalk.inspections WHERE id = $1 FOR UPDATE',
+        `SELECT i.id, i.site_id AS "siteId", i.inspector_id AS "inspectorId", i.status,
+            s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+         FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
+         LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
+         WHERE i.id = $1 FOR UPDATE OF i`,
         [id],
       );
       const inspection = inspectionResult.rows[0];
@@ -133,13 +137,19 @@ export class EvidenceController {
   ) {
     const result = await this.pool.query<{
       storageKey: string;
+      id: string;
       siteId: string;
       inspectorId: string;
+      orgId: string;
+      supervisorUserId: string | null;
     }>(
-      `SELECT e.storage_key AS "storageKey", i.site_id AS "siteId", i.inspector_id AS "inspectorId"
+      `SELECT e.storage_key AS "storageKey", i.id, i.site_id AS "siteId", i.inspector_id AS "inspectorId",
+          s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
          FROM floorwalk.evidence e
          JOIN floorwalk.inspection_items ii ON ii.id = e.inspection_item_id
          JOIN floorwalk.inspections i ON i.id = ii.inspection_id
+         JOIN floorwalk.sites s ON s.id = i.site_id
+         LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
          WHERE e.id = $1`,
       [id],
     );

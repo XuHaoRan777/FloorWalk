@@ -53,7 +53,8 @@ export class InspectionController {
         message: '店员未绑定门店。',
       });
     const template = await this.pool.query(
-      'SELECT id, name, is_current AS "isCurrent", created_at AS "createdAt" FROM floorwalk.templates WHERE is_current = true LIMIT 1',
+      'SELECT id, name, is_current AS "isCurrent", created_at AS "createdAt" FROM floorwalk.templates WHERE org_id = $1 AND is_current = true LIMIT 1',
+      [request.user.orgId],
     );
     if (!template.rows[0])
       throw new NotFoundException({
@@ -118,6 +119,15 @@ export class InspectionController {
         message: '店员未绑定门店。',
       });
     const input = createInspectionRequestSchema.parse(body);
+    const templateExists = await this.pool.query(
+      'SELECT id FROM floorwalk.templates WHERE id = $1 AND org_id = $2',
+      [input.templateId, request.user.orgId],
+    );
+    if (!templateExists.rows[0])
+      throw new NotFoundException({
+        code: 'NOT_FOUND',
+        message: '检查模板不存在。',
+      });
     const pool = this.pool;
     const client = await pool.connect();
     try {
@@ -200,7 +210,11 @@ export class InspectionController {
     try {
       await client.query('BEGIN');
       const inspectionResult = await client.query(
-        'SELECT id, site_id AS "siteId", inspector_id AS "inspectorId", status FROM floorwalk.inspections WHERE id = $1 FOR UPDATE',
+        `SELECT i.id, i.site_id AS "siteId", i.inspector_id AS "inspectorId", i.status,
+            s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+         FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
+         LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
+         WHERE i.id = $1 FOR UPDATE OF i`,
         [id],
       );
       const inspection = inspectionResult.rows[0];
@@ -267,7 +281,12 @@ export class InspectionController {
     try {
       await client.query('BEGIN');
       const inspectionResult = await client.query(
-        'SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt" FROM floorwalk.inspections WHERE id = $1 FOR UPDATE',
+        `SELECT i.id, i.site_id AS "siteId", i.template_id AS "templateId", i.inspector_id AS "inspectorId",
+            i.status, i.score, i.submitted_at AS "submittedAt", i.decided_at AS "decidedAt",
+            i.created_at AS "createdAt", s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+         FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
+         LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
+         WHERE i.id = $1 FOR UPDATE OF i`,
         [id],
       );
       const inspection = inspectionResult.rows[0];

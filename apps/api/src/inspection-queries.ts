@@ -3,6 +3,7 @@ import type { Request } from 'express';
 import { inspectionDetailSchema } from '@libs/shared';
 import { createPool } from './db/client.js';
 import { type AuthUser } from './auth.js';
+import { canAccessSite } from './site-scope.js';
 
 export type AuthedRequest = Request & { user: AuthUser };
 export type UploadedImage = {
@@ -44,13 +45,33 @@ export function assertRole(
 }
 
 export function assertInspectionAccess(
-  inspection: { siteId: string; inspectorId: string },
+  inspection: {
+    id: string;
+    siteId: string;
+    inspectorId: string;
+    orgId: string;
+    supervisorUserId: string | null;
+  },
   user: AuthUser,
 ) {
-  if (user.role === 'inspector' && inspection.siteId !== user.siteId)
+  if (inspection.orgId !== user.orgId)
+    throw new NotFoundException({
+      code: 'NOT_FOUND',
+      message: '巡检单不存在。',
+    });
+  if (
+    !canAccessSite(
+      user,
+      { id: inspection.siteId, orgId: inspection.orgId },
+      inspection.supervisorUserId,
+    )
+  )
     throw new ForbiddenException({
       code: 'FORBIDDEN',
-      message: '只能访问本店巡检单。',
+      message:
+        user.role === 'inspector'
+          ? '只能访问本店巡检单。'
+          : '只能访问名下门店的巡检单。',
     });
 }
 
@@ -60,7 +81,14 @@ export async function getInspectionAccess(
   user: AuthUser,
 ) {
   const result = await pool.query(
-    'SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt" FROM floorwalk.inspections WHERE id = $1',
+    `SELECT i.id, i.site_id AS "siteId", i.template_id AS "templateId",
+        i.inspector_id AS "inspectorId", i.status, i.score,
+        i.submitted_at AS "submittedAt", i.decided_at AS "decidedAt",
+        i.created_at AS "createdAt", s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+     FROM floorwalk.inspections i
+     JOIN floorwalk.sites s ON s.id = i.site_id
+     LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
+     WHERE i.id = $1`,
     [id],
   );
   if (!result.rows[0])
