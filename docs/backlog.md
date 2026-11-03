@@ -42,7 +42,7 @@
 | FW-019 | [商家注册与门店指派主管](work/FW-019-org-signup-site-supervisor/spec.md) | `approved` | FW-018                 | 接力      |
 | FW-020 | [账号体系与会话续期](work/FW-020-accounts/spec.md)                       | `approved` | FW-019                 | 接力      |
 | FW-021 | [阿里云 OSS 存储驱动](work/FW-021-oss-storage/spec.md)                   | `approved` | FW-017                 | 开组      |
-| FW-022 | [AI 审核适配器](work/FW-022-ai-reviewer/spec.md)                         | `approved` | FW-017                 | 开组      |
+| FW-022 | [AI 审核适配器](work/FW-022-ai-reviewer/spec.md)                         | `verified` | FW-017                 | 待 FW-023 集成 |
 | FW-023 | [并行组 g03 集成](work/FW-023-g03-integration/spec.md)                   | `approved` | FW-020、FW-021、FW-022 | g03/close |
 
 ## 待开单元（未批准，按建议顺序）
