@@ -18,7 +18,7 @@ export {
   hasCheckedSession,
   checkSession,
 } from './api/session';
-export { login, deleteSession, getMe } from './api/auth';
+export { login, deleteSession, getMe, changePassword } from './api/auth';
 export { getInspection } from './api/inspection';
 export { getEvidenceUrl } from './api/evidence';
 export { getReviewQueue, reviewInspection } from './api/review';

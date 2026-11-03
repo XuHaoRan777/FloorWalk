@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('AC-06 注册入口与注册、改密码路由', async ({ page }) => {
+test('注册入口与首次改密表单路由', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('link', { name: '注册商家' }).click();
   await expect(page).toHaveURL(/\/register$/);
@@ -9,22 +9,15 @@ test('AC-06 注册入口与注册、改密码路由', async ({ page }) => {
   await expect(page.getByLabel('管理员姓名')).toBeVisible();
   await expect(page.getByLabel('邮箱')).toBeVisible();
   await expect(page.getByLabel('密码')).toBeVisible();
-  await page.screenshot({
-    path: 'docs/work/FW-017-g03-protocol/evidence/register.png',
-  });
   await page.getByRole('link', { name: '返回登录' }).click();
   await expect(page.getByLabel('邮箱')).toBeVisible();
 
   await page.goto('/change-password');
   await expect(page.getByRole('heading', { name: '修改密码' })).toBeVisible();
-  await expect(page.locator('input')).toHaveCount(0);
-  await page.screenshot({
-    path: 'docs/work/FW-017-g03-protocol/evidence/web-password.png',
-  });
-  await expect(page.getByRole('link', { name: '返回工作台' })).toHaveAttribute(
-    'href',
-    '/console',
-  );
+  await expect(page.getByLabel('当前密码')).toBeVisible();
+  await expect(page.getByLabel('新密码', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('确认新密码')).toBeVisible();
+  await expect(page.getByRole('button', { name: '保存新密码' })).toBeVisible();
 });
 
 for (const account of [
@@ -32,7 +25,7 @@ for (const account of [
   { email: 'supervisor@northbean.example', canManage: true },
   { email: 'inspector@northbean.example', canManage: false },
 ]) {
-  test(`AC-06 账号分区可见性：${account.email}`, async ({ page }) => {
+  test(`FW-020 AC-08 账号分区可见性：${account.email}`, async ({ page }) => {
     await page.goto('/');
     await page.getByLabel('邮箱').fill(account.email);
     await page.getByLabel('密码').fill('northbean-demo');
@@ -42,12 +35,13 @@ for (const account of [
     if (account.canManage) {
       await usersButton.click();
       await expect(page.getByRole('heading', { name: '账号' })).toBeVisible();
-      await expect(page.locator('main input')).toHaveCount(0);
-      if (account.email === 'hq@northbean.example') {
-        await page.screenshot({
-          path: 'docs/work/FW-017-g03-protocol/evidence/users.png',
-        });
-      }
+      await expect(page.getByLabel('姓名')).toBeVisible();
+      await expect(page.getByLabel('邮箱')).toBeVisible();
+      await expect(page.getByLabel('初始密码')).toBeVisible();
+      const role = page.getByLabel('角色');
+      if (account.email === 'hq@northbean.example')
+        await expect(role.locator('option')).toHaveCount(3);
+      else await expect(role.locator('option')).toHaveCount(1);
     } else {
       await expect(page.getByText('请使用手机端')).toBeVisible();
       await expect(usersButton).toHaveCount(0);

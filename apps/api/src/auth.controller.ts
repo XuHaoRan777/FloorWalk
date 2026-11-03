@@ -54,12 +54,17 @@ export class AuthController {
       org_id: string;
       org_name: string;
       must_change_password: boolean;
+      disabled_at: Date | null;
     }>(
       `SELECT u.*, o.name AS org_name FROM floorwalk.users u JOIN floorwalk.organizations o ON o.id = u.org_id WHERE u.email = $1`,
       [input.email],
     );
     const row = result.rows[0];
-    if (!row || !(await argon2.verify(row.password_hash, input.password)))
+    if (
+      !row ||
+      row.disabled_at ||
+      !(await argon2.verify(row.password_hash, input.password))
+    )
       throw new UnauthorizedException({
         code: 'UNAUTHENTICATED',
         message: '邮箱或密码错误。',

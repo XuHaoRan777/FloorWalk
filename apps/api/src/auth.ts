@@ -18,6 +18,7 @@ export type AuthUser = {
   role: 'inspector' | 'supervisor' | 'admin';
   orgId: string;
   siteId: string | null;
+  mustChangePassword: boolean;
 };
 
 @Injectable()
@@ -34,31 +35,46 @@ export class AuthGuard implements CanActivate {
         code: 'UNAUTHENTICATED',
         message: '需要登录。',
       });
+    let user: AuthUser | undefined;
     try {
       const result = await this.pool.query<AuthUser>(
         `UPDATE floorwalk.sessions s SET last_seen_at = now()
          FROM floorwalk.users u
          WHERE u.id = s.user_id AND s.token_hash = $1 AND s.revoked_at IS NULL
-           AND s.last_seen_at > now() - interval '7 days'
+           AND s.last_seen_at > now() - interval '7 days' AND u.disabled_at IS NULL
          RETURNING u.id, u.email, u.display_name AS "displayName", u.role,
-           u.site_id AS "siteId", u.org_id AS "orgId"`,
+           u.site_id AS "siteId", u.org_id AS "orgId",
+           u.must_change_password AS "mustChangePassword"`,
         [hashSessionId(sessionId)],
       );
-      const user = result.rows[0];
-      if (!user || !['inspector', 'supervisor', 'admin'].includes(user.role))
-        throw new Error('unknown user');
-      context
-        .switchToHttp()
-        .getResponse<Response>()
-        .setHeader('Set-Cookie', sessionCookie(sessionId));
-      request.user = user;
-      return true;
+      user = result.rows[0];
     } catch {
       throw new UnauthorizedException({
         code: 'UNAUTHENTICATED',
         message: '登录凭证无效。',
       });
     }
+    if (!user || !['inspector', 'supervisor', 'admin'].includes(user.role))
+      throw new UnauthorizedException({
+        code: 'UNAUTHENTICATED',
+        message: '登录凭证无效。',
+      });
+    if (
+      user.mustChangePassword &&
+      !(request.method === 'GET' && request.path === '/api/me') &&
+      !(request.method === 'POST' && request.path === '/api/me/password') &&
+      !(request.method === 'DELETE' && request.path === '/api/auth/session')
+    )
+      throw new ForbiddenException({
+        code: 'FORBIDDEN',
+        message: '请先修改初始密码。',
+      });
+    context
+      .switchToHttp()
+      .getResponse<Response>()
+      .setHeader('Set-Cookie', sessionCookie(sessionId));
+    request.user = user;
+    return true;
   }
 }
 

@@ -38,7 +38,9 @@ export function HomePage() {
       .then((session) => {
         if (!active) return;
         writeSession(session);
-        void navigate({ to: '/console' });
+        void navigate({
+          to: session.user.mustChangePassword ? '/change-password' : '/console',
+        });
       })
       .catch(() => {
         if (!active) return;
@@ -56,7 +58,9 @@ export function HomePage() {
     void login(email, password)
       .then((session) => {
         writeSession(session);
-        void navigate({ to: '/console' });
+        void navigate({
+          to: session.user.mustChangePassword ? '/change-password' : '/console',
+        });
       })
       .catch((reason: unknown) =>
         setError(

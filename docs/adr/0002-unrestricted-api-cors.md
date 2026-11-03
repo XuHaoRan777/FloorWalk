@@ -1,9 +1,9 @@
 # 0002. API 接受任意跨域来源
 
-- 状态：`accepted`
+- 状态：`superseded`
 - 日期：`2026-10-29`
 - 来源工作单元：`-`
-- 取代：`-`
+- 取代：[`ADR 0003`](0003-cors-origin-allowlist.md)
 
 ## 背景
 

@@ -55,12 +55,12 @@ const protocolRouteBodies = {
   updateAdminUser: { displayName: 'Protocol user' },
   resetAdminUserPassword: { password: 'protocol-password' },
   changePassword: {
-    currentPassword: 'northbean-demo',
+    currentPassword: 'wrong-password',
     newPassword: 'protocol-password',
   },
 } as const;
 
-// L1 permission expectation table; data-dependent enforcement follows the 501 stubs.
+// L1 permission expectation table; account operations have focused tests in users.test.ts.
 // Scope / operation                                    Status  Error code
 // Cross-organization resource (all protected resources) 404     NOT_FOUND
 // Supervisor creates/changes/disables/resets admin      403     FORBIDDEN
@@ -340,7 +340,14 @@ describe('inspection contract API', () => {
             ? route.successStatus
             : routeKey === 'setSiteSupervisor'
               ? 404
-              : 501,
+              : routeKey === 'createAdminUser'
+                ? 400
+                : routeKey === 'updateAdminUser' ||
+                    routeKey === 'resetAdminUserPassword'
+                  ? 404
+                  : routeKey === 'changePassword'
+                    ? 401
+                    : 501,
         );
         if (routeKey === 'createOrg') {
           route.responseSchema.parse(response.body);
@@ -352,7 +359,7 @@ describe('inspection contract API', () => {
             'NOT_FOUND',
           );
         }
-        // 501 checks role admission only, never the future success body.
+        // Empty implemented writes may fail validation after role admission.
       }
     }
   });
@@ -2063,7 +2070,14 @@ describe('inspection contract API', () => {
             routeKey === 'setSiteSupervisor' ||
             routeKey === 'listAdminUsers'
             ? route.successStatus
-            : 501,
+            : routeKey === 'createAdminUser'
+              ? 400
+              : routeKey === 'updateAdminUser' ||
+                  routeKey === 'resetAdminUserPassword'
+                ? 404
+                : routeKey === 'changePassword'
+                  ? 401
+                  : 501,
         );
         if (routeKey === 'createOrg') {
           route.responseSchema.parse(response.body);

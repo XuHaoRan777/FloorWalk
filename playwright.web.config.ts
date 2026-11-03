@@ -37,6 +37,7 @@ const slotEnvironment = {
   STORAGE_DIR: `${projectRoot}/apps/api/.e2e/slot-${slot}/storage`,
   API_PUBLIC_BASE_URL: apiUrl,
   NODE_ENV: 'development',
+  CORS_ORIGINS: webUrl,
 };
 
 export default defineConfig({
