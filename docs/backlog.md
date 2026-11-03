@@ -8,12 +8,12 @@
 
 | 能力                                                               | 现状 `有\|部分\|无` | 依据 / 缺口                                                                   |
 | ------------------------------------------------------------------ | ------------------- | ----------------------------------------------------------------------------- |
-| 商家注册与多商家数据隔离                                           | 有                  | [巡检主链](specs/inspection.md)；Web 注册并按商家隔离                          |
-| 三角色与门店归属（主管可管多店、一店最多一个主管、店员只属一店）   | 有                  | [巡检主链](specs/inspection.md)、[门店管理](specs/admin.md)                    |
-| 账号分配、初始密码强制修改、上级重置、停用即吊销                   | 有                  | [巡检主链](specs/inspection.md)、[Web 控制台](specs/web-console.md)             |
-| 会话滑动续期                                                       | 有                  | 闲置超过 7 天失效，[巡检主链](specs/inspection.md)                              |
+| 商家注册与多商家数据隔离                                           | 有                  | [巡检主链](specs/inspection.md)；Web 注册并按商家隔离                         |
+| 三角色与门店归属（主管可管多店、一店最多一个主管、店员只属一店）   | 有                  | [巡检主链](specs/inspection.md)、[门店管理](specs/admin.md)                   |
+| 账号分配、初始密码强制修改、上级重置、停用即吊销                   | 有                  | [巡检主链](specs/inspection.md)、[Web 控制台](specs/web-console.md)           |
+| 会话滑动续期                                                       | 有                  | 闲置超过 7 天失效，[巡检主链](specs/inspection.md)                            |
 | 个人中心（姓名、头像、改密码）                                     | 无                  | Mobile「我的」只能看账号与门店                                                |
-| 门店管理、停用、指派主管                                           | 有                  | [门店与模板管理](specs/admin.md)                                                |
+| 门店管理、停用、指派主管                                           | 有                  | [门店与模板管理](specs/admin.md)                                              |
 | 多模板，检查项含最少张数与验收要点                                 | 部分                | [门店与模板管理](specs/admin.md)；全公司一个当前模板                          |
 | 模板、AI 审核标准、日程的两级归属                                  | 无                  |                                                                               |
 | AI 审核标准库，模板开启 AI                                         | 无                  |                                                                               |
@@ -36,9 +36,9 @@
 
 只列 `归档状态：active` 的单元，个数上限与状态一致性由 `python scripts/validate_docs.py` 校验。
 
-| ID     | 工作单元                                                                 | 状态       | 依赖                   | 下一步              |
-| ------ | ------------------------------------------------------------------------ | ---------- | ---------------------- | ------------------- |
-| FW-023 | [并行组 g03 集成](work/FW-023-g03-integration/spec.md)                   | `blocked`  | FW-020、FW-021、FW-022 | AC-04 模型直读 OSS URL 结果格式异常 |
+| ID     | 工作单元                                               | 状态          | 依赖                   | 下一步                     |
+| ------ | ------------------------------------------------------ | ------------- | ---------------------- | -------------------------- |
+| FW-023 | [并行组 g03 集成](work/FW-023-g03-integration/spec.md) | `in_progress` | FW-020、FW-021、FW-022 | T03 组合冒烟改走正式适配器 |
 
 ## 待开单元（未批准，按建议顺序）
 
@@ -89,8 +89,8 @@
 | FW-015 | [并行组 g02 集成](work/FW-015-g02-integration/spec.md)                              | 2026-10-29 | 本地集成、原生回归、审查及归档提交（见 git log），未推送  |
 | FW-016 | [UI 基础：两端统一设计](work/FW-016-ui-foundation/spec.md)                          | 2026-11-03 | 阶段提交、修正与归档提交（见 git log）                    |
 | FW-017 | [g03 协议：多商家、账号、存储与 AI 接口](work/FW-017-g03-protocol/spec.md)          | 2026-11-03 | T07 定向复核与归档提交（见 git log）                      |
-| FW-018 | [多商家隔离与门店范围](work/FW-018-org-isolation/spec.md)                            | 2026-11-03 | FW-023 T05 Promote 与归档提交                              |
-| FW-019 | [商家注册与门店指派主管](work/FW-019-org-signup-site-supervisor/spec.md)             | 2026-11-03 | FW-023 T05 Promote 与归档提交                              |
-| FW-020 | [账号体系与会话续期](work/FW-020-accounts/spec.md)                                   | 2026-11-03 | FW-023 T05 Promote 与归档提交                              |
-| FW-021 | [阿里云 OSS 存储驱动](work/FW-021-oss-storage/spec.md)                               | 2026-11-03 | FW-023 T05 Promote 与归档提交                              |
-| FW-022 | [AI 审核适配器](work/FW-022-ai-reviewer/spec.md)                                     | 2026-11-03 | FW-023 T05 Promote 与归档提交                              |
+| FW-018 | [多商家隔离与门店范围](work/FW-018-org-isolation/spec.md)                           | 2026-11-03 | FW-023 T05 Promote 与归档提交                             |
+| FW-019 | [商家注册与门店指派主管](work/FW-019-org-signup-site-supervisor/spec.md)            | 2026-11-03 | FW-023 T05 Promote 与归档提交                             |
+| FW-020 | [账号体系与会话续期](work/FW-020-accounts/spec.md)                                  | 2026-11-03 | FW-023 T05 Promote 与归档提交                             |
+| FW-021 | [阿里云 OSS 存储驱动](work/FW-021-oss-storage/spec.md)                              | 2026-11-03 | FW-023 T05 Promote 与归档提交                             |
+| FW-022 | [AI 审核适配器](work/FW-022-ai-reviewer/spec.md)                                    | 2026-11-03 | FW-023 T05 Promote 与归档提交                             |
