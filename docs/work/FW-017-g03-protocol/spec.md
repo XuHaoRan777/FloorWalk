@@ -22,6 +22,7 @@
 - 新表 `organizations`：`id` uuid 主键、`name text not null`、`timezone text not null default 'Asia/Shanghai'`、`created_at`。
 - `sites`、`users`、`templates` 加 `org_id uuid not null` 外键；迁移先建 Northbean 商家行，再把现有行全部指向它，最后加 `not null`。`inspections`、`inspection_items`、`evidence`、`reviews`、`chat_messages` 不加，商家经 `site_id` 或 `inspection_id` 推出。
 - 唯一约束改为按商家：`sites (org_id, code)`、`templates (org_id, name)`；`users.email` 保持全局唯一。
+- 当前模板按商家唯一：另起一个迁移删掉 g02 的 `templates_single_current_idx`（只在 `is_current` 上），改为 `(org_id) WHERE is_current = true` 的部分唯一索引；每个商家最多一个当前模板。（2026-11-03 用户原话"按建议"：T07 独立审查发现）
 - `users.role` 的取值改为 `inspector | supervisor | admin`，迁移把 `hq` 改成 `admin`；`inspector` 必须有 `site_id`，`supervisor`、`admin` 的 `site_id` 为空。
 - `users` 加 `must_change_password boolean not null default false`、`disabled_at timestamptz` 可空、`created_by uuid` 可空外键。
 - 新表 `site_supervisors`：`site_id` 主键并外键（一店最多一个主管）、`user_id` 外键、`assigned_at`。
@@ -30,6 +31,7 @@
 ### 角色与权限的写法
 
 - 路由表 `roles` 的取值改为 `inspector | supervisor | admin`。
+- 审核接口 `POST /inspections/:id/review` 的 `roles` 改为 `supervisor`、`admin`：admin 能审本商家任何门店的单（主管请假时兜底），主管只能审名下门店；门店范围判断由 FW-018 接进去。Web 的 `canReview` 同步改为 `supervisor` 或 `admin`。两人同时审同一张单由现有状态机挡住，后提交的得 409。（2026-11-03 用户原话"按建议"：T07 独立审查发现）
 - 新增门店范围判断函数（签名在 `@libs/shared`，实现在 API）：`admin` 可访问本商家全部门店；`supervisor` 只能访问 `site_supervisors` 里自己名下的门店；`inspector` 只能访问自己的 `site_id`。协议单元只建函数和测试，不接进现有查询。
 
 ### 接口（前缀 `/api`）
@@ -95,10 +97,10 @@ L1 三个单元在同一分支上依次做，后面的单元可以改前面单�
 
 ## 验收标准
 
-- AC-01（`用户要求`）：迁移在空库、现有开发库副本和槽位库上都能跑通；跑完后全部 `sites`、`users`、`templates` 都属于 Northbean 商家，原 `hq` 账号是 `admin`，现有业务数据条数不变（迁移前后各计一次写进证据）。
-- AC-02（`用户要求`）：种子重建为"Northbean 是第一个商家"：12 店分给 2 个主管各 6 家（`site_supervisors`），1 个商家管理员，12 个店员；另建第二个商家"演示二号"（1 店、1 主管、1 店员、1 商家管理员、1 张已判定单），供 L1-1 测跨商家隔离。存储键按新格式写入。
+- AC-01（`用户要求`）：迁移在空库、现有开发库副本和槽位库上都能跑通；跑完后全部 `sites`、`users`、`templates` 都属于 Northbean 商家，原 `hq` 账号是 `admin`，现有业务数据条数不变（迁移前后各计一次写进证据）。 当前模板的唯一索引按商家：同一商家设第二个当前模板违反约束，两个商家可以各有一个当前模板，迁移测试各覆盖一次。（2026-11-03 用户原话"按建议"：T07 独立审查发现）
+- AC-02（`用户要求`）：种子重建为"Northbean 是第一个商家"：12 店分给 2 个主管各 6 家（`site_supervisors`），1 个商家管理员，12 个店员；另建第二个商家"演示二号"（1 店、1 主管、1 店员、1 商家管理员、1 张已判定单），供 L1-1 测跨商家隔离。存储键按新格式写入。 演示二号也有一个当前模板。（2026-11-03 用户原话"按建议"：T07 独立审查发现）
 - AC-03（`用户要求`）：契约代码覆盖上文「契约」：schema、角色、路由表（新增 7 条接口、两处现有字段变化）、门店范围函数签名、存储接口、AI 输入输出 schema。契约 e2e 按路由表遍历新路由，验证角色放行与拒绝；新接口这时返回 501，契约 e2e 对 501 只检查角色，不检查响应体。
-- AC-04（`用户要求`）：现有行为不变：存储改走 `LocalStorageDriver` 后，证据照片与聊天图片的上传、签名读取、失败清理照旧；`hq` 改名后，原总部账号的看板、审核详情只读、门店模板管理照旧。现有 API 测试、契约 e2e、Web e2e、`e2e:mobile`、`e2e:cors`、`e2e:demo`、`e2e:demo-ui` 全绿；断言里 `hq` 改 `admin` 可以，不放宽。
+- AC-04（`用户要求`）：现有行为不变：存储改走 `LocalStorageDriver` 后，证据照片与聊天图片的上传、签名读取、失败清理照旧；`hq` 改名后，原总部账号的看板、审核详情只读、门店模板管理照旧。现有 API 测试、契约 e2e、Web e2e、`e2e:mobile`、`e2e:cors`、`e2e:demo`、`e2e:demo-ui` 全绿；断言里 `hq` 改 `admin` 可以，不放宽。 审核角色语义变了：admin 能审核（原先断言 403 的用例改为断言成功，属语义变化不算放宽），主管照旧能审，店员 403。（2026-11-03 用户原话"按建议"：T07 独立审查发现）
 - AC-05（`用户要求`）：门店范围函数有单元测试：admin 看本商家全部门店、看不到另一商家；supervisor 只看名下门店；inspector 只看自己门店；停用的门店仍在范围内（历史可读）。
 - AC-06（`用户要求`）：注册行与空桩：`app.module.ts` 注册 `orgs`、`users` 两个控制器（方法返回 501）；Web `lib/api.ts` 导出 `orgs`、`users`；Web 加注册页路由（首页"注册商家"入口）、控制台「账号」分区（admin、supervisor 可见）、改密码页路由，都挂空页；Mobile 加改密码路由，挂空页。
 - AC-07（`用户要求`）：`FakeAiReviewer` 按 AI 输出 schema 返回；`needs_human` 的三种来源（schema 不符、超时、调用失败）各有一个测试，用可注入的假客户端触发。
