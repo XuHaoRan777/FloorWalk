@@ -99,12 +99,12 @@ Subagent 只做当前任务内的调查、审查或局部实现：未说明写�
 - 不读取 `.env*` 文件内容、不打印环境变量的值，需要配置项时只引用变量名。不泄露、复制或写入凭据、Cookie、私钥；示例只用完整占位符 `<secret>`、`${VAR}`、`[REDACTED]`。
 - 数据库结构变化使用版本化前向迁移，不改写已有迁移，不建临时库或 Schema。写库的任务 `done` 前清理本任务测试数据，优先事务回滚。
 - 提交、推送、发布、生产操作是不同授权。禁止 `git reset --hard`、`git checkout --` 等破坏性命令回退用户修改。
-- 常驻进程用起停脚本；容器端口先查归属，结束清理本任务资源。
+- 常驻进程只经项目的起停脚本起停（用法见 dev-environment）；容器、端口先查归属，任务结束清理本任务资源。
 - Agent 以完全访问运行，没有沙箱兜底：只改本仓库和本单元工作树里的文件；数据库只用 `floorwalk` 角色连 `floorwalk*` 库，不进容器、不用超级用户。
 
 ## 13. 文档职责
 
-- `AGENTS.md`：本内核，字数上限写在 `scripts/workflow.conf`（校验器 `kernel-size`），超了先删或移出，不调高上限；`CLAUDE.md` 只含 `@AGENTS.md`。
+- `AGENTS.md`：本内核，字数上限写在 `scripts/workflow.conf`（校验器 `kernel-size`），超了先删或移出，Agent 不自行调高上限；`CLAUDE.md` 只含 `@AGENTS.md`。
 - `docs/specs/`：唯一的"现在是什么"。行为与不变量是权威；「数据契约」和代码路径标「归档时再生成」。修订记录只记用户或调用方可观察的行为变化，是历史变更的唯一位置，其余历史在 `git log`。
 - `docs/testlog.md`：修正模式的缓冲，只存上次"收一下"以来的改动；是 Promote 的输入，不是事实来源，也不是历史。
 - `docs/work/<id>/`：快照，只记目标、任务、证据、交接、回修、决策，不承载业务描述；归档后只读。`evidence/` 不入库。
@@ -118,7 +118,7 @@ Subagent 只做当前任务内的调查、审查或局部实现：未说明写�
 | 产品定位、禁区、演示租户 | [`docs/context/product.md`](docs/context/product.md) |
 | 环境、端口、验证命令 | [`docs/context/dev-environment.md`](docs/context/dev-environment.md) |
 | 本地安装、启动、构建产物运行、骨架验收 | [`docs/howto/local-development.md`](docs/howto/local-development.md) |
-| 单元带「并行组」，或开、并、收一组并行单元 | [`docs/howto/parallel.md`](docs/howto/parallel.md)（试行） |
+| 单元带「并行组」或「接力」，或开、并、收一组 | [`docs/howto/parallel.md`](docs/howto/parallel.md) |
 
 机器门按受影响模块，入口在 [`docs/context/dev-environment.md`](docs/context/dev-environment.md)；Mobile 的上传、拍照等原生路径在模拟器取证，不以 Expo Web 代替。认证、支付、权限和外部回调的失败与越权路径必须在 `spec.md` 的 AC 里逐条列出，由 Agent 用仓库内测试取证（方式 A 也一样），不以类型检查或构建代替；验证只覆盖列出的。
 

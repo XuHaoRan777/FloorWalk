@@ -19,6 +19,7 @@
 .taste-skill/
 apps/api/.e2e/
 .run/
+.claude/worktrees/
 tests/e2e-results/
 tests/web-results/
 test-results/

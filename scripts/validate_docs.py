@@ -8,7 +8,7 @@
 2. 文档内部相对链接可达（只检查指向 `docs/` 或根目录 Markdown 的链接；
    指向代码文件的链接不检查，历史单元指向已删除代码属正常现象）。
 3. 每个工作单元有 `spec.md` 和 `plan.md`，状态字段取值合法，
-   `archived` 只能配 `verified` 或 `descoped`；同时 `active` 的单元不超过 3 个。
+   `archived` 只能配 `verified` 或 `descoped`；同时 `active` 的单元不超过 3 个（`workflow.conf` 的 `active-units-max` 可改）。
 4. Backlog 当前工作表与各单元 `plan.md` 的活动集合和状态一致。
 5. `specs/`、`context/`、`adr/`、`pitfalls.md` 不链接到 `docs/work/`。
 6. `docs/testlog.md` 的 `待同步` 行不超过 5 条，最早一行不超过 2 天。
@@ -305,7 +305,7 @@ def check_work_units(root: Path, issues: list[Issue]) -> dict[str, tuple[str, st
         if work_status in VALID_WORK_STATUSES and archive_status in VALID_ARCHIVE_STATUSES:
             states[unit.name] = (archive_status, work_status)
     active = sorted(name for name, (archive, _) in states.items() if archive == "active")
-    # 上限默认 MAX_ACTIVE_UNITS；workflow.conf 的 active-units-max 可改（FloorWalk 并行组试行：3 个并行单元 + 1 个集成单元）
+    # 上限默认 MAX_ACTIVE_UNITS；workflow.conf 的 active-units-max 可改（并行组批准时调高，收组改回）
     raw = (read_workflow_conf(root) or {}).get("active-units-max", [""])[-1]
     limit = int(raw) if raw.isdigit() else MAX_ACTIVE_UNITS
     if len(active) > limit:
