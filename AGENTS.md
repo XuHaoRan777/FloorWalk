@@ -53,7 +53,7 @@ FloorWalk 是连锁门店巡检的三端作品样本：店员按清单现场拍�
 
 ## 6. 工作单元与任务
 
-一个工作单元 = 一个用户能观察到的交付目标，判断标准是"做完后用户能多做什么"；可跨前后端，但只解决一件事。目录 `docs/work/FW-NNN-slug/` 只有 `spec.md` 和 `plan.md`，模板见 [`docs/work/_template/`](docs/work/_template/)。「涉及的当前事实」必须列出本单元会改动的 `docs/specs/` 小节，它决定新会话读哪几份规格、收尾时改哪里。「依赖」只写单元 ID，单元之间不引用内容，不设"集中验收""汇总"类单元（并行组的集成单元不算，见第 14 节）；同时 `active` 的单元数有上限（校验器 `active-units`）。本单元的提交信息都带单元号。
+一个工作单元 = 一个用户能观察到的交付目标，判断标准是"做完后用户能多做什么"；可跨前后端，但只解决一件事。目录 `docs/work/FW-NNN-slug/` 只有 `spec.md` 和 `plan.md`，模板见 [`docs/work/_template/`](docs/work/_template/)。「涉及的当前事实」必须列出本单元会改动的 `docs/specs/` 小节，它决定新会话读哪几份规格、收尾时改哪里。「依赖」只写单元 ID 和要消费的路径，单元之间不引用内容（校验器 `cross-unit-ac`），不设"集中验收""汇总"类单元（并行组的集成单元不算，见第 14 节）；同时 `active` 的单元数有上限（校验器 `active-units`）。本单元的提交信息都带单元号。
 
 状态：`spec.md` `draft|approved`，批准前不写代码；`plan.md` 工作单元 `draft|approved|in_progress|blocked|verified|descoped`，归档 `active|archived`（只配 `verified|descoped`）；任务 `pending|in_progress|blocked|done`。Backlog 只列 `active` 单元，状态与 `plan.md` 一致。
 
@@ -96,7 +96,7 @@ Subagent 只做当前任务内的调查、审查或局部实现：未说明写�
 
 ## 12. 安全与资源底线
 
-- 不读取 `.env*` 文件内容、不打印环境变量的值，需要配置项时只引用变量名。不泄露、复制或写入凭据、Cookie、私钥；示例只用完整占位符 `<secret>`、`${VAR}`、`[REDACTED]`。
+- 不读取 `.env*` 文件内容，也不用 grep 等工具碰它；键在不在只用 `python scripts/validate_docs.py --env-keys` 查，需要配置项时只引用变量名。不泄露、复制或写入凭据、Cookie、私钥；示例只用完整占位符 `<secret>`、`${VAR}`、`[REDACTED]`。
 - 数据库结构变化使用版本化前向迁移，不改写已有迁移，不建临时库或 Schema。写库的任务 `done` 前清理本任务测试数据，优先事务回滚。
 - 提交、推送、发布、生产操作是不同授权。禁止 `git reset --hard`、`git checkout --` 等破坏性命令回退用户修改。
 - 常驻进程只经项目的起停脚本起停（用法见 dev-environment）；容器、端口先查归属，任务结束清理本任务资源。
@@ -116,9 +116,10 @@ Subagent 只做当前任务内的调查、审查或局部实现：未说明写�
 | 触发 | 读 |
 | --- | --- |
 | 产品定位、禁区、演示租户 | [`docs/context/product.md`](docs/context/product.md) |
-| 环境、端口、验证命令 | [`docs/context/dev-environment.md`](docs/context/dev-environment.md) |
+| 环境、端口、配置键、验证命令 | [`docs/context/dev-environment.md`](docs/context/dev-environment.md) |
 | 本地安装、启动、构建产物运行、骨架验收 | [`docs/howto/local-development.md`](docs/howto/local-development.md) |
-| 单元带「并行组」或「接力」，或开、并、收一组 | [`docs/howto/parallel.md`](docs/howto/parallel.md) |
+| 单元带「接力」，或批准一条接力线 | [`docs/howto/relay.md`](docs/howto/relay.md) |
+| 单元带「并行组」，或开、并、收一组 | [`docs/howto/parallel.md`](docs/howto/parallel.md) |
 
 机器门按受影响模块，入口在 [`docs/context/dev-environment.md`](docs/context/dev-environment.md)；Mobile 的上传、拍照等原生路径在模拟器取证，不以 Expo Web 代替。认证、支付、权限和外部回调的失败与越权路径必须在 `spec.md` 的 AC 里逐条列出，由 Agent 用仓库内测试取证（方式 A 也一样），不以类型检查或构建代替；验证只覆盖列出的。
 

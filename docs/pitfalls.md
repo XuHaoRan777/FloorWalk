@@ -26,6 +26,16 @@
 
 ## 陷阱清单
 
+### StrictMode 重复执行自动开始审核的 effect
+
+- 触发条件：Web React 19.2.5 开发模式启用 StrictMode，在详情组件的 effect 内自动发送非幂等的开始审核请求。
+- 现象：打开待审核巡检后显示「审核中」，同时报「当前状态不允许执行该审核操作」。
+- 根因：StrictMode 重复执行 effect，首次请求已改变巡检状态，第二次 start 被 API 判为 INVALID_STATE。
+- 规避方式：用 ref 记录已发起 start 的巡检 ID，在同一次详情挂载期间阻止对同一巡检重复发送；不要为隐藏该问题而放宽服务端状态机。
+- 验证方式：`528307e` 的 `tests/web/console.spec.ts` AC-03 记录修前 start 两次、修后一次且无冲突提示，既有 Web e2e 13/13；本次仅升迁文档，未重跑业务测试。
+- 失效条件：详情不再通过 effect 自动开始审核，或开始审核契约改为幂等后重新核对。
+- 首次记录：2026-11-02 修正提交 `528307e`（FW-008 引入，FW-016 前置审查发现）；2026-11-07 升迁。
+
 ### PostgreSQL 时间戳游标保留微秒
 
 - 触发条件：PostgreSQL `timestamptz` 用作分页排序键，API 先解码成 JavaScript `Date` 再把时间写进 cursor。

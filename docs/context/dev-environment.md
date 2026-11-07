@@ -10,15 +10,26 @@
 - 数据库：本机 Docker 容器 `local-pg18`（PostgreSQL 18），宿主端口 `5433`；角色 `floorwalk`（非超级用户，不能建库），库 `floorwalk`（开发）和 `floorwalk_e2e_1`～`floorwalk_e2e_3`（e2e 槽位，见 [并行组](../howto/parallel.md)）。schema `floorwalk` 由版本化迁移建立，含组织、门店、账号、主管指派及巡检业务表，可由种子重建。无邮件服务或部署环境。
 - 开发 Agent：Codex 桌面版，权限用完全访问（2026-10-23 用户决定），没有沙箱，边界见 [`AGENTS.md`](../../AGENTS.md) 第 12 节。并行单元的对话工作位置选「新建本地工作树」，Codex 建工作树时按 [`.worktreeinclude`](../../.worktreeinclude) 复制各端 env 文件。
 - 起停脚本（AGENTS.md 第 12 节）：`node scripts/dev/proc.mjs start|stop <服务> --slot N`，`status` 列出在跑的；支持 `api`（槽位端口 31N0）和 `metro`（31N2，环境变量写在脚本里）。PID 和日志在忽略目录 `.run/`；只停自己登记的进程树，端口被别的进程占用时只报告。2026-11-01 在 Claude Code 和 Codex 本地对话都实测通过（[试行记录](../parallel-trial.md)）。
-- 测试槽位（[并行组与接力](../howto/parallel.md)）：槽位 1～3，库 `floorwalk_e2e_N`，存储目录 `apps/api/.e2e/slot-N/storage`，端口 API `31N0`、Web `31N1`、Metro `31N2`；开发端口 3018～3020 留给主目录。线上单元不跑 `pnpm e2e:slots`、`pnpm dev`；收组时 3018～3020、3110～3132 无监听、`proc.mjs status` 为空、模拟器已关、`adb reverse --list` 为空。UI 套件 `workers` 为 1，图片断言用 `naturalWidth`（g02）。新工作树按 `.worktreeinclude` 复制 env（Codex）；Claude 的工作树在 `.claude/worktrees/`（已忽略），env 要手动放入。
+- 测试槽位（[并行组](../howto/parallel.md)）：槽位 1～3，库 `floorwalk_e2e_N`，存储目录 `apps/api/.e2e/slot-N/storage`，端口 API `31N0`、Web `31N1`、Metro `31N2`；开发端口 3018～3020 留给主目录。线上单元不跑 `pnpm e2e:slots`、`pnpm dev`；收组时 3018～3020、3110～3132 无监听、`proc.mjs status` 为空、模拟器已关、`adb reverse --list` 为空。UI 套件 `workers` 为 1，图片断言用 `naturalWidth`（g02）。新工作树按 `.worktreeinclude` 复制 env（Codex）；Claude 的工作树在 `.claude/worktrees/`（已忽略），env 要手动放入。
 - 只读参考仓库：`F:\react_project\Gift2CashApp`；本轮未读取或复制其源码。
 
-## 环境配置
+## 配置
 
-- API、Web、Mobile 各自使用 `.env.development` 与 `.env.production`，实际文件被 Git 忽略，配套 `.example` 模板可提交。初始化步骤、加载优先级和变量边界见 [本地开发说明](../howto/local-development.md#环境文件与生效时机)。
-- OSS 驱动需 `OSS_REGION`、`OSS_BUCKET`、`OSS_ACCESS_KEY_ID`、`OSS_ACCESS_KEY_SECRET`、`OSS_PREFIX`；模型驱动需 `OPENAI_API_KEY`、`OPENAI_MODEL`，可选 `OPENAI_BASE_URL`、`OPENAI_TIMEOUT_MS`。只记录键名，不在文档或命令输出中记录值。`STORAGE_DRIVER` 缺省为 `local`，`AI_DRIVER` 缺省为 `fake`。模型探针验证图片输入与 JSON schema；本地签名 URL 无法由模型端读取，适配器读取照片字节并转 JPEG data URL，长边压至 1280、质量 80。OSS 签名 URL 与模型组合已由 FW-023 冒烟实测。
-- API 以 Node 原生 env-file 在 dev/start 时加载，端口来自 PORT；本地开发默认监听所有网卡，e2e 槽位仍监听 loopback，其他启动方式监听 HOST（默认 `127.0.0.1`）。Web 通过 Vite mode/loadEnv 分别加载开发与生产配置，dev/preview 端口来自 PORT；Mobile 通过 Node env-file 预加载，开发端口使用 Expo 内置 RCT_METRO_PORT，未显式配置 API 地址时用 Expo 的 Metro 主机名访问同机 API，生产配置用于 bundle 导出。
-- 2026-10-06 本机验证：三端类型检查通过；API/Web 构建成功；开发端口 3018/3019/3020 的 HTTP/Metro 检查通过；API 生产启动 3018、Web preview 3019 通过。Mobile 生产导出单 worker 成功；2026-10-06 用户确认真机首页与体验按钮交互通过，设备操作系统未记录。Agent 验证时启动的测试服务已清理，用户自启进程不作清理。
+键名和每个键的属性以各端 `.env*.example` 为准；本节记录加载层和模板位置，加载优先级与生效时机见 [本地开发说明](../howto/local-development.md#环境文件与生效时机)。值由用户填写；新增配置键必须由 AC 点名（AGENTS.md 第 8 节）。
+
+| 子项目 | 模板（相对仓库根） | 本地文件与加载者 | 服务器 / CI |
+| --- | --- | --- | --- |
+| API | `apps/api/.env.development.example`、`apps/api/.env.production.example` | 同目录去掉 `.example`；包内 dev/start 由 Node 原生 env-file 加载 | 无部署环境；CI 配置未登记 |
+| Web | `apps/web/.env.development.example`、`apps/web/.env.production.example` | 同目录去掉 `.example`；Vite 按 development / production mode 加载 | preview 只作本地预览；CI 配置未登记 |
+| Mobile | `apps/mobile/.env.development.example`、`apps/mobile/.env.production.example` | 同目录去掉 `.example`；Node env-file 预加载，随后由 Expo 加载 | 生产配置用于 bundle 导出；CI 配置未登记 |
+
+- 属性注释：每个键上方一行 `# 凭据：是|否；缺失：启动失败|用默认值|功能关闭；<一句说明>`（校验器 `env-attr`）。
+- 新增、改名、删除一个键，同次同步所属模板（含属性注释）、消费层引用、点名它的 AC（`env-dead-key`、`env-missing-key`）。
+- 同一键被不同解析器读取时，引号、空格、`#` 的处理可能不同；值含这些字符时由用户在各层验证，Agent 不读取或打印值。
+- 本地缺键检查：`python scripts/validate_docs.py --env-keys`，只打印键名。当前仅同步检查工具，尚未登记 `env-group` / `env-local`，此命令会提示没有可检查配置，不能据此声称各端配置齐全。各端模板属性与引用需在获得相应维护授权后对账登记；本次未读取或修改环境文件。
+- 已启用 `env-untracked on`：普通文档校验检查真实 `.env*` 未被 Git 跟踪（`.example` 除外），不读取其内容。
+
+API 本地开发默认监听所有网卡，e2e 槽位仍监听 loopback；Mobile 未显式配置 API 地址时用 Expo Metro 主机名访问同机 API。模型探针验证图片输入与 JSON schema；本地签名 URL 无法由模型端读取时，适配器读取照片字节并转 JPEG data URL，长边压至 1280、质量 80。模型与存储驱动行为见 [工程骨架](../specs/workspace.md)；环境变量的加载、公开变量边界、重启和重新构建要求见 [本地开发说明](../howto/local-development.md#环境文件与生效时机)。
 
 ## 基础依赖选型
 
@@ -71,7 +82,8 @@ Web 固定源码 commit `e16c87f213a5ba5e45964e9b67c792105ec74d26`，gluestack �
 
 ## 工作流配套
 
-- 上游模板：`F:\project\workflow\template`；同步日期：2026-10-23（workflow `ba5d74a`）。项目协议中的授权与产品边界保留为本地配置。
+- 上游模板：`F:\project\workflow\template`；同步日期：2026-11-07（workflow `d09344f`）。项目协议中的授权与产品边界保留为本地配置。
 - 本地适配（只在本项目）：内核第 12 节加完全访问下的边界；`.worktreeinclude`、测试槽位、`proc.mjs` 的服务表。并行组与接力、`active-units-max`、停止条件加「已批准 spec 有矛盾或要改」、Subagent 按会话计、常驻进程走起停脚本已于 2026-11-03 抽回模板（workflow `c8b91d4`、`2c57c30`、`63aee92`），2026-11-04 同步回本项目，内核上限随模板改为 8500。
+- 2026-11-07 同步：拆分接力与并行组指南，接力在主目录当前分支执行；补跨单元 AC 检查（从当天起、不追溯归档单元）、配置键检查工具及对应测试。保留项目授权、内核上限 8500、硬线路径与测试槽位；配置键分组尚未登记，见上文「配置」。验证：`python -m unittest discover -s scripts/tests -t .` 77/77 通过；用户授权「收一下」后，升迁审核去重修正并清空两条缓冲，普通文档校验通过。
 - Git 工作树已存在，执行起点 HEAD `1778848`，起始工作区干净，已配置 origin；用户于 2026-10-06 确认真机验收并授权当前单元归档、提交与推送。
 - `scripts/hooks/commit-msg` 已提供，未启用（`core.hooksPath` 未设）：`Mode: fix` 的代码提交须暂存 testlog；改到 `scripts/workflow.conf` 登记的 `hardline` 路径须有「硬线：」行。启用须按用户授权办理：`git config core.hooksPath scripts/hooks`，工作树共用这项设置。

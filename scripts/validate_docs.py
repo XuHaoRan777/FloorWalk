@@ -14,18 +14,23 @@
 6. `docs/testlog.md` 的 `待同步` 行不超过 5 条，最早一行不超过 2 天。
 7. `AGENTS.md` 字数不超过 `scripts/workflow.conf` 的 `kernel-max-chars`（按字符计）。
 8. `--archive-gate`：工作树必须干净。
+9. 未归档、在 `cross-unit-ac-since` 当天及以后批准（或未批准）的 `spec.md` 不引用别的单元的 AC。
+10. 配置键契约（`workflow.conf` 配了 `env-*` 才查）：模板键有属性注释、被引用到；
+    无默认值的引用键在模板里；`env-untracked on` 时 `.env*` 不被 Git 跟踪。
+11. `--env-keys`：只报本地配置文件缺的键名，从不打印值。
 
 `CLAUDE.md` 只含 `@AGENTS.md` 导入，不再需要内核同步检查。`workflow.conf` 的
 `hardline` 路径由 `scripts/hooks/commit-msg` 检查，不在这里。
 
 用法：
-    python scripts/validate_docs.py [--root DIR] [--archive-gate] [--today YYYY-MM-DD]
+    python scripts/validate_docs.py [--root DIR] [--archive-gate] [--today YYYY-MM-DD] [--env-keys]
 
 退出码 0 表示通过，1 表示存在错误。
 """
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime as _dt
 import re
 import subprocess
@@ -315,6 +320,250 @@ def check_work_units(root: Path, issues: list[Issue]) -> dict[str, tuple[str, st
     return states
 
 
+# ---------------------------------------------------------------------------
+# 配置键契约（scripts/workflow.conf 的 env-* 行驱动；一行都不配就不检查）
+# ---------------------------------------------------------------------------
+
+ENV_EXAMPLE_KEY_PATTERN = re.compile(r"^\s*(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=")
+ENV_ATTR_PATTERN = re.compile(r"^\s*#\s*凭据：(?:是|否)；缺失：(?:启动失败|用默认值|功能关闭)")
+# 占位符：${K}、${K:x}、${K:-x}、{$K}、{$K:x}；以 } 直接结束的视为无默认值、必填。
+ENV_PLACEHOLDER_PATTERN = re.compile(r"\$\{([A-Z][A-Z0-9_]*)(\}|:)|\{\$([A-Z][A-Z0-9_]*)(\}|:)")
+ENV_JS_PATTERN = re.compile(r"\b(?:import\.meta\.env|process\.env|env)\.([A-Z][A-Z0-9_]*)\b")
+# 代码文件里的 ${...} 是字符串插值，不是配置占位符；只在这些后缀、文件名里认占位符。
+ENV_CONFIG_SUFFIXES = {".yml", ".yaml", ".properties", ".toml", ".conf", ".env", ".json", ".xml"}
+ENV_CONFIG_NAMES = {"caddyfile", "dockerfile", "docker-compose.yml", "compose.yml"}
+ENV_CODE_SUFFIXES = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".vue", ".svelte"}
+ENV_PY_REQUIRED_PATTERN = re.compile(r"os\.environ\[\s*[\"']([A-Z][A-Z0-9_]*)[\"']\s*\]")
+ENV_PY_OPTIONAL_PATTERN = re.compile(r"os\.(?:getenv|environ\.get)\(\s*[\"']([A-Z][A-Z0-9_]*)[\"']")
+# 跨单元引用 AC：「XX-005 AC-02」「XX-005 的 AC-02」。
+CROSS_UNIT_AC_PATTERN = re.compile(r"\b([A-Z][A-Z0-9]{1,5}-\d{3})\s*(?:的\s*)?(AC-\d+)\b")
+SPEC_ID_PATTERN = re.compile(r"^> ID：`([^`]+)`", re.MULTILINE)
+SPEC_APPROVED_DATE_PATTERN = re.compile(r"^- 批准时间：`(\d{4}-\d{2}-\d{2})`", re.MULTILINE)
+HTML_COMMENT_PATTERN = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
+def read_workflow_conf_rows(root: Path, key: str) -> list[list[str]]:
+    """返回 `workflow.conf` 里以 `key` 开头的每一行其余的词（`read_workflow_conf` 只取第一个值）。"""
+    path = root / WORKFLOW_CONF
+    if not path.is_file():
+        return []
+    rows: list[list[str]] = []
+    for line in read_text(path).splitlines():
+        parts = line.split("#", 1)[0].split()
+        if parts and parts[0] == key:
+            rows.append(parts[1:])
+    return rows
+
+
+def parse_env_example(content: str) -> list[tuple[str, int, str]]:
+    """解析模板里未注释的键：(键, 行号, 紧邻上方注释块里的属性行，没有为空串)。不取值。"""
+    keys: list[tuple[str, int, str]] = []
+    comments: list[str] = []
+    for number, line in enumerate(content.splitlines(), start=1):
+        if line.lstrip().startswith("#"):
+            comments.append(line)
+            continue
+        match = ENV_EXAMPLE_KEY_PATTERN.match(line)
+        if match:
+            keys.append((match.group(1), number, next((c for c in comments if ENV_ATTR_PATTERN.match(c)), "")))
+        comments = []
+    return keys
+
+
+def python_settings_keys(content: str) -> dict[str, bool]:
+    """取继承 *Settings 的类的注解字段，转大写为键；没有默认值的算必填。语法错误返回空。"""
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return {}
+    keys: dict[str, bool] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        if not any("Settings" in ast.unparse(base) for base in node.bases):
+            continue
+        for item in node.body:
+            if not (isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)):
+                continue
+            name = item.target.id
+            if name.startswith("_") or name == "model_config" or "ClassVar" in ast.unparse(item.annotation):
+                continue
+            key = name.upper()
+            keys[key] = keys.get(key, False) or item.value is None
+    return keys
+
+
+def collect_env_references(path: Path, declared: frozenset[str] = frozenset()) -> dict[str, bool]:
+    """返回 {键: 是否必填}，同一个键任一处必填即必填。读不了的文件（二进制、非 UTF-8）跳过。
+
+    JS/TS 常经一层解析函数读键（`source.VITE_X`），所以模板已声明的键在代码里以完整单词出现即算读到；
+    这只用来消除死键误报，不会让未声明的键报缺。
+    """
+    try:
+        content = read_text(path)
+    except (OSError, UnicodeDecodeError):
+        return {}
+    refs: dict[str, bool] = {}
+
+    def add(key: str, required: bool) -> None:
+        refs[key] = refs.get(key, False) or required
+
+    name = path.name.lower()
+    if path.suffix.lower() in ENV_CONFIG_SUFFIXES or name in ENV_CONFIG_NAMES or name.startswith("caddyfile"):
+        for match in ENV_PLACEHOLDER_PATTERN.finditer(content):
+            add(match.group(1) or match.group(3), (match.group(2) or match.group(4)) == "}")
+    if path.suffix.lower() in ENV_CODE_SUFFIXES:
+        for match in ENV_JS_PATTERN.finditer(content):
+            add(match.group(1), False)  # JS 看不出默认值，只证明键被读到，不据此报缺
+        for key in declared:
+            if re.search(rf"\b{re.escape(key)}\b", content):
+                add(key, False)
+    if path.suffix == ".py":
+        for match in ENV_PY_REQUIRED_PATTERN.finditer(content):
+            add(match.group(1), True)
+        for match in ENV_PY_OPTIONAL_PATTERN.finditer(content):
+            add(match.group(1), False)
+        for key, required in python_settings_keys(content).items():
+            add(key, required)
+    return refs
+
+
+def env_groups(root: Path) -> list[tuple[str, list[Path]]]:
+    """`env-group <模板> <引用 glob>...` → (模板, 引用文件)。glob 相对仓库根，`**` 跨目录。"""
+    groups: list[tuple[str, list[Path]]] = []
+    for row in read_workflow_conf_rows(root, "env-group"):
+        if not row:
+            continue
+        files: set[Path] = set()
+        for pattern in row[1:]:
+            files.update(p for p in root.glob(pattern) if p.is_file())
+        groups.append((row[0], sorted(files)))
+    return groups
+
+
+def check_env_contract(root: Path, issues: list[Issue]) -> None:
+    """模板键、代码引用、属性注释三方对账；只读模板和引用文件，不打开本地 `.env`。"""
+    ignored = {row[0] for row in read_workflow_conf_rows(root, "env-ignore") if row}
+    for example, ref_files in env_groups(root):
+        if not (root / example).is_file():
+            issues.append(Issue("env-group", WORKFLOW_CONF, f"env-group 的模板不存在：{example}"))
+            continue
+        declared = parse_env_example(read_text(root / example))
+        names = {key for key, _, _ in declared}
+        refs: dict[str, bool] = {}
+        for ref in ref_files:
+            for key, required in collect_env_references(ref, frozenset(names)).items():
+                refs[key] = refs.get(key, False) or required
+        for key, number, attr in declared:
+            if not attr:
+                issues.append(Issue("env-attr", f"{example}:{number}", f"{key} 上方缺属性注释（# 凭据：是|否；缺失：…）"))
+            if key not in refs and key not in ignored:
+                issues.append(Issue("env-dead-key", f"{example}:{number}", f"{key} 没有被本组任何引用文件读到"))
+        for key, required in sorted(refs.items()):
+            if required and key not in names and key not in ignored:
+                issues.append(Issue("env-missing-key", example, f"{key} 被引用且无默认值，模板里没有"))
+
+
+def git_tracked_files(root: Path) -> list[str] | None:
+    """`git ls-files` 的结果；不是仓库或 git 不可用时返回 None。"""
+    try:
+        result = subprocess.run(["git", "ls-files"], cwd=root, capture_output=True, text=True, check=False)
+    except OSError:
+        return None
+    return result.stdout.splitlines() if result.returncode == 0 else None
+
+
+def check_env_tracked(root: Path, issues: list[Issue]) -> None:
+    """`env-untracked on` 时，`*.example` 以外的 `.env*` 不得被 Git 跟踪。"""
+    rows = read_workflow_conf_rows(root, "env-untracked")
+    if not rows or rows[-1][:1] != ["on"]:
+        return
+    for name in git_tracked_files(root) or []:
+        base = name.rsplit("/", 1)[-1]
+        if base.startswith(".env") and not base.endswith(".example"):
+            issues.append(Issue("env-tracked", name, "本地配置文件被 Git 跟踪；git rm --cached 后保留本地文件"))
+
+
+def check_cross_unit_ac(root: Path, issues: list[Issue]) -> None:
+    """未归档单元的 spec 正文（注释外）不得引用别的单元的 AC；只查 `cross-unit-ac-since` 当天及以后批准或尚未批准的。"""
+    since_rows = read_workflow_conf_rows(root, "cross-unit-ac-since")
+    since = since_rows[-1][0] if since_rows and since_rows[-1] else ""
+    work_root = root / "docs/work"
+    if not work_root.is_dir():
+        return
+    for spec_path in sorted(work_root.glob("*/spec.md")):
+        plan_path = spec_path.with_name("plan.md")
+        if plan_path.is_file():
+            archive = ARCHIVE_STATUS_PATTERN.search(read_text(plan_path))
+            if archive and archive.group(1) == "archived":
+                continue
+        content = read_text(spec_path)
+        approved = SPEC_APPROVED_DATE_PATTERN.search(content)
+        if since and approved and approved.group(1) < since:
+            continue
+        own = SPEC_ID_PATTERN.search(content)
+        own_id = own.group(1) if own else ""
+        body = HTML_COMMENT_PATTERN.sub("", markdown_without_fenced_code(content))
+        for match in CROSS_UNIT_AC_PATTERN.finditer(body):
+            if match.group(1) != own_id:
+                issues.append(
+                    Issue(
+                        "cross-unit-ac",
+                        relative(spec_path, root),
+                        f"引用了 {match.group(1)} {match.group(2)}：人工项留在本单元，不挪进别的单元",
+                    )
+                )
+
+
+def local_env_files(root: Path) -> list[tuple[str, str]]:
+    """(本地文件, 模板)：`env-local <本地> <模板>` 优先，否则每个 env-group 模板去掉 `.example` 后缀。"""
+    pairs = [(row[0], row[1]) for row in read_workflow_conf_rows(root, "env-local") if len(row) >= 2]
+    covered = {example for _, example in pairs}
+    for example, _ in env_groups(root):
+        if example not in covered and example.endswith(".example"):
+            pairs.append((example[: -len(".example")], example))
+    return pairs
+
+
+def report_env_keys(root: Path) -> int:
+    """`--env-keys`：本地文件缺了模板里标「缺失：启动失败」或没标属性的键时报出键名。
+
+    在进程内只匹配行首的键名，从不保存或打印值；Agent 用它代替自己打开 `.env*`。
+    """
+    missing_total = 0
+    pairs = local_env_files(root)
+    if not pairs:
+        print("workflow.conf 没有 env-group 或 env-local，无可检查的本地配置")
+        return 0
+    for local, example in pairs:
+        if not (root / example).is_file():
+            print(f"[env-keys] {example}: 模板不存在")
+            missing_total += 1
+            continue
+        local_path = root / local
+        if not local_path.is_file():
+            print(f"[env-keys] {local}: 本地文件不存在（模板 {example}）")
+            missing_total += 1
+            continue
+        present = set()
+        for line in local_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            match = ENV_EXAMPLE_KEY_PATTERN.match(line)
+            if match:
+                present.add(match.group(1))
+        declared = parse_env_example(read_text(root / example))
+        for key, _, attr in declared:
+            if key in present:
+                continue
+            if "缺失：用默认值" not in attr and "缺失：功能关闭" not in attr:
+                print(f"[env-keys] {local}: 缺 {key}")
+                missing_total += 1
+        extra = sorted(present - {key for key, _, _ in declared})
+        if extra:
+            print(f"[env-keys] {local}: 模板里没有的键（只提示）：{', '.join(extra)}")
+    print(f"本地配置检查：{missing_total} 个缺失")
+    return 1 if missing_total else 0
+
+
 def check_testlog(root: Path, issues: list[Issue], *, today: _dt.date) -> None:
     """`待同步` 行数与缓冲里最早一行的年龄不得超过预算。"""
     path = root / "docs/testlog.md"
@@ -437,6 +686,9 @@ def validate_repository(
     check_backlog(root, states, issues)
     check_testlog(root, issues, today=today)
     check_kernel_size(root, issues)
+    check_cross_unit_ac(root, issues)
+    check_env_contract(root, issues)
+    check_env_tracked(root, issues)
 
     if archive_gate:
         check_worktree_clean(root, issues)
@@ -450,11 +702,15 @@ def main() -> int:
     )
     parser.add_argument("--archive-gate", action="store_true", help="归档门：要求 git 工作树干净")
     parser.add_argument("--today", type=_dt.date.fromisoformat, default=None, help="覆盖当天日期（测试用）")
+    parser.add_argument("--env-keys", action="store_true", help="只检查本地配置文件缺不缺键，只打印键名")
     args = parser.parse_args()
 
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
+
+    if args.env_keys:
+        return report_env_keys(args.root.resolve())
 
     issues = validate_repository(args.root.resolve(), archive_gate=args.archive_gate, today=args.today)
     for issue in issues:
