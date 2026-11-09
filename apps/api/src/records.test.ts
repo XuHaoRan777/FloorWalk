@@ -31,7 +31,7 @@ describe('inspector records API', () => {
     const login = await request(app.getHttpServer())
       .post('/api/auth/session')
       .send({
-        email: 'inspector@northbean.example',
+        loginName: 'manager2@northbean.example',
         password: 'northbean-demo',
       })
       .expect(201);
@@ -49,8 +49,8 @@ describe('inspector records API', () => {
         'SELECT id FROM floorwalk.templates LIMIT 1',
       );
       const colleague = await pool.query<{ id: string }>(
-        `INSERT INTO floorwalk.users (email, password_hash, display_name, role, site_id, org_id)
-         VALUES ($1, 'test-hash', '同店店员', 'inspector', $2, (SELECT org_id FROM floorwalk.sites WHERE id = $2)) RETURNING id`,
+        `INSERT INTO floorwalk.users (login_name, password_hash, display_name, role, site_id, org_id)
+         VALUES ($1, 'test-hash', '同店店长', 'store_manager', $2, (SELECT org_id FROM floorwalk.sites WHERE id = $2)) RETURNING id`,
         [`records-${crypto.randomUUID()}@northbean.example`, site.rows[0].id],
       );
       colleagueId = colleague.rows[0].id;
@@ -146,24 +146,10 @@ describe('inspector records API', () => {
       .set('Cookie', inspectorCookie)
       .expect(400);
 
-    const supervisor = await request(app.getHttpServer())
-      .post('/api/auth/session')
-      .send({
-        email: 'supervisor@northbean.example',
-        password: 'northbean-demo',
-      })
-      .expect(201);
     const hq = await request(app.getHttpServer())
       .post('/api/auth/session')
-      .send({ email: 'hq@northbean.example', password: 'northbean-demo' })
+      .send({ loginName: 'hq@northbean.example', password: 'northbean-demo' })
       .expect(201);
-    await request(app.getHttpServer())
-      .get('/api/inspector/inspections')
-      .set(
-        'Cookie',
-        (supervisor.headers['set-cookie'] as unknown as string[])[0],
-      )
-      .expect(403);
     await request(app.getHttpServer())
       .get('/api/inspector/inspections')
       .set('Cookie', (hq.headers['set-cookie'] as unknown as string[])[0])

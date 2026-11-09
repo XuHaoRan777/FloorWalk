@@ -16,7 +16,7 @@ import {
 import {
   apiRoutePath,
   apiRoutes,
-  canSupervisorApprove,
+  canReviewApprove,
   reviewQueueResponseSchema,
   reviewRequestSchema,
   reviewResponseSchema,
@@ -42,13 +42,11 @@ export class ReviewController {
     const result = await this.pool.query(
       `SELECT i.id, i.site_id AS "siteId", i.template_id AS "templateId", i.inspector_id AS "inspectorId",
           i.status, i.score, i.submitted_at AS "submittedAt", i.decided_at AS "decidedAt", i.created_at AS "createdAt",
-          s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+          s.org_id AS "orgId"
          FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
-         LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
          WHERE i.status IN ('submitted', 'in_review') AND s.org_id = $1
-           AND ($2 = 'admin' OR ss.user_id = $3)
          ORDER BY i.created_at`,
-      [request.user.orgId, request.user.role, request.user.id],
+      [request.user.orgId],
     );
     const details = await Promise.all(
       result.rows.map((row) => loadInspectionDetail(this.pool, row)),
@@ -73,9 +71,8 @@ export class ReviewController {
       const inspectionResult = await client.query(
         `SELECT i.id, i.site_id AS "siteId", i.template_id AS "templateId", i.inspector_id AS "inspectorId",
             i.status, i.score, i.submitted_at AS "submittedAt", i.decided_at AS "decidedAt",
-            i.created_at AS "createdAt", s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+            i.created_at AS "createdAt", s.org_id AS "orgId"
          FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
-         LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
          WHERE i.id = $1 FOR UPDATE OF i`,
         [id],
       );
@@ -100,7 +97,7 @@ export class ReviewController {
           code: 'INVALID_STATE',
           message: '当前状态不允许执行该审核操作。',
         });
-      if (input.action === 'approve' && !canSupervisorApprove(items.rows))
+      if (input.action === 'approve' && !canReviewApprove(items.rows))
         throw new UnprocessableEntityException({
           code: 'CRITICAL_FAILED',
           message: '存在不合格的严重检查项，不能通过。',

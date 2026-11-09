@@ -69,7 +69,10 @@ export class RecordsController {
           i.submitted_at AS "submittedAt", i.decided_at AS "decidedAt"
        FROM floorwalk.inspections i
        JOIN floorwalk.sites s ON s.id = i.site_id
-       WHERE i.site_id = $1 AND s.org_id = $5
+       WHERE s.org_id = $5 AND (i.site_id = $1 OR EXISTS (
+         SELECT 1 FROM floorwalk.inspection_participants p
+         WHERE p.inspection_id = i.id AND p.user_id = $6
+       ))
          AND ($2::timestamptz IS NULL OR (i.created_at, i.id) < ($2::timestamptz, $3::uuid))
        ORDER BY i.created_at DESC, i.id DESC LIMIT $4`,
       [
@@ -78,6 +81,7 @@ export class RecordsController {
         boundary?.id ?? null,
         limit + 1,
         request.user.orgId,
+        request.user.id,
       ],
     );
     const hasMore = rows.rows.length > limit;

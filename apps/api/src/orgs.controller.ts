@@ -47,11 +47,11 @@ export class OrgsController {
       const org = orgResult.rows[0];
       const userResult = await client.query<{
         id: string;
-        email: string;
+        login_name: string;
         display_name: string;
         created_at: Date;
       }>(
-        `INSERT INTO floorwalk.users (org_id, email, password_hash, display_name, role)
+        `INSERT INTO floorwalk.users (org_id, login_name, password_hash, display_name, role)
          VALUES ($1, $2, $3, $4, 'admin') RETURNING *`,
         [org.id, input.email, passwordHash, input.adminName],
       );
@@ -70,7 +70,7 @@ export class OrgsController {
         },
         user: {
           id: user.id,
-          email: user.email,
+          loginName: user.login_name,
           displayName: user.display_name,
           role: 'admin',
           siteId: null,
@@ -89,7 +89,7 @@ export class OrgsController {
         'code' in error &&
         error.code === '23505' &&
         'constraint' in error &&
-        error.constraint === 'users_email_unique'
+        error.constraint === 'users_org_login_name_unique'
       )
         throw new ConflictException({
           code: 'INVALID_STATE',

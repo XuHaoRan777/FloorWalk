@@ -50,9 +50,10 @@ export function assertInspectionAccess(
     siteId: string;
     inspectorId: string;
     orgId: string;
-    supervisorUserId: string | null;
+    participated?: boolean;
   },
   user: AuthUser,
+  allowHistory = false,
 ) {
   if (inspection.orgId !== user.orgId)
     throw new NotFoundException({
@@ -60,18 +61,12 @@ export function assertInspectionAccess(
       message: '巡检单不存在。',
     });
   if (
-    !canAccessSite(
-      user,
-      { id: inspection.siteId, orgId: inspection.orgId },
-      inspection.supervisorUserId,
-    )
+    !canAccessSite(user, { id: inspection.siteId, orgId: inspection.orgId }) &&
+    !(allowHistory && inspection.participated)
   )
-    throw new ForbiddenException({
-      code: 'FORBIDDEN',
-      message:
-        user.role === 'inspector'
-          ? '只能访问本店巡检单。'
-          : '只能访问名下门店的巡检单。',
+    throw new NotFoundException({
+      code: 'NOT_FOUND',
+      message: '巡检单不存在。',
     });
 }
 
@@ -84,19 +79,20 @@ export async function getInspectionAccess(
     `SELECT i.id, i.site_id AS "siteId", i.template_id AS "templateId",
         i.inspector_id AS "inspectorId", i.status, i.score,
         i.submitted_at AS "submittedAt", i.decided_at AS "decidedAt",
-        i.created_at AS "createdAt", s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+        i.created_at AS "createdAt", s.org_id AS "orgId",
+        EXISTS (SELECT 1 FROM floorwalk.inspection_participants p
+          WHERE p.inspection_id = i.id AND p.user_id = $2) AS participated
      FROM floorwalk.inspections i
      JOIN floorwalk.sites s ON s.id = i.site_id
-     LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
      WHERE i.id = $1`,
-    [id],
+    [id, user.id],
   );
   if (!result.rows[0])
     throw new NotFoundException({
       code: 'NOT_FOUND',
       message: '巡检单不存在。',
     });
-  assertInspectionAccess(result.rows[0], user);
+  assertInspectionAccess(result.rows[0], user, true);
   return result.rows[0];
 }
 

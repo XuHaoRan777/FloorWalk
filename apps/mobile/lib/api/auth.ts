@@ -1,10 +1,10 @@
 import type { ChangePasswordRequest, LoginResponse, User } from '@libs/shared';
 import { request } from './request';
 
-export const login = (email: string, password: string) =>
+export const login = (loginName: string, password: string, orgId?: string) =>
   request<LoginResponse>('/auth/session', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ loginName, password, orgId }),
   });
 
 export const logout = () =>

@@ -7,6 +7,7 @@ import {
   index,
   integer,
   pgSchema,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -48,7 +49,7 @@ export const users = floorwalk.table(
     orgId: uuid('org_id')
       .notNull()
       .references(() => organizations.id),
-    email: text('email').notNull().unique(),
+    loginName: text('login_name').notNull(),
     passwordHash: text('password_hash').notNull(),
     displayName: text('display_name').notNull(),
     role: text('role').notNull(),
@@ -61,24 +62,17 @@ export const users = floorwalk.table(
     createdAt: createdAt(),
   },
   (table) => [
+    check('users_role_check', sql`${table.role} IN ('admin', 'store_manager')`),
+    unique('users_org_login_name_unique').on(table.orgId, table.loginName),
+    uniqueIndex('users_one_admin_per_org')
+      .on(table.orgId)
+      .where(sql`${table.role} = 'admin'`),
     check(
-      'users_role_check',
-      sql`${table.role} IN ('inspector', 'supervisor', 'admin')`,
+      'users_role_site_check',
+      sql`(${table.role} = 'store_manager' AND ${table.siteId} IS NOT NULL) OR (${table.role} = 'admin' AND ${table.siteId} IS NULL)`,
     ),
   ],
 );
-
-export const siteSupervisors = floorwalk.table('site_supervisors', {
-  siteId: uuid('site_id')
-    .primaryKey()
-    .references(() => sites.id),
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => users.id),
-  assignedAt: timestamp('assigned_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
 
 export const sessions = floorwalk.table(
   'sessions',
@@ -169,6 +163,19 @@ export const inspectionItems = floorwalk.table('inspection_items', {
   note: text('note'),
   createdAt: createdAt(),
 });
+
+export const inspectionParticipants = floorwalk.table(
+  'inspection_participants',
+  {
+    inspectionId: uuid('inspection_id')
+      .notNull()
+      .references(() => inspections.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+  },
+  (table) => [primaryKey({ columns: [table.inspectionId, table.userId] })],
+);
 
 export const evidence = floorwalk.table('evidence', {
   id: uuid('id').defaultRandom().primaryKey(),

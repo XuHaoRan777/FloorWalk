@@ -13,7 +13,7 @@ test('FW-020 AC-05 Mobile 首次登录强制改密后进入今日巡检', async 
   try {
     const adminLogin = await page.request.post(`${apiBase}/auth/session`, {
       data: {
-        email: 'hq@northbean.example',
+        loginName: 'hq@northbean.example',
         password: 'northbean-demo',
       },
     });
@@ -22,9 +22,9 @@ test('FW-020 AC-05 Mobile 首次登录强制改密后进入今日巡检', async 
     const sites = (await sitesResponse.json()) as Array<{ id: string }>;
     const created = await page.request.post(`${apiBase}/admin/users`, {
       data: {
-        email,
+        loginName: email,
         displayName: 'FW-020 Mobile e2e',
-        role: 'inspector',
+        role: 'store_manager',
         siteId: sites[0].id,
         password: 'initial-password',
       },
@@ -33,7 +33,7 @@ test('FW-020 AC-05 Mobile 首次登录强制改密后进入今日巡检', async 
     await page.request.delete(`${apiBase}/auth/session`);
 
     await page.goto('/');
-    await page.getByLabel('邮箱').fill(email);
+    await page.getByLabel('登录名').fill(email);
     await page.getByLabel('密码').fill('initial-password');
     await page.getByTestId('login-button').click();
     await expect(page.getByRole('heading', { name: '修改密码' })).toBeVisible();
@@ -46,7 +46,36 @@ test('FW-020 AC-05 Mobile 首次登录强制改密后进入今日巡检', async 
     await page.getByRole('button', { name: '保存新密码' }).click();
     await expect(page.getByRole('tab', { name: '今日待巡' })).toBeVisible();
   } finally {
-    await pool.query('DELETE FROM floorwalk.users WHERE email = $1', [email]);
+    await pool.query('DELETE FROM floorwalk.users WHERE login_name = $1', [
+      email,
+    ]);
     await pool.end();
   }
 });
+
+for (const [orgName, siteName] of [
+  ['Northbean', 'Northbean Coffee 1'],
+  ['演示二号', '演示二号门店'],
+] as const) {
+  test(`FW-024 AC-08 Mobile 选择 ${orgName} 后进入对应门店`, async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.getByLabel('登录名').fill('inspector@northbean.example');
+    await page.getByLabel('密码').fill('northbean-demo');
+    await page.getByTestId('login-button').click();
+    await expect(
+      page.getByRole('button', { name: 'Northbean', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: '演示二号', exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: orgName, exact: true }).click();
+    await expect(page.getByRole('heading', { name: siteName })).toBeVisible();
+    const session = await page.evaluate(async (base) => {
+      const response = await fetch(`${base}/me`, { credentials: 'include' });
+      return response.json();
+    }, apiBase);
+    expect(session.org.name).toBe(orgName);
+  });
+}

@@ -45,20 +45,27 @@ describe('organization registration (FW-019 AC-01)', () => {
   }, 60000);
 
   afterAll(async () => {
+    const client = await pool.connect();
     try {
-      await pool.query(
+      await client.query('BEGIN');
+      await client.query(
         'DELETE FROM floorwalk.sessions WHERE token_hash = ANY($1::text[])',
         [sessionHashes],
       );
-      await pool.query(
+      await client.query(
         'DELETE FROM floorwalk.users WHERE org_id = ANY($1::uuid[])',
         [createdOrgIds],
       );
-      await pool.query(
+      await client.query(
         'DELETE FROM floorwalk.organizations WHERE id = ANY($1::uuid[]) OR name = $2',
         [createdOrgIds, orgName],
       );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
     } finally {
+      client.release();
       await pool.end();
       await app.close();
     }
@@ -74,7 +81,7 @@ describe('organization registration (FW-019 AC-01)', () => {
     const { org, user } = createOrgResponseSchema.parse(response.body);
     expect(org).toMatchObject({ name: orgName, timezone: 'Asia/Shanghai' });
     expect(user).toMatchObject({
-      email: registration.email,
+      loginName: registration.email,
       displayName: registration.adminName,
       role: 'admin',
       org: { id: org.id, name: orgName },
@@ -122,32 +129,22 @@ describe('organization registration (FW-019 AC-01)', () => {
     expect(me.body).toEqual(user);
     const login = await request(app.getHttpServer())
       .post('/api/auth/session')
-      .send({ email: registration.email, password: registration.password })
+      .send({ loginName: registration.email, password: registration.password })
       .expect(201);
-    expect(loginResponseSchema.parse(login.body).user).toEqual(user);
+    expect(loginResponseSchema.parse(login.body)).toEqual({ user });
   });
 
   it.each(['hq@northbean.example', 'admin@demo2.example'])(
-    'rejects the globally existing email %s without leaving an organization',
+    'allows an existing login name in another organization %s',
     async (email) => {
-      const before = await pool.query<{ count: string }>(
-        'SELECT count(*)::text AS count FROM floorwalk.organizations WHERE name = $1',
-        [orgName],
-      );
       const response = await request(app.getHttpServer())
         .post('/api/orgs')
         .send({ ...input(), email })
-        .expect(409);
-      expect(errorResponseSchema.parse(response.body)).toEqual({
-        code: 'INVALID_STATE',
-        message: '该邮箱已被注册。',
-      });
-      expect(response.headers['set-cookie']).toBeUndefined();
-      const after = await pool.query<{ count: string }>(
-        'SELECT count(*)::text AS count FROM floorwalk.organizations WHERE name = $1',
-        [orgName],
+        .expect(201);
+      createdOrgIds.push(response.body.org.id);
+      expect(createOrgResponseSchema.parse(response.body).user.loginName).toBe(
+        email,
       );
-      expect(after.rows).toEqual(before.rows);
     },
   );
 
@@ -169,9 +166,12 @@ describe('organization registration (FW-019 AC-01)', () => {
   it('registers a new organization while logged in without changing the original organization or session', async () => {
     const login = await request(app.getHttpServer())
       .post('/api/auth/session')
-      .send({ email: 'hq@northbean.example', password: 'northbean-demo' })
+      .send({ loginName: 'hq@northbean.example', password: 'northbean-demo' })
       .expect(201);
-    const originalUser = loginResponseSchema.parse(login.body).user;
+    const parsedLogin = loginResponseSchema.parse(login.body);
+    if (!('user' in parsedLogin))
+      throw new Error('Expected one matching account');
+    const originalUser = parsedLogin.user;
     const originalCookie = cookieFrom(login);
     const originalHash = hashSessionId(
       originalCookie.slice('fw_session='.length),

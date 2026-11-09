@@ -36,6 +36,13 @@
       "when": 1793687949468,
       "tag": "0004_fw017_template_current_per_org",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794200000000,
+      "tag": "0005_fw024_two_roles",
+      "breakpoints": true
     }
   ]
 }

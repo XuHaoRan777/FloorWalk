@@ -1,6 +1,8 @@
 import { z, type ZodTypeAny } from 'zod';
 import {
   siteSchema,
+  loginNameSchema,
+  organizationSummarySchema,
   timestamp,
   userRoleSchema,
   userRoles,
@@ -15,8 +17,6 @@ import {
   changePasswordRequestSchema,
   createUserRequestSchema,
   resetUserPasswordRequestSchema,
-  setSiteSupervisorRequestSchema,
-  setSiteSupervisorResponseSchema,
   updateUserRequestSchema,
   userResponseSchema,
 } from './users.js';
@@ -129,13 +129,15 @@ export const reviewSchema = z.discriminatedUnion('action', [
 ]);
 
 export const loginRequestSchema = z.object({
-  email: z.string().email(),
+  loginName: loginNameSchema,
   password: z.string().min(1),
+  orgId: uuid.optional(),
 });
 
-export const loginResponseSchema = z.object({
-  user: userSchema,
-});
+export const loginResponseSchema = z.union([
+  z.object({ user: userSchema }),
+  z.object({ organizations: z.array(organizationSummarySchema).min(2) }),
+]);
 
 export const todayResponseSchema = z.object({
   site: siteSchema,
@@ -346,7 +348,9 @@ export const databaseConstraints = {
   unique: [
     'sites(org_id, code)',
     'templates(org_id, name)',
-    'users.email',
+    'users(org_id, login_name)',
+    "users.org_id WHERE role = 'admin'",
+    'inspection_participants(inspection_id, user_id)',
     'templates.is_current WHERE is_current = true',
     'template_items(template_id, position)',
     'sessions.token_hash',
@@ -360,8 +364,8 @@ export const databaseConstraints = {
     'chat_messages(inspection_id, seq)',
   ],
   checks: [
-    "users.role IN ('inspector', 'supervisor', 'admin')",
-    'users.role = inspector requires site_id; other roles require NULL site_id',
+    "users.role IN ('admin', 'store_manager')",
+    'users.role = store_manager requires site_id; admin requires NULL site_id',
     'template_items.position > 0',
     "inspections.status IN ('draft', 'submitted', 'in_review', 'passed', 'rework', 'failed')",
     'inspections.score IS NULL OR inspections.score BETWEEN 0 AND 100',
@@ -434,18 +438,10 @@ export const apiRoutes = {
     responseSchema: createOrgResponseSchema,
     successStatus: 201,
   },
-  setSiteSupervisor: {
-    method: 'PUT',
-    path: '/api/admin/sites/:id/supervisor',
-    roles: ['admin'],
-    requestSchema: setSiteSupervisorRequestSchema,
-    responseSchema: setSiteSupervisorResponseSchema,
-    successStatus: 200,
-  },
   listAdminUsers: {
     method: 'GET',
     path: '/api/admin/users',
-    roles: ['admin', 'supervisor'],
+    roles: ['admin'],
     requestSchema: null,
     responseSchema: adminUsersResponseSchema,
     successStatus: 200,
@@ -453,7 +449,7 @@ export const apiRoutes = {
   createAdminUser: {
     method: 'POST',
     path: '/api/admin/users',
-    roles: ['admin', 'supervisor'],
+    roles: ['admin'],
     requestSchema: createUserRequestSchema,
     responseSchema: userResponseSchema,
     successStatus: 201,
@@ -461,7 +457,7 @@ export const apiRoutes = {
   updateAdminUser: {
     method: 'PATCH',
     path: '/api/admin/users/:id',
-    roles: ['admin', 'supervisor'],
+    roles: ['admin'],
     requestSchema: updateUserRequestSchema,
     responseSchema: userResponseSchema,
     successStatus: 200,
@@ -469,7 +465,7 @@ export const apiRoutes = {
   resetAdminUserPassword: {
     method: 'POST',
     path: '/api/admin/users/:id/password',
-    roles: ['admin', 'supervisor'],
+    roles: ['admin'],
     requestSchema: resetUserPasswordRequestSchema,
     responseSchema: z.undefined(),
     successStatus: 204,
@@ -486,7 +482,7 @@ export const apiRoutes = {
   today: {
     method: 'GET',
     path: '/api/inspector/today',
-    roles: ['inspector'],
+    roles: ['store_manager'],
     requestSchema: null,
     responseSchema: todayResponseSchema,
     successStatus: 200,
@@ -494,7 +490,7 @@ export const apiRoutes = {
   createInspection: {
     method: 'POST',
     path: '/api/inspections',
-    roles: ['inspector'],
+    roles: ['store_manager'],
     requestSchema: createInspectionRequestSchema,
     responseSchema: inspectionSchema,
     successStatus: 201,
@@ -510,7 +506,7 @@ export const apiRoutes = {
   updateInspectionItem: {
     method: 'PATCH',
     path: '/api/inspections/:id/items/:itemId',
-    roles: ['inspector'],
+    roles: ['store_manager'],
     requestSchema: updateInspectionItemRequestSchema,
     responseSchema: updateInspectionItemResponseSchema,
     successStatus: 200,
@@ -518,7 +514,7 @@ export const apiRoutes = {
   addEvidence: {
     method: 'POST',
     path: '/api/inspections/:id/items/:itemId/evidence',
-    roles: ['inspector'],
+    roles: ['store_manager'],
     requestSchema: evidenceUploadRequestSchema,
     responseSchema: evidenceSchema,
     successStatus: 201,
@@ -534,7 +530,7 @@ export const apiRoutes = {
   submitInspection: {
     method: 'POST',
     path: '/api/inspections/:id/submit',
-    roles: ['inspector'],
+    roles: ['store_manager'],
     requestSchema: null,
     responseSchema: submitInspectionResponseSchema,
     successStatus: 201,
@@ -542,7 +538,7 @@ export const apiRoutes = {
   reviewQueue: {
     method: 'GET',
     path: '/api/review/queue',
-    roles: ['supervisor', 'admin'],
+    roles: ['admin'],
     requestSchema: null,
     responseSchema: reviewQueueResponseSchema,
     successStatus: 200,
@@ -550,7 +546,7 @@ export const apiRoutes = {
   reviewInspection: {
     method: 'POST',
     path: '/api/inspections/:id/review',
-    roles: ['supervisor', 'admin'],
+    roles: ['admin'],
     requestSchema: reviewRequestSchema,
     responseSchema: reviewResponseSchema,
     successStatus: 201,
@@ -558,7 +554,7 @@ export const apiRoutes = {
   dashboardSites: {
     method: 'GET',
     path: '/api/dashboard/sites',
-    roles: ['supervisor', 'admin'],
+    roles: ['admin'],
     requestSchema: null,
     responseSchema: dashboardSitesResponseSchema,
     successStatus: 200,
@@ -588,7 +584,7 @@ export const apiRoutes = {
   createInspectionMessage: {
     method: 'POST',
     path: '/api/inspections/:id/messages',
-    roles: ['inspector', 'supervisor'],
+    roles: userRoles,
     requestSchema: chatMessageRequestSchema,
     responseSchema: chatMessageSchema,
     successStatus: 201,
@@ -604,7 +600,7 @@ export const apiRoutes = {
   listInspectorInspections: {
     method: 'GET',
     path: '/api/inspector/inspections',
-    roles: ['inspector'],
+    roles: ['store_manager'],
     requestSchema: z.object({
       cursor: z.string().optional(),
       limit: z.coerce.number().int().positive().max(50).default(10),
@@ -615,7 +611,7 @@ export const apiRoutes = {
   listAdminSites: {
     method: 'GET',
     path: '/api/admin/sites',
-    roles: ['supervisor', 'admin'],
+    roles: ['admin'],
     requestSchema: null,
     responseSchema: adminSitesResponseSchema,
     successStatus: 200,
@@ -623,7 +619,7 @@ export const apiRoutes = {
   createAdminSite: {
     method: 'POST',
     path: '/api/admin/sites',
-    roles: ['supervisor', 'admin'],
+    roles: ['admin'],
     requestSchema: createSiteRequestSchema,
     responseSchema: siteResponseSchema,
     successStatus: 201,
@@ -631,7 +627,7 @@ export const apiRoutes = {
   updateAdminSite: {
     method: 'PATCH',
     path: '/api/admin/sites/:id',
-    roles: ['supervisor', 'admin'],
+    roles: ['admin'],
     requestSchema: updateSiteRequestSchema,
     responseSchema: siteResponseSchema,
     successStatus: 200,
@@ -639,7 +635,7 @@ export const apiRoutes = {
   listAdminTemplates: {
     method: 'GET',
     path: '/api/admin/templates',
-    roles: ['supervisor', 'admin'],
+    roles: ['admin'],
     requestSchema: null,
     responseSchema: adminTemplatesResponseSchema,
     successStatus: 200,
@@ -647,7 +643,7 @@ export const apiRoutes = {
   createAdminTemplate: {
     method: 'POST',
     path: '/api/admin/templates',
-    roles: ['supervisor', 'admin'],
+    roles: ['admin'],
     requestSchema: createTemplateRequestSchema,
     responseSchema: templateResponseSchema,
     successStatus: 201,
@@ -655,7 +651,7 @@ export const apiRoutes = {
   updateAdminTemplate: {
     method: 'PUT',
     path: '/api/admin/templates/:id',
-    roles: ['supervisor', 'admin'],
+    roles: ['admin'],
     requestSchema: updateTemplateRequestSchema,
     responseSchema: templateResponseSchema,
     successStatus: 200,
@@ -663,7 +659,7 @@ export const apiRoutes = {
   setCurrentAdminTemplate: {
     method: 'POST',
     path: '/api/admin/templates/:id/current',
-    roles: ['supervisor', 'admin'],
+    roles: ['admin'],
     requestSchema: null,
     responseSchema: templateResponseSchema,
     successStatus: 200,
@@ -726,9 +722,7 @@ export type ValidateInspectionSubmission = (input: {
   items: readonly InspectionItem[];
   evidenceCountByItemId: Readonly<Record<string, number>>;
 }) => void;
-export type CanSupervisorApprove = (
-  items: readonly InspectionItem[],
-) => boolean;
+export type CanReviewApprove = (items: readonly InspectionItem[]) => boolean;
 export type GetLatestSiteScore = (
   inspections: readonly Inspection[],
 ) => Inspection | null;
@@ -758,7 +752,7 @@ export function validateInspectionSubmission(input: {
     throw new Error('INCOMPLETE');
 }
 
-export function canSupervisorApprove(items: readonly InspectionItem[]) {
+export function canReviewApprove(items: readonly InspectionItem[]) {
   return !items.some((item) => item.critical && item.result === 'fail');
 }
 

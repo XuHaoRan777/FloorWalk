@@ -1,11 +1,11 @@
-import type { Session, User } from './types';
-import type { ChangePasswordRequest } from '@libs/shared';
+import type { User } from './types';
+import type { ChangePasswordRequest, LoginResponse } from '@libs/shared';
 import { request } from './request';
 
-export function login(email: string, password: string) {
-  return request<Session>('/auth/session', {
+export function login(loginName: string, password: string, orgId?: string) {
+  return request<LoginResponse>('/auth/session', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ loginName, password, orgId }),
   });
 }
 

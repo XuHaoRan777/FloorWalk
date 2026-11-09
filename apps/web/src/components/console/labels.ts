@@ -1,6 +1,5 @@
 export const roleLabel = {
-  inspector: '店员',
-  supervisor: '主管',
+  store_manager: '店长',
   admin: '商家管理员',
 } as const;
 

@@ -1,20 +1,20 @@
 import { z } from 'zod';
-import { siteSchema, userRoleSchema, userSchema, uuid } from './identity.js';
+import {
+  loginNameSchema,
+  siteSchema,
+  userRoleSchema,
+  userSchema,
+  uuid,
+} from './identity.js';
 
-export const supervisorSummarySchema = userSchema.pick({
+export const storeManagerSummarySchema = userSchema.pick({
   id: true,
   displayName: true,
 });
 
 export const adminSiteSchema = siteSchema.extend({
-  supervisor: supervisorSummarySchema.nullable(),
+  storeManagers: z.array(storeManagerSummarySchema),
 });
-
-export const setSiteSupervisorRequestSchema = z.object({
-  userId: uuid.nullable(),
-});
-
-export const setSiteSupervisorResponseSchema = adminSiteSchema;
 
 export const adminUserSchema = userSchema.extend({
   site: siteSchema.nullable(),
@@ -24,7 +24,7 @@ export const adminUserSchema = userSchema.extend({
 export const adminUsersResponseSchema = z.array(adminUserSchema);
 
 export const createUserRequestSchema = z.object({
-  email: z.string().email(),
+  loginName: loginNameSchema,
   displayName: z.string().trim().min(1),
   role: userRoleSchema,
   siteId: uuid.optional(),
@@ -35,9 +35,13 @@ export const updateUserRequestSchema = z
   .object({
     displayName: z.string().trim().min(1).optional(),
     disabled: z.boolean().optional(),
+    siteId: uuid.optional(),
   })
   .refine(
-    (value) => value.displayName !== undefined || value.disabled !== undefined,
+    (value) =>
+      value.displayName !== undefined ||
+      value.disabled !== undefined ||
+      value.siteId !== undefined,
   );
 
 export const userResponseSchema = adminUserSchema;
@@ -52,9 +56,6 @@ export const changePasswordRequestSchema = z.object({
 });
 
 export type AdminSite = z.infer<typeof adminSiteSchema>;
-export type SetSiteSupervisorRequest = z.infer<
-  typeof setSiteSupervisorRequestSchema
->;
 export type AdminUser = z.infer<typeof adminUserSchema>;
 export type AdminUsersResponse = z.infer<typeof adminUsersResponseSchema>;
 export type CreateUserRequest = z.infer<typeof createUserRequestSchema>;

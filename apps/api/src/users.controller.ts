@@ -40,7 +40,7 @@ export class UsersController {
   async listUsers(@Req() request: AuthedRequest) {
     assertRole(request.user, ...apiRoutes.listAdminUsers.roles);
     const result = await this.pool.query(
-      `SELECT u.id, u.email, u.display_name AS "displayName", u.role,
+      `SELECT u.id, u.login_name AS "loginName", u.display_name AS "displayName", u.role,
          s.id AS "siteId", u.must_change_password AS "mustChangePassword",
          u.disabled_at IS NOT NULL AS disabled, u.created_at AS "createdAt",
          json_build_object('id', o.id, 'name', o.name) AS org,
@@ -51,11 +51,8 @@ export class UsersController {
        FROM floorwalk.users u
        JOIN floorwalk.organizations o ON o.id = u.org_id
        LEFT JOIN floorwalk.sites s ON s.id = u.site_id AND s.org_id = u.org_id
-       WHERE u.org_id = $1 AND ($2 = 'admin' OR (u.role = 'inspector' AND EXISTS (
-         SELECT 1 FROM floorwalk.site_supervisors ss
-         WHERE ss.site_id = s.id AND ss.user_id = $3
-       ))) ORDER BY u.display_name, u.id`,
-      [request.user.orgId, request.user.role, request.user.id],
+       WHERE u.org_id = $1 ORDER BY u.display_name, u.id`,
+      [request.user.orgId],
     );
     return adminUsersResponseSchema.parse(
       result.rows.map((row) => ({ ...row, createdAt: iso(row.createdAt) })),
@@ -66,20 +63,15 @@ export class UsersController {
   async createUser(@Req() request: AuthedRequest, @Body() body: unknown) {
     assertRole(request.user, ...apiRoutes.createAdminUser.roles);
     const input = createUserRequestSchema.parse(body);
-    if (input.role === 'inspector' && !input.siteId)
-      throw new BadRequestException({
-        code: 'VALIDATION_FAILED',
-        message: '店员必须绑定门店。',
-      });
-    if (input.role !== 'inspector' && input.siteId)
-      throw new BadRequestException({
-        code: 'VALIDATION_FAILED',
-        message: '主管和商家管理员不能绑定门店。',
-      });
-    if (request.user.role === 'supervisor' && input.role !== 'inspector')
+    if (input.role === 'admin')
       throw new ForbiddenException({
         code: 'FORBIDDEN',
-        message: '主管只能创建名下门店的店员。',
+        message: '不能创建管理员。',
+      });
+    if (!input.siteId)
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: '店长必须绑定门店。',
       });
 
     const client = await this.pool.connect();
@@ -95,23 +87,17 @@ export class UsersController {
             code: 'NOT_FOUND',
             message: '门店不存在。',
           });
-        if (request.user.role === 'supervisor')
-          await this.assertSupervisorAssigned(
-            client,
-            input.siteId,
-            request.user.id,
-          );
       }
       const passwordHash = await argon2.hash(input.password);
       const result = await client.query(
         `INSERT INTO floorwalk.users
-           (org_id, email, password_hash, display_name, role, site_id,
+           (org_id, login_name, password_hash, display_name, role, site_id,
             must_change_password, created_by)
          VALUES ($1, $2, $3, $4, $5, $6, true, $7)
          RETURNING id`,
         [
           request.user.orgId,
-          input.email,
+          input.loginName,
           passwordHash,
           input.displayName,
           input.role,
@@ -131,7 +117,7 @@ export class UsersController {
       if (isUniqueViolation(error))
         throw new ConflictException({
           code: 'INVALID_STATE',
-          message: '该邮箱已被注册。',
+          message: '该登录名已被注册。',
         });
       throw error;
     } finally {
@@ -156,26 +142,36 @@ export class UsersController {
           [request.user.orgId],
         );
       const target = await this.lockTarget(client, id, request.user.orgId);
-      await this.assertCanManage(client, request.user, target);
       if (
         input.disabled === true &&
         target.role === 'admin' &&
         target.disabled_at === null
       ) {
-        const enabledAdmins = await client.query<{ count: number }>(
-          `SELECT count(*)::int AS count FROM floorwalk.users
-           WHERE org_id = $1 AND role = 'admin' AND disabled_at IS NULL`,
-          [request.user.orgId],
+        throw new ConflictException({
+          code: 'INVALID_STATE',
+          message: '不能停用商家管理员。',
+        });
+      }
+      if (input.siteId !== undefined) {
+        if (target.role !== 'store_manager')
+          throw new BadRequestException({
+            code: 'VALIDATION_FAILED',
+            message: '只有店长可以调店。',
+          });
+        const site = await client.query(
+          'SELECT id FROM floorwalk.sites WHERE id = $1 AND org_id = $2 FOR UPDATE',
+          [input.siteId, request.user.orgId],
         );
-        if (enabledAdmins.rows[0].count <= 1)
-          throw new ConflictException({
-            code: 'INVALID_STATE',
-            message: '不能停用商家最后一个启用的管理员。',
+        if (!site.rowCount)
+          throw new NotFoundException({
+            code: 'NOT_FOUND',
+            message: '门店不存在。',
           });
       }
       const updated = await client.query(
         `UPDATE floorwalk.users SET
            display_name = COALESCE($2, display_name),
+           site_id = COALESCE($5, site_id),
            disabled_at = CASE WHEN $3::boolean IS NULL THEN disabled_at
              WHEN $3 THEN COALESCE(disabled_at, now()) ELSE NULL END
          WHERE id = $1 AND org_id = $4 RETURNING id`,
@@ -184,6 +180,7 @@ export class UsersController {
           input.displayName ?? null,
           input.disabled ?? null,
           request.user.orgId,
+          input.siteId ?? null,
         ],
       );
       if (input.disabled === true)
@@ -218,8 +215,7 @@ export class UsersController {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const target = await this.lockTarget(client, id, request.user.orgId);
-      await this.assertCanManage(client, request.user, target);
+      await this.lockTarget(client, id, request.user.orgId);
       const passwordHash = await argon2.hash(input.password);
       await client.query(
         'UPDATE floorwalk.users SET password_hash = $2, must_change_password = true WHERE id = $1',
@@ -311,7 +307,7 @@ export class UsersController {
   private async lockTarget(client: PoolClient, id: string, orgId: string) {
     const result = await client.query<{
       id: string;
-      role: 'inspector' | 'supervisor' | 'admin';
+      role: 'store_manager' | 'admin';
       site_id: string | null;
       disabled_at: Date | null;
     }>(
@@ -327,58 +323,13 @@ export class UsersController {
     return target;
   }
 
-  private async assertCanManage(
-    client: PoolClient,
-    user: AuthedRequest['user'],
-    target: {
-      role: 'inspector' | 'supervisor' | 'admin';
-      site_id: string | null;
-    },
-  ) {
-    if (user.role === 'supervisor' && target.role !== 'inspector')
-      throw new ForbiddenException({
-        code: 'FORBIDDEN',
-        message: '主管不能管理主管或商家管理员账号。',
-      });
-    if (user.role === 'supervisor') {
-      if (target.site_id)
-        await this.assertSupervisorAssigned(client, target.site_id, user.id);
-      else
-        throw new ForbiddenException({
-          code: 'FORBIDDEN',
-          message: '只能管理名下门店的店员。',
-        });
-    }
-  }
-
-  private async assertSupervisorAssigned(
-    client: PoolClient,
-    siteId: string,
-    supervisorId: string,
-  ) {
-    await client.query(
-      'SELECT id FROM floorwalk.sites WHERE id = $1 FOR UPDATE',
-      [siteId],
-    );
-    const assigned = await client.query(
-      `SELECT 1 FROM floorwalk.site_supervisors
-       WHERE site_id = $1 AND user_id = $2`,
-      [siteId, supervisorId],
-    );
-    if (!assigned.rowCount)
-      throw new ForbiddenException({
-        code: 'FORBIDDEN',
-        message: '只能管理名下门店的店员。',
-      });
-  }
-
   private async getUser(
     id: string,
     orgId: string,
     executor: Pool | PoolClient = this.pool,
   ) {
     const result = await executor.query(
-      `SELECT u.id, u.email, u.display_name AS "displayName", u.role,
+      `SELECT u.id, u.login_name AS "loginName", u.display_name AS "displayName", u.role,
          s.id AS "siteId", u.must_change_password AS "mustChangePassword",
          u.disabled_at IS NOT NULL AS disabled, u.created_at AS "createdAt",
          json_build_object('id', o.id, 'name', o.name) AS org,

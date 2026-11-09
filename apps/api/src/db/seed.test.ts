@@ -31,12 +31,11 @@ describe('Northbean seed', () => {
     await pool.end();
   });
 
-  it('creates all sites, one inspector per site, and shared demo roles', async () => {
+  it('creates all sites with managers and one administrator', async () => {
     const result = await pool.query<{
       sites: string;
       users: string;
-      inspectors: string;
-      supervisors: string;
+      managers: string;
       admins: string;
       templates: string;
       current_templates: string;
@@ -45,8 +44,7 @@ describe('Northbean seed', () => {
       `SELECT
       (SELECT COUNT(*) FROM floorwalk.sites WHERE org_id = $1) AS sites,
       (SELECT COUNT(*) FROM floorwalk.users WHERE org_id = $1) AS users,
-      (SELECT COUNT(*) FROM floorwalk.users WHERE org_id = $1 AND role = 'inspector') AS inspectors,
-      (SELECT COUNT(*) FROM floorwalk.users WHERE org_id = $1 AND role = 'supervisor') AS supervisors,
+      (SELECT COUNT(*) FROM floorwalk.users WHERE org_id = $1 AND role = 'store_manager') AS managers,
       (SELECT COUNT(*) FROM floorwalk.users WHERE org_id = $1 AND role = 'admin') AS admins,
       (SELECT COUNT(*) FROM floorwalk.templates WHERE org_id = $1) AS templates,
       (SELECT COUNT(*) FROM floorwalk.templates WHERE org_id = $1 AND is_current) AS current_templates,
@@ -56,9 +54,8 @@ describe('Northbean seed', () => {
     );
     expect(result.rows[0]).toEqual({
       sites: '12',
-      users: '15',
-      inspectors: '12',
-      supervisors: '2',
+      users: '14',
+      managers: '13',
       admins: '1',
       templates: '1',
       current_templates: '1',
@@ -66,47 +63,31 @@ describe('Northbean seed', () => {
     });
     const siteInspectors = await pool.query<{ site_id: string; count: string }>(
       `SELECT site_id, COUNT(*)::text AS count FROM floorwalk.users
-       WHERE org_id = $1 AND role = 'inspector' GROUP BY site_id ORDER BY site_id`,
+       WHERE org_id = $1 AND role = 'store_manager' GROUP BY site_id ORDER BY site_id`,
       [northbeanOrgId],
     );
     expect(siteInspectors.rows).toHaveLength(12);
-    expect(siteInspectors.rows.every((row) => row.count === '1')).toBe(true);
+    expect(siteInspectors.rows.filter((row) => row.count === '2')).toHaveLength(
+      1,
+    );
+    expect(siteInspectors.rows.every((row) => Number(row.count) >= 1)).toBe(
+      true,
+    );
     const admin = await pool.query<{ role: string }>(
-      'SELECT role FROM floorwalk.users WHERE org_id = $1 AND email = $2',
+      'SELECT role FROM floorwalk.users WHERE org_id = $1 AND login_name = $2',
       [northbeanOrgId, 'hq@northbean.example'],
     );
     expect(admin.rows).toEqual([{ role: 'admin' }]);
   });
 
-  it('assigns six Northbean sites to each supervisor', async () => {
-    const assignments = await pool.query<{
-      email: string;
-      role: string;
-      org_id: string;
-      codes: string[];
-    }>(
-      `SELECT u.email, u.role, u.org_id, array_agg(s.code ORDER BY s.code) AS codes
-       FROM floorwalk.site_supervisors ss
-       JOIN floorwalk.sites s ON s.id = ss.site_id
-       JOIN floorwalk.users u ON u.id = ss.user_id
-       WHERE s.org_id = $1
-       GROUP BY u.id ORDER BY MIN(s.code)`,
-      [northbeanOrgId],
+  it('has a manager login shared by both organizations', async () => {
+    const result = await pool.query<{ org_id: string }>(
+      `SELECT org_id FROM floorwalk.users WHERE role = 'store_manager'
+       AND login_name = 'inspector@northbean.example'`,
     );
-    expect(assignments.rows).toEqual([
-      {
-        email: 'supervisor@northbean.example',
-        role: 'supervisor',
-        org_id: northbeanOrgId,
-        codes: ['NB-001', 'NB-002', 'NB-003', 'NB-004', 'NB-005', 'NB-006'],
-      },
-      {
-        email: 'supervisor+2@northbean.example',
-        role: 'supervisor',
-        org_id: northbeanOrgId,
-        codes: ['NB-007', 'NB-008', 'NB-009', 'NB-010', 'NB-011', 'NB-012'],
-      },
-    ]);
+    expect(result.rows.map((row) => row.org_id).sort()).toEqual(
+      [northbeanOrgId, secondOrgId].sort(),
+    );
   });
 
   it('creates a separate second organization with its own judged inspection', async () => {
@@ -121,23 +102,7 @@ describe('Northbean seed', () => {
     );
     expect(users.rows).toEqual([
       { role: 'admin', site_org_id: null },
-      { role: 'inspector', site_org_id: secondOrgId },
-      { role: 'supervisor', site_org_id: null },
-    ]);
-    const sites = await pool.query<{
-      code: string;
-      supervisor_org_id: string;
-      role: string;
-    }>(
-      `SELECT s.code, u.org_id AS supervisor_org_id, u.role
-       FROM floorwalk.sites s
-       LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
-       LEFT JOIN floorwalk.users u ON u.id = ss.user_id
-       WHERE s.org_id = $1`,
-      [secondOrgId],
-    );
-    expect(sites.rows).toEqual([
-      { code: 'DEMO2-001', supervisor_org_id: secondOrgId, role: 'supervisor' },
+      { role: 'store_manager', site_org_id: secondOrgId },
     ]);
     const templates = await pool.query<{ is_current: boolean; items: string }>(
       `SELECT t.is_current, COUNT(ti.id)::text AS items FROM floorwalk.templates t

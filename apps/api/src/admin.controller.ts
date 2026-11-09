@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import {
-  BadRequestException,
   ConflictException,
   Controller,
   Get,
@@ -23,8 +22,6 @@ import {
   adminTemplatesResponseSchema,
   createSiteRequestSchema,
   createTemplateRequestSchema,
-  setSiteSupervisorRequestSchema,
-  setSiteSupervisorResponseSchema,
   siteResponseSchema,
   templateResponseSchema,
   updateSiteRequestSchema,
@@ -40,82 +37,19 @@ export class AdminController {
   constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
 
   @UseGuards(AuthGuard)
-  @Put(apiRoutePath(apiRoutes.setSiteSupervisor))
-  async setSiteSupervisor(
-    @Body() body: unknown,
-    @Param('id', new ParseUUIDPipe()) id: string,
-    @Req() request: AuthedRequest,
-  ) {
-    assertRole(request.user, ...apiRoutes.setSiteSupervisor.roles);
-    const input = setSiteSupervisorRequestSchema.parse(body);
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-      const sites = await client.query(
-        `SELECT id, code, name, deactivated_at IS NULL AS active,
-           created_at AS "createdAt" FROM floorwalk.sites
-         WHERE id = $1 AND org_id = $2 FOR UPDATE`,
-        [id, request.user.orgId],
-      );
-      const site = sites.rows[0];
-      if (!site)
-        throw new NotFoundException({
-          code: 'NOT_FOUND',
-          message: '门店不存在。',
-        });
-      let supervisor: { id: string; displayName: string } | null = null;
-      if (input.userId !== null) {
-        const users = await client.query<{ id: string; displayName: string }>(
-          `SELECT id, display_name AS "displayName" FROM floorwalk.users
-           WHERE id = $1 AND org_id = $2 AND role = 'supervisor' FOR SHARE`,
-          [input.userId, request.user.orgId],
-        );
-        supervisor = users.rows[0];
-        if (!supervisor)
-          throw new BadRequestException({
-            code: 'VALIDATION_FAILED',
-            message: '请选择本商家的主管。',
-          });
-        await client.query(
-          `INSERT INTO floorwalk.site_supervisors (site_id, user_id)
-           VALUES ($1, $2) ON CONFLICT (site_id) DO UPDATE
-           SET user_id = EXCLUDED.user_id, assigned_at = now()`,
-          [id, supervisor.id],
-        );
-      } else {
-        await client.query(
-          'DELETE FROM floorwalk.site_supervisors WHERE site_id = $1',
-          [id],
-        );
-      }
-      const result = setSiteSupervisorResponseSchema.parse({
-        ...site,
-        createdAt: iso(site.createdAt),
-        supervisor,
-      });
-      await client.query('COMMIT');
-      return result;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  @UseGuards(AuthGuard)
   @Get(apiRoutePath(apiRoutes.listAdminSites))
   async listSites(@Req() request: AuthedRequest) {
     assertRole(request.user, ...apiRoutes.listAdminSites.roles);
     const result = await this.pool.query(
       `SELECT s.id, s.code, s.name, s.deactivated_at IS NULL AS active,
-          s.created_at AS "createdAt", CASE WHEN u.id IS NULL THEN NULL ELSE
-          json_build_object('id', u.id, 'displayName', u.display_name) END AS supervisor
-       FROM floorwalk.sites s LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
-       LEFT JOIN floorwalk.users u ON u.id = ss.user_id
-       WHERE s.org_id = $1 AND ($2 = 'admin' OR ss.user_id = $3)
+          s.created_at AS "createdAt", COALESCE((SELECT json_agg(
+            json_build_object('id', u.id, 'displayName', u.display_name)
+            ORDER BY u.display_name, u.id) FROM floorwalk.users u
+            WHERE u.org_id = s.org_id AND u.site_id = s.id AND u.role = 'store_manager'), '[]'::json) AS "storeManagers"
+       FROM floorwalk.sites s
+       WHERE s.org_id = $1
        ORDER BY s.code`,
-      [request.user.orgId, request.user.role, request.user.id],
+      [request.user.orgId],
     );
     return adminSitesResponseSchema.parse(
       result.rows.map((row) => ({ ...row, createdAt: iso(row.createdAt) })),

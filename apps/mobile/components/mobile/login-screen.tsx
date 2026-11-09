@@ -15,19 +15,26 @@ export function LoginScreen({
 }) {
   const [email, setEmail] = useState('inspector@northbean.example');
   const [password, setPassword] = useState('northbean-demo');
+  const [organizations, setOrganizations] = useState<
+    { id: string; name: string }[]
+  >([]);
   const [error, setError] = useState<string | null>(initialError);
   const [loading, setLoading] = useState(false);
 
-  async function submit() {
+  async function submit(orgId?: string) {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.login(email.trim(), password);
+      const response = await api.login(email.trim(), password, orgId);
+      if ('organizations' in response) {
+        setOrganizations(response.organizations);
+        return;
+      }
       onLogin(response);
     } catch (cause) {
       setError(
         cause instanceof ApiError && cause.status === 401
-          ? '邮箱或密码错误。'
+          ? '登录名或密码错误。'
           : userFacingError(cause),
       );
     } finally {
@@ -42,7 +49,7 @@ export function LoginScreen({
       keyboardShouldPersistTaps="handled"
     >
       <Text className={classes.eyebrow} style={styles.eyebrow}>
-        NORTHBEAN COFFEE · 店员端
+        NORTHBEAN COFFEE · 店长端
       </Text>
       <Text
         accessibilityRole="header"
@@ -56,13 +63,15 @@ export function LoginScreen({
       </Text>
       <View style={styles.form}>
         <Text className={classes.muted} style={styles.label}>
-          邮箱
+          登录名
         </Text>
         <TextInput
-          accessibilityLabel="邮箱"
+          accessibilityLabel="登录名"
           autoCapitalize="none"
-          keyboardType="email-address"
-          onChangeText={setEmail}
+          onChangeText={(value) => {
+            setEmail(value);
+            setOrganizations([]);
+          }}
           className={classes.input}
           style={styles.input}
           value={email}
@@ -72,20 +81,36 @@ export function LoginScreen({
         </Text>
         <TextInput
           accessibilityLabel="密码"
-          onChangeText={setPassword}
+          onChangeText={(value) => {
+            setPassword(value);
+            setOrganizations([]);
+          }}
           className={classes.input}
           secureTextEntry
           style={styles.input}
           value={password}
         />
         <ErrorBanner message={error} />
-        <PrimaryButton
-          disabled={loading}
-          onPress={() => void submit()}
-          testID="login-button"
-        >
-          {loading ? '登录中…' : '登录'}
-        </PrimaryButton>
+        {organizations.length > 0 ? (
+          organizations.map((org) => (
+            <PrimaryButton
+              key={org.id}
+              disabled={loading}
+              onPress={() => void submit(org.id)}
+              variant="secondary"
+            >
+              {org.name}
+            </PrimaryButton>
+          ))
+        ) : (
+          <PrimaryButton
+            disabled={loading}
+            onPress={() => void submit()}
+            testID="login-button"
+          >
+            {loading ? '登录中…' : '登录'}
+          </PrimaryButton>
+        )}
       </View>
     </ScrollView>
   );

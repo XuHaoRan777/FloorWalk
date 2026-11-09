@@ -16,7 +16,9 @@ describe('inspection chat authorization', () => {
   let hqCookie: string;
   let passedInspectionId: string;
   let otherSiteInspectionId: string;
+  let otherOrgInspectionId: string;
   let createdMessageId: string | undefined;
+  let adminMessageId: string | undefined;
 
   beforeAll(async () => {
     await runMigrations();
@@ -29,16 +31,16 @@ describe('inspection chat authorization', () => {
     app.useGlobalFilters(new HttpErrorFilter());
     await app.init();
 
-    const login = async (email: string) => {
+    const login = async (loginName: string) => {
       const response = await request(app.getHttpServer())
         .post('/api/auth/session')
-        .send({ email, password: 'northbean-demo' })
+        .send({ loginName, password: 'northbean-demo' })
         .expect(201);
       return (response.headers['set-cookie'] as unknown as string[])[0].split(
         ';',
       )[0];
     };
-    inspectorCookie = await login('inspector@northbean.example');
+    inspectorCookie = await login('manager2@northbean.example');
     hqCookie = await login('hq@northbean.example');
 
     const inspections = await pool.query<{ id: string; code: string }>(
@@ -55,6 +57,10 @@ describe('inspection chat authorization', () => {
     otherSiteInspectionId = inspections.rows.find(
       (row) => row.code === 'NB-002',
     )!.id;
+    const otherOrg = await pool.query<{ id: string }>(
+      `SELECT i.id FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id WHERE s.code = 'DEMO2-001' LIMIT 1`,
+    );
+    otherOrgInspectionId = otherOrg.rows[0].id;
   }, 60000);
 
   afterAll(async () => {
@@ -63,6 +69,10 @@ describe('inspection chat authorization', () => {
         await pool.query('DELETE FROM floorwalk.chat_messages WHERE id = $1', [
           createdMessageId,
         ]);
+      if (adminMessageId)
+        await pool.query('DELETE FROM floorwalk.chat_messages WHERE id = $1', [
+          adminMessageId,
+        ]);
       await pool.query('DELETE FROM floorwalk.sessions');
     } finally {
       await pool.end();
@@ -70,17 +80,23 @@ describe('inspection chat authorization', () => {
     }
   });
 
-  it('blocks HQ from sending and an inspector from reading another site', async () => {
-    await request(app.getHttpServer())
+  it('allows an admin to send within their organization and rejects other organizations', async () => {
+    const response = await request(app.getHttpServer())
       .post(`/api/inspections/${passedInspectionId}/messages`)
       .set('Cookie', hqCookie)
-      .field('text', '总部只读')
-      .expect(403);
+      .field('text', '管理员回复')
+      .expect(201);
+    adminMessageId = response.body.id as string;
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${otherOrgInspectionId}/messages`)
+      .set('Cookie', hqCookie)
+      .field('text', '跨商家')
+      .expect(404);
 
     await request(app.getHttpServer())
       .get(`/api/inspections/${otherSiteInspectionId}/messages`)
       .set('Cookie', inspectorCookie)
-      .expect(403);
+      .expect(404);
   });
 
   it('allows the assigned inspector to send after the inspection is closed', async () => {

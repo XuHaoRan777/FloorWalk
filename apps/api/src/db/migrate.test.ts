@@ -7,6 +7,7 @@ import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { createPool, getDatabaseUrl } from './client.js';
 import { runMigrations } from './migrate.js';
+import { migrateLocalStorage } from './migrate-storage.js';
 import { seedDatabase } from './seed.js';
 
 const projectRoot = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -157,7 +158,13 @@ async function loadLegacy(pool: Pool, data: Snapshot) {
     ).rows.map((row) => row.column_name as string);
     for (const row of data.rows[table]) {
       const values = columns.map((column) =>
-        column === 'role' && row[column] === 'admin' ? 'hq' : row[column],
+        column === 'email'
+          ? (row.email ?? row.login_name)
+          : column === 'role' && row[column] === 'admin'
+            ? 'hq'
+            : column === 'role' && row[column] === 'store_manager'
+              ? 'inspector'
+              : row[column],
       );
       await pool.query(
         `INSERT INTO floorwalk.${table} (${columns.map((c) => `"${c}"`).join(', ')}) VALUES (${columns.map((_, i) => `$${i + 1}`).join(', ')})`,
@@ -170,6 +177,21 @@ async function loadLegacy(pool: Pool, data: Snapshot) {
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, bytes);
   }
+}
+
+async function runLegacyMigrations(pool: Pool) {
+  const applied = Number(
+    (await pool.query('SELECT count(*) FROM drizzle.__drizzle_migrations'))
+      .rows[0].count,
+  );
+  for (const migration of migrations.slice(applied, 5)) {
+    for (const sql of migration.sql) await pool.query(sql);
+    await pool.query(
+      'INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)',
+      [migration.hash, migration.folderMillis],
+    );
+  }
+  await migrateLocalStorage(pool, storageDir);
 }
 
 async function counts(pool: Pool) {
@@ -202,11 +224,17 @@ describe('g03 forward migration (AC-01)', () => {
         ['slot', slotCopy],
       ] as const) {
         await clearSlot(slotPool);
-        if (data) await loadLegacy(slotPool, data);
+        await loadLegacy(
+          slotPool,
+          data ?? {
+            rows: Object.fromEntries(tables.map((table) => [table, []])),
+            files: new Map(),
+          },
+        );
         const before = data
           ? await counts(slotPool)
           : Object.fromEntries(tables.map((t) => [t, 0]));
-        await runMigrations(getSlotDatabaseUrl(), storageDir);
+        await runLegacyMigrations(slotPool);
         expect(await counts(slotPool)).toEqual(before);
         const org = (
           await slotPool.query('SELECT id, name FROM floorwalk.organizations')
@@ -274,7 +302,7 @@ describe('g03 forward migration (AC-01)', () => {
             ).rejects.toMatchObject({ code: 'ENOENT' });
           }
           // Retry must preserve both the rows and their already migrated files.
-          await runMigrations(getSlotDatabaseUrl(), storageDir);
+          await runLegacyMigrations(slotPool);
           expect(await counts(slotPool)).toEqual(before);
         }
         console.info(
@@ -289,6 +317,104 @@ describe('g03 forward migration (AC-01)', () => {
       await runMigrations(getSlotDatabaseUrl(), storageDir);
       await seedDatabase(getSlotDatabaseUrl(), storageDir);
       await slotPool.end();
+    }
+  }, 60000);
+});
+
+describe('FW-024 empty migration and administrator constraint', () => {
+  it('migrates an empty slot and requires exactly one administrator per organization', async () => {
+    const pool = createPool(getSlotDatabaseUrl());
+    const client = await pool.connect();
+    try {
+      await clearSlot(pool);
+      await runMigrations(getSlotDatabaseUrl(), storageDir);
+      expect(
+        (await client.query('SELECT count(*) FROM floorwalk.organizations'))
+          .rows[0].count,
+      ).toBe('0');
+
+      await client.query('BEGIN');
+      await client.query(
+        "INSERT INTO floorwalk.organizations (name) VALUES ('no admin')",
+      );
+      await expect(client.query('COMMIT')).rejects.toMatchObject({
+        code: '23514',
+        constraint: 'organizations_require_admin',
+      });
+
+      await client.query('BEGIN');
+      const org = (
+        await client.query(
+          "INSERT INTO floorwalk.organizations (name) VALUES ('with admin') RETURNING id",
+        )
+      ).rows[0].id;
+      const admin = (
+        await client.query(
+          "INSERT INTO floorwalk.users (org_id, login_name, password_hash, display_name, role) VALUES ($1, 'admin@example.com', 'hash', 'Admin', 'admin') RETURNING id",
+          [org],
+        )
+      ).rows[0].id;
+      await client.query('COMMIT');
+
+      await expect(
+        client.query(
+          "INSERT INTO floorwalk.users (org_id, login_name, password_hash, display_name, role) VALUES ($1, 'other@example.com', 'hash', 'Other', 'admin')",
+          [org],
+        ),
+      ).rejects.toMatchObject({
+        code: '23505',
+        constraint: 'users_one_admin_per_org',
+      });
+
+      await client.query('BEGIN');
+      await client.query('DELETE FROM floorwalk.users WHERE id = $1', [admin]);
+      await expect(client.query('COMMIT')).rejects.toMatchObject({
+        code: '23514',
+        constraint: 'organizations_require_admin',
+      });
+
+      await client.query('BEGIN');
+      const other = (
+        await client.query(
+          "INSERT INTO floorwalk.organizations (name) VALUES ('other') RETURNING id",
+        )
+      ).rows[0].id;
+      await client.query(
+        'UPDATE floorwalk.users SET org_id = $1 WHERE id = $2',
+        [other, admin],
+      );
+      await expect(client.query('COMMIT')).rejects.toMatchObject({
+        code: '23514',
+        constraint: 'organizations_require_admin',
+      });
+
+      await client.query('BEGIN');
+      const site = (
+        await client.query(
+          "INSERT INTO floorwalk.sites (org_id, code, name) VALUES ($1, 'test', 'Test') RETURNING id",
+          [org],
+        )
+      ).rows[0].id;
+      await client.query(
+        "UPDATE floorwalk.users SET role = 'store_manager', site_id = $1 WHERE id = $2",
+        [site, admin],
+      );
+      await expect(client.query('COMMIT')).rejects.toMatchObject({
+        code: '23514',
+        constraint: 'organizations_require_admin',
+      });
+
+      await client.query('BEGIN');
+      await client.query('DELETE FROM floorwalk.users WHERE id = $1', [admin]);
+      await client.query('DELETE FROM floorwalk.organizations WHERE id = $1', [
+        org,
+      ]);
+      await client.query('COMMIT');
+    } finally {
+      client.release();
+      await clearSlot(pool);
+      await runMigrations(getSlotDatabaseUrl(), storageDir);
+      await pool.end();
     }
   }, 60000);
 });

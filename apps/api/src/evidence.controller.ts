@@ -33,6 +33,7 @@ import {
   iso,
   assertRole,
   assertInspectionAccess,
+  getInspectionAccess,
 } from './inspection-queries.js';
 import { getStorageDriver } from './storage/index.js';
 
@@ -73,9 +74,8 @@ export class EvidenceController {
       await client.query('BEGIN');
       const inspectionResult = await client.query(
         `SELECT i.id, i.site_id AS "siteId", i.inspector_id AS "inspectorId", i.status,
-            s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+            s.org_id AS "orgId"
          FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
-         LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
          WHERE i.id = $1 FOR UPDATE OF i`,
         [id],
       );
@@ -138,18 +138,11 @@ export class EvidenceController {
     const result = await this.pool.query<{
       storageKey: string;
       id: string;
-      siteId: string;
-      inspectorId: string;
-      orgId: string;
-      supervisorUserId: string | null;
     }>(
-      `SELECT e.storage_key AS "storageKey", i.id, i.site_id AS "siteId", i.inspector_id AS "inspectorId",
-          s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+      `SELECT e.storage_key AS "storageKey", i.id
          FROM floorwalk.evidence e
          JOIN floorwalk.inspection_items ii ON ii.id = e.inspection_item_id
          JOIN floorwalk.inspections i ON i.id = ii.inspection_id
-         JOIN floorwalk.sites s ON s.id = i.site_id
-         LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
          WHERE e.id = $1`,
       [id],
     );
@@ -159,7 +152,7 @@ export class EvidenceController {
         code: 'NOT_FOUND',
         message: '照片不存在。',
       });
-    assertInspectionAccess(evidence, request.user);
+    await getInspectionAccess(this.pool, evidence.id, request.user);
     const storage = await getStorageDriver();
     return signedEvidenceResponseSchema.parse(
       await storage.signedUrl(evidence.storageKey, 3600),

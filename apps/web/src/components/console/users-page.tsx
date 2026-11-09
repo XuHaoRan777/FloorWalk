@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { LoaderCircle, Plus, RotateCcw, UserRound } from 'lucide-react';
-import type { AdminSite, AdminUser, CreateUserRequest } from '@libs/shared';
+import type { AdminSite, AdminUser } from '@libs/shared';
 import { Button } from '@/components/ui/button';
 import { getAdminSites } from '@/lib/api/admin';
 import {
@@ -9,23 +9,23 @@ import {
   resetAdminUserPassword,
   updateAdminUser,
 } from '@/lib/api/users';
-import { readSession } from '@/lib/api/session';
 import { ErrorBanner } from './error-banner';
 import { getErrorMessage } from './helpers';
 import { roleLabel } from './labels';
 
 export function UsersPage() {
-  const isAdmin = readSession()?.user.role === 'admin';
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [sites, setSites] = useState<AdminSite[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [email, setEmail] = useState('');
+  const [loginName, setLoginName] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [role, setRole] = useState<CreateUserRequest['role']>('inspector');
   const [siteId, setSiteId] = useState('');
   const [password, setPassword] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [editingSiteId, setEditingSiteId] = useState('');
 
   const load = useCallback(() => {
     setLoading(true);
@@ -47,10 +47,10 @@ export function UsersPage() {
     setError('');
     try {
       const created = await createAdminUser({
-        email: email.trim(),
+        loginName: loginName.trim(),
         displayName: displayName.trim(),
-        role,
-        ...(role === 'inspector' ? { siteId } : {}),
+        role: 'store_manager',
+        siteId,
         password,
       });
       setUsers((current) =>
@@ -58,9 +58,28 @@ export function UsersPage() {
           a.displayName.localeCompare(b.displayName),
         ),
       );
-      setEmail('');
+      setLoginName('');
       setDisplayName('');
       setPassword('');
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveUser = async (user: AdminUser) => {
+    setBusy(true);
+    setError('');
+    try {
+      const updated = await updateAdminUser(user.id, {
+        displayName: editingName.trim(),
+        ...(user.role === 'store_manager' ? { siteId: editingSiteId } : {}),
+      });
+      setUsers((current) =>
+        current.map((entry) => (entry.id === updated.id ? updated : entry)),
+      );
+      setEditingId(null);
     } catch (reason) {
       setError(getErrorMessage(reason));
     } finally {
@@ -130,7 +149,7 @@ export function UsersPage() {
         className="grid gap-3 border-y py-4 lg:grid-cols-2"
       >
         <label className="grid gap-1.5 text-sm font-medium">
-          姓名
+          昵称
           <input
             className="h-9 rounded-md border bg-background px-3 font-normal"
             value={displayName}
@@ -139,46 +158,29 @@ export function UsersPage() {
           />
         </label>
         <label className="grid gap-1.5 text-sm font-medium">
-          邮箱
+          登录名（手机号或邮箱）
           <input
             className="h-9 rounded-md border bg-background px-3 font-normal"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            value={loginName}
+            onChange={(event) => setLoginName(event.target.value)}
             required
           />
         </label>
         <label className="grid gap-1.5 text-sm font-medium">
-          角色
+          门店
           <select
             className="h-9 rounded-md border bg-background px-3 font-normal"
-            value={role}
-            onChange={(event) =>
-              setRole(event.target.value as CreateUserRequest['role'])
-            }
+            value={siteId}
+            onChange={(event) => setSiteId(event.target.value)}
+            required
           >
-            <option value="inspector">店员</option>
-            {isAdmin && <option value="supervisor">主管</option>}
-            {isAdmin && <option value="admin">商家管理员</option>}
+            {sites.map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.code} · {site.name}
+              </option>
+            ))}
           </select>
         </label>
-        {role === 'inspector' && (
-          <label className="grid gap-1.5 text-sm font-medium">
-            门店
-            <select
-              className="h-9 rounded-md border bg-background px-3 font-normal"
-              value={siteId}
-              onChange={(event) => setSiteId(event.target.value)}
-              required
-            >
-              {sites.map((site) => (
-                <option key={site.id} value={site.id}>
-                  {site.code} · {site.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
         <label className="grid gap-1.5 text-sm font-medium">
           初始密码
           <input
@@ -192,12 +194,9 @@ export function UsersPage() {
           />
         </label>
         <div className="flex items-end">
-          <Button
-            type="submit"
-            disabled={busy || loading || (role === 'inspector' && !siteId)}
-          >
+          <Button type="submit" disabled={busy || loading || !siteId}>
             <Plus aria-hidden="true" />
-            创建账号
+            创建店长
           </Button>
         </div>
       </form>
@@ -216,8 +215,8 @@ export function UsersPage() {
           <table className="fw-data-table min-w-[48rem]">
             <thead>
               <tr>
-                <th>姓名</th>
-                <th>邮箱</th>
+                <th>昵称</th>
+                <th>登录名</th>
                 <th>角色</th>
                 <th>门店</th>
                 <th>状态</th>
@@ -227,11 +226,41 @@ export function UsersPage() {
             <tbody>
               {users.map((user) => (
                 <tr key={user.id}>
-                  <td className="font-medium">{user.displayName}</td>
-                  <td>{user.email}</td>
+                  <td className="font-medium">
+                    {editingId === user.id ? (
+                      <input
+                        aria-label={`昵称 ${user.loginName}`}
+                        className="h-8 rounded-md border bg-background px-2"
+                        value={editingName}
+                        onChange={(event) => setEditingName(event.target.value)}
+                      />
+                    ) : (
+                      user.displayName
+                    )}
+                  </td>
+                  <td>{user.loginName}</td>
                   <td>{roleLabel[user.role]}</td>
                   <td>
-                    {user.site ? `${user.site.code} · ${user.site.name}` : '—'}
+                    {editingId === user.id && user.role === 'store_manager' ? (
+                      <select
+                        aria-label={`门店 ${user.loginName}`}
+                        className="h-8 rounded-md border bg-background px-2"
+                        value={editingSiteId}
+                        onChange={(event) =>
+                          setEditingSiteId(event.target.value)
+                        }
+                      >
+                        {sites.map((site) => (
+                          <option key={site.id} value={site.id}>
+                            {site.code} · {site.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : user.site ? (
+                      `${user.site.code} · ${user.site.name}`
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td>
                     {user.disabled ? (
@@ -244,6 +273,41 @@ export function UsersPage() {
                   </td>
                   <td>
                     <div className="flex justify-end gap-2">
+                      {editingId === user.id ? (
+                        <>
+                          <Button
+                            size="sm"
+                            disabled={
+                              busy ||
+                              !editingName.trim() ||
+                              (user.role === 'store_manager' && !editingSiteId)
+                            }
+                            onClick={() => void saveUser(user)}
+                          >
+                            保存
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingId(null)}
+                          >
+                            取消
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => {
+                            setEditingId(user.id);
+                            setEditingName(user.displayName);
+                            setEditingSiteId(user.site?.id ?? '');
+                          }}
+                        >
+                          编辑
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"

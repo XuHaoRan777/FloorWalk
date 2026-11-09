@@ -133,8 +133,8 @@ export function ConsolePage() {
   const { user } = session;
   if (user.mustChangePassword) return null;
   const isAdmin = user.role === 'admin';
-  const canManage = user.role === 'supervisor' || isAdmin;
-  const canSeeDashboard = user.role === 'supervisor' || isAdmin;
+  const canManage = isAdmin;
+  const canSeeDashboard = isAdmin;
   const showDashboard = canSeeDashboard && section === 'dashboard';
   return (
     <SidebarProvider className="fw-console">
@@ -147,7 +147,7 @@ export function ConsolePage() {
         <SidebarContent>
           <nav aria-label="控制台导航" className="p-2">
             <SidebarMenu>
-              {(user.role === 'supervisor' || user.role === 'admin') && (
+              {isAdmin && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     isActive={section === 'queue'}
@@ -251,7 +251,7 @@ export function ConsolePage() {
               <TemplatesPage />
             ) : canManage && section === 'users' ? (
               <UsersPage />
-            ) : user.role === 'inspector' ? (
+            ) : user.role === 'store_manager' ? (
               <div className="fw-inspector-notice mx-auto rounded-md border bg-card p-8 text-center">
                 <FileText
                   className="mx-auto size-10 text-muted-foreground"
@@ -259,21 +259,21 @@ export function ConsolePage() {
                 />
                 <h1 className="mt-4 text-2xl font-semibold">请使用手机端</h1>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  店员巡检请在手机端完成，Web 端不提供操作页面。
+                  店长巡检请在手机端完成，Web 端不提供操作页面。
                 </p>
               </div>
             ) : selected ? (
               <ReviewDetail
                 initialInspection={selected}
-                canReview={user.role === 'supervisor' || user.role === 'admin'}
-                canSendChat={user.role === 'supervisor'}
+                canReview={isAdmin}
+                canSendChat={isAdmin}
                 onBack={() => setSelected(null)}
               />
             ) : showDashboard ? (
               <DashboardView onQueue={() => setSection('queue')} />
             ) : (
               <QueueView
-                canReview={user.role === 'supervisor' || user.role === 'admin'}
+                canReview={isAdmin}
                 onSelect={(inspection) => {
                   setSelected(inspection);
                   setError('');

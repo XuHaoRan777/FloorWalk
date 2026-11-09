@@ -45,7 +45,7 @@ export function ProfileScreen({
           className={classes.foreground}
           style={styles.value}
         >
-          {session.user.email}
+          {session.user.loginName}
         </Text>
         <Text className={classes.muted} style={styles.label}>
           所属门店

@@ -13,9 +13,9 @@ import type { Pool } from 'pg';
 
 export type AuthUser = {
   id: string;
-  email: string;
+  loginName: string;
   displayName: string;
-  role: 'inspector' | 'supervisor' | 'admin';
+  role: 'store_manager' | 'admin';
   orgId: string;
   siteId: string | null;
   mustChangePassword: boolean;
@@ -42,7 +42,7 @@ export class AuthGuard implements CanActivate {
          FROM floorwalk.users u
          WHERE u.id = s.user_id AND s.token_hash = $1 AND s.revoked_at IS NULL
            AND s.last_seen_at > now() - interval '7 days' AND u.disabled_at IS NULL
-         RETURNING u.id, u.email, u.display_name AS "displayName", u.role,
+         RETURNING u.id, u.login_name AS "loginName", u.display_name AS "displayName", u.role,
            u.site_id AS "siteId", u.org_id AS "orgId",
            u.must_change_password AS "mustChangePassword"`,
         [hashSessionId(sessionId)],
@@ -54,7 +54,7 @@ export class AuthGuard implements CanActivate {
         message: '登录凭证无效。',
       });
     }
-    if (!user || !['inspector', 'supervisor', 'admin'].includes(user.role))
+    if (!user || !['store_manager', 'admin'].includes(user.role))
       throw new UnauthorizedException({
         code: 'UNAUTHENTICATED',
         message: '登录凭证无效。',

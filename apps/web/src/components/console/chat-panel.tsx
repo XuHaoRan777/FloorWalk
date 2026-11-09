@@ -11,8 +11,7 @@ import { ErrorBanner } from './error-banner';
 import { formatTime, getErrorMessage } from './helpers';
 
 const roleLabels = {
-  inspector: '店员',
-  supervisor: '主管',
+  store_manager: '店长',
   admin: '商家管理员',
 } as const;
 const maxFileSize = 10 * 1024 * 1024;

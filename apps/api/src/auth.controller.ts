@@ -33,6 +33,9 @@ import {
 } from './auth.js';
 import { type AuthedRequest } from './inspection-queries.js';
 
+const dummyPasswordHash =
+  '$argon2id$v=19$m=65536,t=3,p=4$Ba6wlrKFzsrY3N1sAQcKbA$PB60152pm8Qtu2UQupk0i+KR+NP7Qg5Iyda+j4yWSpI';
+
 @Controller('api')
 export class AuthController {
   constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
@@ -45,7 +48,7 @@ export class AuthController {
     const input = loginRequestSchema.parse(body);
     const result = await this.pool.query<{
       id: string;
-      email: string;
+      login_name: string;
       password_hash: string;
       display_name: string;
       role: AuthUser['role'];
@@ -56,22 +59,38 @@ export class AuthController {
       must_change_password: boolean;
       disabled_at: Date | null;
     }>(
-      `SELECT u.*, o.name AS org_name FROM floorwalk.users u JOIN floorwalk.organizations o ON o.id = u.org_id WHERE u.email = $1`,
-      [input.email],
+      `SELECT u.*, o.name AS org_name FROM floorwalk.users u JOIN floorwalk.organizations o ON o.id = u.org_id WHERE u.login_name = $1 AND u.disabled_at IS NULL ORDER BY o.name, o.id`,
+      [input.loginName],
     );
-    const row = result.rows[0];
-    if (
-      !row ||
-      row.disabled_at ||
-      !(await argon2.verify(row.password_hash, input.password))
-    )
+    if (result.rows.length === 0)
+      await argon2.verify(dummyPasswordHash, input.password);
+    const matches = (
+      await Promise.all(
+        result.rows.map(async (row) =>
+          (await argon2.verify(row.password_hash, input.password)) ? row : null,
+        ),
+      )
+    ).filter((row) => row !== null);
+    const row = input.orgId
+      ? matches.find((match) => match.org_id === input.orgId)
+      : matches.length === 1
+        ? matches[0]
+        : undefined;
+    if (!input.orgId && matches.length > 1)
+      return loginResponseSchema.parse({
+        organizations: matches.map((match) => ({
+          id: match.org_id,
+          name: match.org_name,
+        })),
+      });
+    if (!row)
       throw new UnauthorizedException({
         code: 'UNAUTHENTICATED',
-        message: '邮箱或密码错误。',
+        message: '登录名或密码错误。',
       });
     const user = userSchema.parse({
       id: row.id,
-      email: row.email,
+      loginName: row.login_name,
       displayName: row.display_name,
       role: row.role,
       siteId: row.site_id,
@@ -80,11 +99,37 @@ export class AuthController {
       createdAt: new Date(row.created_at).toISOString(),
     });
     const sessionId = randomBytes(32).toString('base64url');
-    await this.pool.query(
-      `INSERT INTO floorwalk.sessions (token_hash, user_id, expires_at)
-       VALUES ($1, $2, now() + interval '7 days')`,
-      [hashSessionId(sessionId), user.id],
-    );
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const current = await client.query<{
+        password_hash: string;
+        disabled_at: Date | null;
+      }>(
+        'SELECT password_hash, disabled_at FROM floorwalk.users WHERE id = $1 FOR UPDATE',
+        [user.id],
+      );
+      if (
+        !current.rows[0] ||
+        current.rows[0].disabled_at ||
+        current.rows[0].password_hash !== row.password_hash
+      )
+        throw new UnauthorizedException({
+          code: 'UNAUTHENTICATED',
+          message: '登录名或密码错误。',
+        });
+      await client.query(
+        `INSERT INTO floorwalk.sessions (token_hash, user_id, expires_at)
+         VALUES ($1, $2, now() + interval '7 days')`,
+        [hashSessionId(sessionId), user.id],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
     response.setHeader('Set-Cookie', sessionCookie(sessionId));
     return loginResponseSchema.parse({ user });
   }
@@ -110,7 +155,7 @@ export class AuthController {
   async me(@Req() request: AuthedRequest) {
     const result = await this.pool.query<{
       id: string;
-      email: string;
+      login_name: string;
       display_name: string;
       role: AuthUser['role'];
       site_id: string | null;
@@ -130,7 +175,7 @@ export class AuthController {
       });
     return userSchema.parse({
       id: row.id,
-      email: row.email,
+      loginName: row.login_name,
       displayName: row.display_name,
       role: row.role,
       siteId: row.site_id,

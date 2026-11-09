@@ -1,9 +1,10 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Pool } from 'pg';
 import request from 'supertest';
+import argon2 from 'argon2';
 import { errorResponseSchema, loginResponseSchema } from '@libs/shared';
 import { AppModule } from './app.module.js';
 import { HttpErrorFilter } from './http-exception.filter.js';
@@ -20,7 +21,7 @@ describe('HttpOnly sessions', () => {
     createHash('sha256').update(value).digest('hex');
   const login = () =>
     request(app.getHttpServer()).post('/api/auth/session').send({
-      email: 'supervisor@northbean.example',
+      loginName: 'hq@northbean.example',
       password: 'northbean-demo',
     });
   const cookieFrom = (response: request.Response) =>
@@ -81,7 +82,7 @@ describe('HttpOnly sessions', () => {
     const session = result.rows[0];
     expect(session.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(session.token_hash).toBe(hash(rawId));
-    expect(session.user_id).toBe(body.user.id);
+    expect('user' in body && session.user_id === body.user.id).toBe(true);
     expect(session.revoked_at).toBeNull();
     expect(
       Math.abs(
@@ -121,7 +122,7 @@ describe('HttpOnly sessions', () => {
     const response = await request(app.getHttpServer())
       .post('/api/auth/session')
       .send({
-        email: 'supervisor@northbean.example',
+        loginName: 'hq@northbean.example',
         password: 'wrong-password',
       })
       .expect(401);
@@ -133,6 +134,80 @@ describe('HttpOnly sessions', () => {
       'SELECT COUNT(*)::int AS count FROM floorwalk.sessions',
     );
     expect(after.rows).toEqual(before.rows);
+  });
+
+  it('does not create a session from a password reset during login', async () => {
+    const blocker = await pool.connect();
+    let pending: Promise<request.Response> | undefined;
+    let originalHash: string | undefined;
+    try {
+      await blocker.query('BEGIN');
+      const user = await blocker.query<{ id: string; password_hash: string }>(
+        "SELECT id, password_hash FROM floorwalk.users WHERE login_name = 'hq@northbean.example' FOR UPDATE",
+      );
+      originalHash = user.rows[0].password_hash;
+      const owner = await blocker.query<{ pid: number }>(
+        'SELECT pg_backend_pid() AS pid',
+      );
+      await blocker.query(
+        'UPDATE floorwalk.users SET password_hash = $2 WHERE id = $1',
+        [user.rows[0].id, await argon2.hash('reset-password')],
+      );
+      pending = login().then((response) => response);
+      await expect
+        .poll(async () => {
+          const waiting = await pool.query<{ count: string }>(
+            `SELECT count(*)::text AS count FROM pg_stat_activity
+           WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid))
+             AND query LIKE '%FROM floorwalk.users%FOR UPDATE%'`,
+            [owner.rows[0].pid],
+          );
+          return Number(waiting.rows[0].count);
+        })
+        .toBe(1);
+      await blocker.query('COMMIT');
+      const response = await pending;
+      expect(response.status).toBe(401);
+      expect(response.headers['set-cookie']).toBeUndefined();
+    } finally {
+      await blocker.query('ROLLBACK');
+      await pending;
+      if (originalHash)
+        await pool.query(
+          "UPDATE floorwalk.users SET password_hash = $1 WHERE login_name = 'hq@northbean.example'",
+          [originalHash],
+        );
+      blocker.release();
+    }
+  });
+
+  it('requires an organization selection for matching accounts without creating a session', async () => {
+    const loginName = 'inspector@northbean.example';
+    const before = await pool.query('SELECT count(*) FROM floorwalk.sessions');
+    const selection = await request(app.getHttpServer())
+      .post('/api/auth/session')
+      .send({ loginName, password: 'northbean-demo' })
+      .expect(201);
+    expect(selection.headers['set-cookie']).toBeUndefined();
+    expect(selection.body.organizations).toHaveLength(2);
+    expect(
+      (await pool.query('SELECT count(*) FROM floorwalk.sessions')).rows,
+    ).toEqual(before.rows);
+    const chosen = selection.body.organizations[1];
+    const response = await request(app.getHttpServer())
+      .post('/api/auth/session')
+      .send({ loginName, password: 'northbean-demo', orgId: chosen.id })
+      .expect(201);
+    expect(response.body.user.org.id).toBe(chosen.id);
+    expect(response.headers['set-cookie']).toBeDefined();
+    await request(app.getHttpServer())
+      .post('/api/auth/session')
+      .send({ loginName, password: 'northbean-demo', orgId: randomUUID() })
+      .expect(401);
+    await request(app.getHttpServer())
+      .post('/api/auth/session')
+      .send({ loginName, password: 'incorrect' })
+      .expect(401);
   });
 
   it('rejects a request with no cookie', async () => {
@@ -184,9 +259,9 @@ describe('HttpOnly sessions', () => {
 
   it('rejects a session after its user has been deleted and cascades all their sessions', async () => {
     const created = await pool.query<{ id: string }>(
-      `INSERT INTO floorwalk.users (email, password_hash, display_name, role, org_id)
-       SELECT 'session-deleted@northbean.example', password_hash, 'Session test', 'supervisor', org_id
-       FROM floorwalk.users WHERE email = 'supervisor@northbean.example' RETURNING id`,
+      `INSERT INTO floorwalk.users (login_name, password_hash, display_name, role, org_id, site_id)
+       SELECT 'session-deleted@northbean.example', password_hash, 'Session test', 'store_manager', org_id, site_id
+       FROM floorwalk.users WHERE login_name = 'manager2@northbean.example' RETURNING id`,
     );
     const userId = created.rows[0].id;
     temporaryUsers.push(userId);
@@ -195,7 +270,7 @@ describe('HttpOnly sessions', () => {
       const response = await request(app.getHttpServer())
         .post('/api/auth/session')
         .send({
-          email: 'session-deleted@northbean.example',
+          loginName: 'session-deleted@northbean.example',
           password: 'northbean-demo',
         })
         .expect(201);
@@ -224,7 +299,7 @@ describe('HttpOnly sessions', () => {
     await request(app.getHttpServer())
       .post('/api/auth/login')
       .send({
-        email: 'supervisor@northbean.example',
+        loginName: 'hq@northbean.example',
         password: 'northbean-demo',
       })
       .expect(404);

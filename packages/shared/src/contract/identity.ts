@@ -3,8 +3,12 @@ import { z } from 'zod';
 export const uuid = z.string().uuid();
 export const timestamp = z.string().datetime({ offset: true });
 
-export const userRoles = ['inspector', 'supervisor', 'admin'] as const;
+export const userRoles = ['admin', 'store_manager'] as const;
 export const userRoleSchema = z.enum(userRoles);
+export const loginNameSchema = z.union([
+  z.string().email(),
+  z.string().regex(/^1[3-9]\d{9}$/),
+]);
 
 export const organizationSchema = z.object({
   id: uuid,
@@ -28,7 +32,7 @@ export const siteSchema = z.object({
 
 export const userSchema = z.object({
   id: uuid,
-  email: z.string().email(),
+  loginName: loginNameSchema,
   displayName: z.string().min(1),
   role: userRoleSchema,
   siteId: uuid.nullable(),
@@ -50,5 +54,4 @@ export type CanAccessSite = (
     siteId: string | null;
   },
   site: { id: string; orgId: string },
-  supervisorUserId: string | null,
 ) => boolean;

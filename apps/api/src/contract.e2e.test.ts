@@ -44,12 +44,11 @@ const protocolRouteBodies = {
     email: 'protocol@example.test',
     password: 'protocol-password',
   },
-  setSiteSupervisor: { userId: null },
   listAdminUsers: undefined,
   createAdminUser: {
-    email: 'protocol@example.test',
+    loginName: 'protocol@example.test',
     displayName: 'Protocol user',
-    role: 'inspector',
+    role: 'store_manager',
     password: 'protocol-password',
   },
   updateAdminUser: { displayName: 'Protocol user' },
@@ -63,9 +62,7 @@ const protocolRouteBodies = {
 // L1 permission expectation table; account operations have focused tests in users.test.ts.
 // Scope / operation                                    Status  Error code
 // Cross-organization resource (all protected resources) 404     NOT_FOUND
-// Supervisor creates/changes/disables/resets admin      403     FORBIDDEN
-// Supervisor creates/changes/disables/resets supervisor 403     FORBIDDEN
-// Supervisor operates outside assigned sites           403     FORBIDDEN
+// Store manager accesses account administration        403     FORBIDDEN
 // Disable the final active admin                       409     INVALID_STATE
 // Login with a disabled account                        401     UNAUTHENTICATED
 // mustChangePassword: protected route other than
@@ -74,12 +71,10 @@ const protocolRouteBodies = {
 describe('inspection contract API', () => {
   let app: NestExpressApplication;
   let inspectorCookie: string;
-  let supervisorCookie: string;
   let hqCookie: string;
   let inspectionId: string;
   let northbeanSiteId: string;
   let otherSiteInspectionId: string;
-  let otherSupervisorInspectionId: string;
   let seedEvidenceId: string;
   let templateId: string;
   let demo2TemplateId: string;
@@ -87,7 +82,6 @@ describe('inspection contract API', () => {
   let chatImageMessageId: string;
   let nb002InspectorCookie: string;
   let demo2InspectorCookie: string;
-  let demo2SupervisorCookie: string;
   let demo2AdminCookie: string;
   let createdInspectionId: string | undefined;
   let createdEvidenceId: string | undefined;
@@ -109,11 +103,21 @@ describe('inspection contract API', () => {
     app.useGlobalFilters(new HttpErrorFilter());
     await app.init();
 
-    const login = async (email: string) => {
-      const response = await request(app.getHttpServer())
+    const login = async (loginName: string, organization = 'Northbean') => {
+      let response = await request(app.getHttpServer())
         .post('/api/auth/session')
-        .send({ email, password: 'northbean-demo' })
+        .send({ loginName, password: 'northbean-demo' })
         .expect(201);
+      if (response.body.organizations) {
+        const orgId = response.body.organizations.find(
+          (org: { name: string }) => org.name === organization,
+        )?.id;
+        expect(orgId).toBeDefined();
+        response = await request(app.getHttpServer())
+          .post('/api/auth/session')
+          .send({ loginName, password: 'northbean-demo', orgId })
+          .expect(201);
+      }
       loginResponseSchema.parse(response.body);
       return (response.headers['set-cookie'] as unknown as string[])[0].split(
         ';',
@@ -121,10 +125,11 @@ describe('inspection contract API', () => {
     };
     inspectorCookie = await login('inspector@northbean.example');
     nb002InspectorCookie = await login('inspector+nb-002@northbean.example');
-    supervisorCookie = await login('supervisor@northbean.example');
     hqCookie = await login('hq@northbean.example');
-    demo2InspectorCookie = await login('inspector@demo2.example');
-    demo2SupervisorCookie = await login('supervisor@demo2.example');
+    demo2InspectorCookie = await login(
+      'inspector@northbean.example',
+      '演示二号',
+    );
     demo2AdminCookie = await login('admin@demo2.example');
 
     const pool = createPool();
@@ -163,9 +168,6 @@ describe('inspection contract API', () => {
       inspectionId = result.rows.find((row) => row.code === 'NB-001')!.id;
       otherSiteInspectionId = result.rows.find(
         (row) => row.code !== 'NB-001',
-      )!.id;
-      otherSupervisorInspectionId = result.rows.find(
-        (row) => row.code === 'NB-007',
       )!.id;
       const evidence = await pool.query<{ id: string }>(
         `SELECT e.id FROM floorwalk.evidence e
@@ -242,14 +244,24 @@ describe('inspection contract API', () => {
         cleanup.release();
       }
       await pool.query('DELETE FROM floorwalk.sessions');
-      await pool.query(
-        'DELETE FROM floorwalk.users WHERE org_id = ANY($1::uuid[])',
-        [createdProtocolOrgIds],
-      );
-      await pool.query(
-        'DELETE FROM floorwalk.organizations WHERE id = ANY($1::uuid[])',
-        [createdProtocolOrgIds],
-      );
+      const orgCleanup = await pool.connect();
+      try {
+        await orgCleanup.query('BEGIN');
+        await orgCleanup.query(
+          'DELETE FROM floorwalk.users WHERE org_id = ANY($1::uuid[])',
+          [createdProtocolOrgIds],
+        );
+        await orgCleanup.query(
+          'DELETE FROM floorwalk.organizations WHERE id = ANY($1::uuid[])',
+          [createdProtocolOrgIds],
+        );
+        await orgCleanup.query('COMMIT');
+      } catch (error) {
+        await orgCleanup.query('ROLLBACK');
+        throw error;
+      } finally {
+        orgCleanup.release();
+      }
       if (createdEvidenceStorageKey) {
         await rm(
           path.resolve(
@@ -308,10 +320,9 @@ describe('inspection contract API', () => {
   };
 
   it('allows every declared role on protocol routes and rejects anonymous protected access', async () => {
-    expect(Object.keys(protocolRouteBodies)).toHaveLength(7);
+    expect(Object.keys(protocolRouteBodies)).toHaveLength(6);
     const cookies = {
-      inspector: inspectorCookie,
-      supervisor: supervisorCookie,
+      store_manager: inspectorCookie,
       admin: hqCookie,
     };
     for (const routeKey of Object.keys(protocolRouteBodies) as Array<
@@ -338,26 +349,20 @@ describe('inspection contract API', () => {
         expect(response.status, `${routeKey} allowed for ${role}`).toBe(
           routeKey === 'createOrg' || routeKey === 'listAdminUsers'
             ? route.successStatus
-            : routeKey === 'setSiteSupervisor'
-              ? 404
-              : routeKey === 'createAdminUser'
-                ? 400
-                : routeKey === 'updateAdminUser' ||
-                    routeKey === 'resetAdminUserPassword'
-                  ? 404
-                  : routeKey === 'changePassword'
-                    ? 401
-                    : 501,
+            : routeKey === 'createAdminUser'
+              ? 400
+              : routeKey === 'updateAdminUser' ||
+                  routeKey === 'resetAdminUserPassword'
+                ? 404
+                : routeKey === 'changePassword'
+                  ? 401
+                  : 501,
         );
         if (routeKey === 'createOrg') {
           route.responseSchema.parse(response.body);
           createdProtocolOrgIds.push(response.body.org.id);
         } else if (routeKey === 'listAdminUsers') {
           route.responseSchema.parse(response.body);
-        } else if (routeKey === 'setSiteSupervisor') {
-          expect(errorResponseSchema.parse(response.body).code).toBe(
-            'NOT_FOUND',
-          );
         }
         // Empty implemented writes may fail validation after role admission.
       }
@@ -365,7 +370,7 @@ describe('inspection contract API', () => {
   });
 
   it('publishes the complete route table under /api', () => {
-    expect(Object.keys(apiRoutes)).toHaveLength(31);
+    expect(Object.keys(apiRoutes)).toHaveLength(30);
     for (const route of Object.values(apiRoutes)) {
       expect(route.path.startsWith('/api/')).toBe(true);
       expect(route.responseSchema).toBeDefined();
@@ -393,7 +398,7 @@ describe('inspection contract API', () => {
       `SELECT u.id AS "userId", u.site_id AS "siteId", foreign_site.id AS "foreignSiteId"
        FROM floorwalk.users u
        JOIN floorwalk.sites foreign_site ON foreign_site.org_id <> u.org_id
-       WHERE u.email = 'inspector@northbean.example' LIMIT 1`,
+       WHERE u.login_name = 'inspector@northbean.example' AND foreign_site.code = 'DEMO2-001' AND u.org_id <> foreign_site.org_id LIMIT 1`,
     );
     const { userId, siteId, foreignSiteId } = binding.rows[0];
     try {
@@ -441,13 +446,13 @@ describe('inspection contract API', () => {
       .get('/api/me')
       .set('Cookie', inspectorCookie)
       .expect(200);
-    expect(userSchema.parse(me.body).role).toBe('inspector');
+    expect(userSchema.parse(me.body).role).toBe('store_manager');
     await request(app.getHttpServer())
       .get(`/api/inspections/${otherSiteInspectionId}`)
       .set('Cookie', inspectorCookie)
-      .expect(403)
+      .expect(404)
       .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('FORBIDDEN'),
+        expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
       );
     await request(app.getHttpServer())
       .get('/api/dashboard/sites')
@@ -474,12 +479,6 @@ describe('inspection contract API', () => {
       [
         'today',
         {
-          supervisor: async () => {
-            const response = await request(app.getHttpServer())
-              .get('/api/inspector/today')
-              .set('Cookie', supervisorCookie);
-            return { status: response.status, body: response.body };
-          },
           admin: async () => {
             const response = await request(app.getHttpServer())
               .get('/api/inspector/today')
@@ -491,13 +490,6 @@ describe('inspection contract API', () => {
       [
         'createInspection',
         {
-          supervisor: async () => {
-            const response = await request(app.getHttpServer())
-              .post('/api/inspections')
-              .set('Cookie', supervisorCookie)
-              .send({ templateId });
-            return { status: response.status, body: response.body };
-          },
           admin: async () => {
             const response = await request(app.getHttpServer())
               .post('/api/inspections')
@@ -510,15 +502,6 @@ describe('inspection contract API', () => {
       [
         'updateInspectionItem',
         {
-          supervisor: async () => {
-            const response = await request(app.getHttpServer())
-              .patch(
-                `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000`,
-              )
-              .set('Cookie', supervisorCookie)
-              .send({ result: 'pass' });
-            return { status: response.status, body: response.body };
-          },
           admin: async () => {
             const response = await request(app.getHttpServer())
               .patch(
@@ -533,14 +516,6 @@ describe('inspection contract API', () => {
       [
         'addEvidence',
         {
-          supervisor: async () => {
-            const response = await request(app.getHttpServer())
-              .post(
-                `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000/evidence`,
-              )
-              .set('Cookie', supervisorCookie);
-            return { status: response.status, body: response.body };
-          },
           admin: async () => {
             const response = await request(app.getHttpServer())
               .post(
@@ -554,12 +529,6 @@ describe('inspection contract API', () => {
       [
         'submitInspection',
         {
-          supervisor: async () => {
-            const response = await request(app.getHttpServer())
-              .post(`/api/inspections/${inspectionId}/submit`)
-              .set('Cookie', supervisorCookie);
-            return { status: response.status, body: response.body };
-          },
           admin: async () => {
             const response = await request(app.getHttpServer())
               .post(`/api/inspections/${inspectionId}/submit`)
@@ -571,7 +540,7 @@ describe('inspection contract API', () => {
       [
         'reviewQueue',
         {
-          inspector: async () => {
+          store_manager: async () => {
             const response = await request(app.getHttpServer())
               .get('/api/review/queue')
               .set('Cookie', inspectorCookie);
@@ -582,7 +551,7 @@ describe('inspection contract API', () => {
       [
         'reviewInspection',
         {
-          inspector: async () => {
+          store_manager: async () => {
             const response = await request(app.getHttpServer())
               .post(`/api/inspections/${inspectionId}/review`)
               .set('Cookie', inspectorCookie)
@@ -601,7 +570,7 @@ describe('inspection contract API', () => {
       [
         'dashboardSites',
         {
-          inspector: async () => {
+          store_manager: async () => {
             const response = await request(app.getHttpServer())
               .get('/api/dashboard/sites')
               .set('Cookie', inspectorCookie);
@@ -610,26 +579,8 @@ describe('inspection contract API', () => {
         },
       ],
       [
-        'createInspectionMessage',
-        {
-          admin: async () => {
-            const response = await request(app.getHttpServer())
-              .post(`/api/inspections/${inspectionId}/messages`)
-              .set('Cookie', hqCookie)
-              .field('text', '越权测试消息');
-            return { status: response.status, body: response.body };
-          },
-        },
-      ],
-      [
         'listInspectorInspections',
         {
-          supervisor: async () => {
-            const response = await request(app.getHttpServer())
-              .get('/api/inspector/inspections')
-              .set('Cookie', supervisorCookie);
-            return { status: response.status, body: response.body };
-          },
           admin: async () => {
             const response = await request(app.getHttpServer())
               .get('/api/inspector/inspections')
@@ -641,7 +592,7 @@ describe('inspection contract API', () => {
       [
         'listAdminSites',
         {
-          inspector: async () => {
+          store_manager: async () => {
             const response = await request(app.getHttpServer())
               .get('/api/admin/sites')
               .set('Cookie', inspectorCookie);
@@ -652,7 +603,7 @@ describe('inspection contract API', () => {
       [
         'createAdminSite',
         {
-          inspector: async () => {
+          store_manager: async () => {
             const response = await request(app.getHttpServer())
               .post('/api/admin/sites')
               .set('Cookie', inspectorCookie)
@@ -664,7 +615,7 @@ describe('inspection contract API', () => {
       [
         'updateAdminSite',
         {
-          inspector: async () => {
+          store_manager: async () => {
             const response = await request(app.getHttpServer())
               .patch(`/api/admin/sites/${inspectionId}`)
               .set('Cookie', inspectorCookie)
@@ -676,7 +627,7 @@ describe('inspection contract API', () => {
       [
         'listAdminTemplates',
         {
-          inspector: async () => {
+          store_manager: async () => {
             const response = await request(app.getHttpServer())
               .get('/api/admin/templates')
               .set('Cookie', inspectorCookie);
@@ -687,7 +638,7 @@ describe('inspection contract API', () => {
       [
         'createAdminTemplate',
         {
-          inspector: async () => {
+          store_manager: async () => {
             const response = await request(app.getHttpServer())
               .post('/api/admin/templates')
               .set('Cookie', inspectorCookie)
@@ -704,7 +655,7 @@ describe('inspection contract API', () => {
       [
         'updateAdminTemplate',
         {
-          inspector: async () => {
+          store_manager: async () => {
             const response = await request(app.getHttpServer())
               .put(`/api/admin/templates/${templateId}`)
               .set('Cookie', inspectorCookie)
@@ -726,7 +677,7 @@ describe('inspection contract API', () => {
       [
         'setCurrentAdminTemplate',
         {
-          inspector: async () => {
+          store_manager: async () => {
             const response = await request(app.getHttpServer())
               .post(`/api/admin/templates/${templateId}/current`)
               .set('Cookie', inspectorCookie);
@@ -744,8 +695,7 @@ describe('inspection contract API', () => {
               protocolRequest(
                 routeKey as keyof typeof protocolRouteBodies,
                 {
-                  inspector: inspectorCookie,
-                  supervisor: supervisorCookie,
+                  store_manager: inspectorCookie,
                   admin: hqCookie,
                 }[role],
               )
@@ -770,25 +720,25 @@ describe('inspection contract API', () => {
 
     const sites = await request(app.getHttpServer())
       .get('/api/admin/sites')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
     const allSites = adminSitesResponseSchema.parse(sites.body);
     expect(allSites.filter((site) => site.code.startsWith('NB-'))).toHaveLength(
-      6,
+      12,
     );
     expect(allSites.filter((site) => site.code === 'DEMO2-001')).toHaveLength(
       0,
     );
     expect(allSites.map((site) => site.code).sort()).toEqual(
       Array.from(
-        { length: 6 },
+        { length: 12 },
         (_, index) => `NB-${String(index + 1).padStart(3, '0')}`,
       ),
     );
 
     const createdSite = await request(app.getHttpServer())
       .post('/api/admin/sites')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ code: 'FW-011-TEMP', name: '临时门店' })
       .expect(201);
     expect(createdSite.body.active).toBe(true);
@@ -796,13 +746,13 @@ describe('inspection contract API', () => {
 
     const templates = await request(app.getHttpServer())
       .get('/api/admin/templates')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
     expect(adminTemplatesResponseSchema.parse(templates.body)).toHaveLength(1);
 
     const createdTemplate = await request(app.getHttpServer())
       .post('/api/admin/templates')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({
         name: 'FW-011 临时模板',
         items: [{ title: '测试项', photoRequired: false, critical: false }],
@@ -814,14 +764,14 @@ describe('inspection contract API', () => {
 
     const updatedSite = await request(app.getHttpServer())
       .patch(`/api/admin/sites/${createdSite.body.id}`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ active: false })
       .expect(200);
     siteResponseSchema.parse(updatedSite.body);
 
     const updatedTemplate = await request(app.getHttpServer())
       .put(`/api/admin/templates/${createdTemplate.body.id}`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({
         name: '开店检查更新',
         items: [
@@ -838,13 +788,13 @@ describe('inspection contract API', () => {
 
     const currentTemplate = await request(app.getHttpServer())
       .post(`/api/admin/templates/${createdTemplate.body.id}/current`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
     templateResponseSchema.parse(currentTemplate.body);
     expect(currentTemplate.body.isCurrent).toBe(true);
     await request(app.getHttpServer())
       .post(`/api/admin/templates/${templateId}/current`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
 
     for (const path of ['/api/admin/sites', '/api/admin/templates'])
@@ -886,7 +836,7 @@ describe('inspection contract API', () => {
       .expect(403);
     await request(app.getHttpServer())
       .get('/api/inspector/inspections')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(403);
   });
 
@@ -1009,11 +959,7 @@ describe('inspection contract API', () => {
   });
 
   it('hides Northbean inspection, evidence, and chat resources from every demo tenant role', async () => {
-    for (const cookie of [
-      demo2InspectorCookie,
-      demo2SupervisorCookie,
-      demo2AdminCookie,
-    ]) {
+    for (const cookie of [demo2InspectorCookie, demo2AdminCookie]) {
       await request(app.getHttpServer())
         .get(`/api/inspections/${inspectionId}`)
         .set('Cookie', cookie)
@@ -1073,8 +1019,8 @@ describe('inspection contract API', () => {
     }
     await request(app.getHttpServer())
       .post(`/api/inspections/${chatInspectionId}/messages`)
-      .set('Cookie', demo2SupervisorCookie)
-      .field('text', '跨商家消息不应写入')
+      .set('Cookie', demo2AdminCookie)
+      .field('text', '跨商家不能发言')
       .expect(404)
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
@@ -1087,7 +1033,7 @@ describe('inspection contract API', () => {
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
       );
-    for (const cookie of [demo2SupervisorCookie, demo2AdminCookie]) {
+    for (const cookie of [demo2AdminCookie]) {
       await request(app.getHttpServer())
         .get('/api/review/queue')
         .set('Cookie', cookie)
@@ -1131,32 +1077,7 @@ describe('inspection contract API', () => {
     ).toBe(false);
   });
 
-  it('limits supervisor inspection access to their assigned sites', async () => {
-    await request(app.getHttpServer())
-      .get(`/api/inspections/${otherSupervisorInspectionId}`)
-      .set('Cookie', supervisorCookie)
-      .expect(403)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('FORBIDDEN'),
-      );
-    await request(app.getHttpServer())
-      .get(`/api/inspections/${otherSupervisorInspectionId}/messages`)
-      .set('Cookie', supervisorCookie)
-      .expect(403)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('FORBIDDEN'),
-      );
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${otherSupervisorInspectionId}/review`)
-      .set('Cookie', supervisorCookie)
-      .send({ action: 'start' })
-      .expect(403)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('FORBIDDEN'),
-      );
-  });
-
-  it('shows supervisors only assigned sites and lets admins review an unassigned site', async () => {
+  it('lets admins review any site in their organization', async () => {
     const pool = createPool();
     let unassignedSiteId: string | undefined;
     let unassignedInspectionId: string | undefined;
@@ -1164,7 +1085,7 @@ describe('inspection contract API', () => {
       const site = await pool.query<{ id: string }>(
         `INSERT INTO floorwalk.sites (org_id, code, name)
          SELECT org_id, 'FW018-UNASSIGNED', '未指派主管门店'
-         FROM floorwalk.users WHERE email = 'hq@northbean.example'
+         FROM floorwalk.users WHERE login_name = 'hq@northbean.example'
          RETURNING id`,
       );
       unassignedSiteId = site.rows[0].id;
@@ -1172,55 +1093,12 @@ describe('inspection contract API', () => {
         `INSERT INTO floorwalk.inspections
            (site_id, template_id, inspector_id, status)
          SELECT $1, $2, id, 'submitted' FROM floorwalk.users
-         WHERE email = 'inspector@northbean.example'
+         WHERE login_name = 'inspector@northbean.example'
+           AND org_id = (SELECT org_id FROM floorwalk.sites WHERE id = $1)
          RETURNING id`,
         [unassignedSiteId, templateId],
       );
       unassignedInspectionId = inspection.rows[0].id;
-
-      const assignedCodes = Array.from(
-        { length: 6 },
-        (_, index) => `NB-${String(index + 1).padStart(3, '0')}`,
-      );
-      const supervisorSites = await request(app.getHttpServer())
-        .get('/api/admin/sites')
-        .set('Cookie', supervisorCookie)
-        .expect(200);
-      expect(
-        adminSitesResponseSchema
-          .parse(supervisorSites.body)
-          .map((entry) => entry.code)
-          .sort(),
-      ).toEqual(assignedCodes);
-
-      const supervisorDashboard = await request(app.getHttpServer())
-        .get('/api/dashboard/sites')
-        .set('Cookie', supervisorCookie)
-        .expect(200);
-      expect(
-        dashboardSitesResponseSchema
-          .parse(supervisorDashboard.body)
-          .map((entry) => entry.site.code),
-      ).toEqual(assignedCodes);
-
-      const supervisorQueue = await request(app.getHttpServer())
-        .get('/api/review/queue')
-        .set('Cookie', supervisorCookie)
-        .expect(200);
-      expect(
-        reviewQueueResponseSchema
-          .parse(supervisorQueue.body)
-          .every((entry) => assignedCodes.includes(entry.site.code)),
-      ).toBe(true);
-      await request(app.getHttpServer())
-        .get(`/api/inspections/${unassignedInspectionId}`)
-        .set('Cookie', supervisorCookie)
-        .expect(403);
-      await request(app.getHttpServer())
-        .post(`/api/inspections/${unassignedInspectionId}/review`)
-        .set('Cookie', supervisorCookie)
-        .send({ action: 'start' })
-        .expect(403);
 
       const adminDashboard = await request(app.getHttpServer())
         .get('/api/dashboard/sites')
@@ -1288,7 +1166,8 @@ describe('inspection contract API', () => {
          CROSS JOIN generate_series(1, 3)
          WHERE site.code = 'NB-001'
            AND site.org_id = (SELECT org.id FROM floorwalk.organizations org WHERE org.name = 'Northbean')
-           AND inspector.email = 'inspector@northbean.example'
+           AND inspector.login_name = 'inspector@northbean.example'
+           AND inspector.org_id = site.org_id
          RETURNING id`,
         [templateId, '2099-10-29T12:00:00.123456Z'],
       );
@@ -1345,7 +1224,7 @@ describe('inspection contract API', () => {
   it('supports chat text, images, access checks, and before/after pagination', async () => {
     const seeded = await request(app.getHttpServer())
       .get(`/api/inspections/${chatInspectionId}/messages`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
     const seedPage = chatMessagesResponseSchema.parse(seeded.body);
     expect(seedPage.messages).toHaveLength(2);
@@ -1362,17 +1241,18 @@ describe('inspection contract API', () => {
     await request(app.getHttpServer())
       .get(`/api/inspections/${chatInspectionId}/messages`)
       .set('Cookie', inspectorCookie)
-      .expect(403);
-    await request(app.getHttpServer())
+      .expect(404);
+    const adminReply = await request(app.getHttpServer())
       .post(`/api/inspections/${inspectionId}/messages`)
       .set('Cookie', hqCookie)
-      .field('text', '总部不能发言')
-      .expect(403);
+      .field('text', '管理员回复')
+      .expect(201);
+    createdChatMessageIds.push(chatMessageSchema.parse(adminReply.body).id);
     await request(app.getHttpServer())
       .post(`/api/inspections/${chatInspectionId}/messages`)
       .set('Cookie', inspectorCookie)
       .field('text', '外店不能发言')
-      .expect(403);
+      .expect(404);
 
     const textResponse = await request(app.getHttpServer())
       .post(`/api/inspections/${inspectionId}/messages`)
@@ -1388,7 +1268,7 @@ describe('inspection contract API', () => {
     );
     const imageResponse = await request(app.getHttpServer())
       .post(`/api/inspections/${inspectionId}/messages`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', inspectorCookie)
       .field('text', '这是补充照片。')
       .attach('file', image, {
         filename: 'chat.jpg',
@@ -1477,7 +1357,7 @@ describe('inspection contract API', () => {
 
     const imageBySeed = await request(app.getHttpServer())
       .get(`/api/messages/${chatImageMessageId}/image-url`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
     chatImageUrlResponseSchema.parse(imageBySeed.body);
   });
@@ -1545,11 +1425,23 @@ describe('inspection contract API', () => {
   });
 
   it('exposes every existing contracted endpoint with its response schema', async () => {
+    const loginChoices = await request(app.getHttpServer())
+      .post('/api/auth/session')
+      .send({
+        loginName: 'inspector@northbean.example',
+        password: 'northbean-demo',
+      })
+      .expect(201);
+    const orgId = loginChoices.body.organizations.find(
+      (org: { name: string }) => org.name === 'Northbean',
+    )?.id;
+    expect(orgId).toBeDefined();
     const login = await request(app.getHttpServer())
       .post('/api/auth/session')
       .send({
-        email: 'inspector@northbean.example',
+        loginName: 'inspector@northbean.example',
         password: 'northbean-demo',
+        orgId,
       })
       .expect(201);
     const me = await request(app.getHttpServer())
@@ -1793,7 +1685,7 @@ describe('inspection contract API', () => {
     ).toBe(true);
     const queue = await request(app.getHttpServer())
       .get('/api/review/queue')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
     const queueBody = reviewQueueResponseSchema.parse(queue.body);
     expect(queueBody.every((entry) => entry.site.code)).toBe(true);
@@ -1808,7 +1700,7 @@ describe('inspection contract API', () => {
     reviewResponseSchema.parse(reviewed.body);
     await request(app.getHttpServer())
       .post(`/api/inspections/${createdInspectionId}/review`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({
         action: 'rework',
         reworkItemIds: ['00000000-0000-4000-8000-000000000000'],
@@ -1819,7 +1711,7 @@ describe('inspection contract API', () => {
       );
     await request(app.getHttpServer())
       .post(`/api/inspections/${createdInspectionId}/review`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ action: 'approve' })
       .expect(201);
     await request(app.getHttpServer())
@@ -1905,12 +1797,12 @@ describe('inspection contract API', () => {
       .expect(201);
     await request(app.getHttpServer())
       .post(`/api/inspections/${criticalInspectionId}/review`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ action: 'start' })
       .expect(201);
     await request(app.getHttpServer())
       .post(`/api/inspections/${criticalInspectionId}/review`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ action: 'approve' })
       .expect(422)
       .expect(({ body }) =>
@@ -1947,7 +1839,7 @@ describe('inspection contract API', () => {
       );
     const dashboard = await request(app.getHttpServer())
       .get('/api/dashboard/sites')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
     dashboardSitesResponseSchema.parse(dashboard.body);
     expect(todayBody.template.items).toHaveLength(8);
@@ -1958,11 +1850,11 @@ describe('inspection contract API', () => {
     expect(deletedSession.text).toBe('');
     const chatListResponse = await request(app.getHttpServer())
       .get(`/api/inspections/${chatInspectionId}/messages`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
     const chatCreateResponse = await request(app.getHttpServer())
       .post(`/api/inspections/${inspectionId}/messages`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', inspectorCookie)
       .field('text', '路由表 schema 验证消息')
       .expect(201);
     createdChatMessageIds.push(
@@ -1970,7 +1862,7 @@ describe('inspection contract API', () => {
     );
     const chatImageUrlResponse = await request(app.getHttpServer())
       .get(`/api/messages/${chatImageMessageId}/image-url`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
     const recordListResponse = await request(app.getHttpServer())
       .get('/api/inspector/inspections')
@@ -1978,25 +1870,25 @@ describe('inspection contract API', () => {
       .expect(200);
     const adminSiteListResponse = await request(app.getHttpServer())
       .get('/api/admin/sites')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
     const adminSiteCreateResponse = await request(app.getHttpServer())
       .post('/api/admin/sites')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ code: 'FW-011-ROUTE', name: '路由表测试门店' })
       .expect(201);
     const adminSiteUpdateResponse = await request(app.getHttpServer())
       .patch(`/api/admin/sites/${adminSiteCreateResponse.body.id}`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ active: false })
       .expect(200);
     const adminTemplateListResponse = await request(app.getHttpServer())
       .get('/api/admin/templates')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
     const adminTemplateCreateResponse = await request(app.getHttpServer())
       .post('/api/admin/templates')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({
         name: 'FW-011 路由表测试模板',
         items: [{ title: '测试项', photoRequired: false, critical: false }],
@@ -2004,7 +1896,7 @@ describe('inspection contract API', () => {
       .expect(201);
     const adminTemplateUpdateResponse = await request(app.getHttpServer())
       .put(`/api/admin/templates/${adminTemplateCreateResponse.body.id}`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({
         name: 'FW-011 路由表测试模板更新',
         items: [
@@ -2021,7 +1913,7 @@ describe('inspection contract API', () => {
       .post(
         `/api/admin/templates/${adminTemplateCreateResponse.body.id}/current`,
       )
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
     createdAdminSiteIds.push(adminSiteCreateResponse.body.id);
     createdAdminTemplateIds.push(adminTemplateCreateResponse.body.id);
@@ -2053,22 +1945,12 @@ describe('inspection contract API', () => {
     };
     for (const [routeKey, route] of Object.entries(apiRoutes)) {
       if (Object.hasOwn(protocolRouteBodies, routeKey)) {
-        const response =
-          routeKey === 'setSiteSupervisor'
-            ? await request(app.getHttpServer())
-                .put(
-                  `/api/admin/sites/${adminSiteCreateResponse.body.id}/supervisor`,
-                )
-                .set('Cookie', hqCookie)
-                .send({ userId: null })
-            : await protocolRequest(
-                routeKey as keyof typeof protocolRouteBodies,
-                hqCookie,
-              );
+        const response = await protocolRequest(
+          routeKey as keyof typeof protocolRouteBodies,
+          hqCookie,
+        );
         expect(response.status).toBe(
-          routeKey === 'createOrg' ||
-            routeKey === 'setSiteSupervisor' ||
-            routeKey === 'listAdminUsers'
+          routeKey === 'createOrg' || routeKey === 'listAdminUsers'
             ? route.successStatus
             : routeKey === 'createAdminUser'
               ? 400
@@ -2082,10 +1964,7 @@ describe('inspection contract API', () => {
         if (routeKey === 'createOrg') {
           route.responseSchema.parse(response.body);
           createdProtocolOrgIds.push(response.body.org.id);
-        } else if (
-          routeKey === 'setSiteSupervisor' ||
-          routeKey === 'listAdminUsers'
-        ) {
+        } else if (routeKey === 'listAdminUsers') {
           route.responseSchema.parse(response.body);
         }
       } else {
@@ -2103,7 +1982,7 @@ describe('inspection contract API', () => {
   it('normalizes validation, not found, and CORS responses', async () => {
     await request(app.getHttpServer())
       .post('/api/auth/session')
-      .send({ email: 'invalid' })
+      .send({ loginName: 'invalid' })
       .expect(400)
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),

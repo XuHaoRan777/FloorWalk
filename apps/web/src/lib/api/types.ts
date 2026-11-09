@@ -1,8 +1,8 @@
-export type Role = 'inspector' | 'supervisor' | 'admin';
+export type Role = 'store_manager' | 'admin';
 
 export type User = {
   id: string;
-  email: string;
+  loginName: string;
   displayName: string;
   role: Role;
   siteId: string | null;

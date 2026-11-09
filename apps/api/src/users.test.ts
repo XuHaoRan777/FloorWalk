@@ -17,14 +17,13 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
   let app: NestExpressApplication;
   let pool: Pool;
   let adminCookie: string;
-  let supervisorCookie: string;
+  let managerCookie: string;
   let siteId: string;
   let foreignSiteId: string;
   let adminId: string;
-  let supervisorId: string;
   const createdUserIds: string[] = [];
   const sessionHashes: string[] = [];
-  const newEmail = () => `fw020-${randomUUID()}@example.test`;
+  const newLoginName = () => `fw020-${randomUUID()}@example.test`;
   const cookieFrom = (response: request.Response) => {
     const cookie = (
       response.headers['set-cookie'] as unknown as string[]
@@ -32,10 +31,10 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
     sessionHashes.push(hashSessionId(cookie.slice('fw_session='.length)));
     return cookie;
   };
-  const login = async (email: string, password = 'northbean-demo') => {
+  const login = async (loginName: string, password = 'northbean-demo') => {
     const response = await request(app.getHttpServer())
       .post('/api/auth/session')
-      .send({ email, password })
+      .send({ loginName, password })
       .expect(201);
     return cookieFrom(response);
   };
@@ -59,10 +58,9 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
     siteId = rows.rows.find((row) => row.code === 'NB-001')!.id;
     foreignSiteId = rows.rows.find((row) => row.code === 'DEMO2-001')!.id;
     const identities = await pool.query<{ id: string; role: string }>(
-      "SELECT id, role FROM floorwalk.users WHERE email IN ('hq@northbean.example', 'supervisor@northbean.example')",
+      "SELECT id, role FROM floorwalk.users WHERE login_name = 'hq@northbean.example'",
     );
     adminId = identities.rows.find((row) => row.role === 'admin')!.id;
-    supervisorId = identities.rows.find((row) => row.role === 'supervisor')!.id;
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -70,7 +68,7 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
     app.useGlobalFilters(new HttpErrorFilter());
     await app.init();
     adminCookie = await login('hq@northbean.example');
-    supervisorCookie = await login('supervisor@northbean.example');
+    managerCookie = await login('manager2@northbean.example');
   }, 60000);
 
   afterAll(async () => {
@@ -90,19 +88,19 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
   });
 
   it('creates an inspector with a hashed initial password and rejects invalid inputs', async () => {
-    const email = newEmail();
+    const loginName = newLoginName();
     const response = await create(adminCookie, {
-      email,
+      loginName,
       displayName: '测试店员',
-      role: 'inspector',
+      role: 'store_manager',
       siteId,
       password: 'initial-password',
     }).expect(201);
     const user = adminUserSchema.parse(response.body);
     createdUserIds.push(user.id);
     expect(user).toMatchObject({
-      email,
-      role: 'inspector',
+      loginName,
+      role: 'store_manager',
       siteId,
       mustChangePassword: true,
       disabled: false,
@@ -115,18 +113,18 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
       await argon2.verify(stored.rows[0].password_hash, 'initial-password'),
     ).toBe(true);
     const missingSite = await create(adminCookie, {
-      email: newEmail(),
+      loginName: newLoginName(),
       displayName: '无门店店员',
-      role: 'inspector',
+      role: 'store_manager',
       password: 'initial-password',
     }).expect(400);
     expect(errorResponseSchema.parse(missingSite.body).code).toBe(
       'VALIDATION_FAILED',
     );
     const shortPassword = await create(adminCookie, {
-      email: newEmail(),
+      loginName: newLoginName(),
       displayName: '短密码店员',
-      role: 'inspector',
+      role: 'store_manager',
       siteId,
       password: 'short',
     }).expect(400);
@@ -134,17 +132,17 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
       'VALIDATION_FAILED',
     );
     const foreignSite = await create(adminCookie, {
-      email: newEmail(),
+      loginName: newLoginName(),
       displayName: '外商家店员',
-      role: 'inspector',
+      role: 'store_manager',
       siteId: foreignSiteId,
       password: 'initial-password',
     }).expect(404);
     expect(errorResponseSchema.parse(foreignSite.body).code).toBe('NOT_FOUND');
     const duplicate = await create(adminCookie, {
-      email,
+      loginName,
       displayName: '重复账号',
-      role: 'inspector',
+      role: 'store_manager',
       siteId,
       password: 'initial-password',
     }).expect(409);
@@ -153,100 +151,29 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
     );
   });
 
-  it('limits supervisors to creating inspectors at their assigned sites', async () => {
-    const response = await create(supervisorCookie, {
-      email: newEmail(),
-      displayName: '主管创建店员',
-      role: 'inspector',
+  it('forbids store managers from creating accounts', async () => {
+    const denied = await create(managerCookie, {
+      loginName: newLoginName(),
+      displayName: '店长创建账号',
+      role: 'store_manager',
       siteId,
       password: 'initial-password',
-    }).expect(201);
-    createdUserIds.push(adminUserSchema.parse(response.body).id);
-    const forbiddenRole = await create(supervisorCookie, {
-      email: newEmail(),
-      displayName: '主管创建管理员',
-      role: 'admin',
-      password: 'initial-password',
     }).expect(403);
-    expect(errorResponseSchema.parse(forbiddenRole.body).code).toBe(
-      'FORBIDDEN',
-    );
-    const otherSite = await pool.query<{ id: string }>(
-      "SELECT id FROM floorwalk.sites WHERE code = 'NB-007'",
-    );
-    const notAssigned = await create(supervisorCookie, {
-      email: newEmail(),
-      displayName: '非名下门店店员',
-      role: 'inspector',
-      siteId: otherSite.rows[0].id,
-      password: 'initial-password',
-    }).expect(403);
-    expect(errorResponseSchema.parse(notAssigned.body).code).toBe('FORBIDDEN');
-  });
-
-  it('rechecks supervisor assignment after waiting for a concurrent reassignment', async () => {
-    const blocker = await pool.connect();
-    let pending: Promise<request.Response> | undefined;
-    try {
-      await blocker.query('BEGIN');
-      await blocker.query(
-        'SELECT id FROM floorwalk.sites WHERE id = $1 FOR UPDATE',
-        [siteId],
-      );
-      const owner = await blocker.query<{ pid: number }>(
-        'SELECT pg_backend_pid() AS pid',
-      );
-      pending = create(supervisorCookie, {
-        email: newEmail(),
-        displayName: '指派变更中的店员',
-        role: 'inspector',
-        siteId,
-        password: 'initial-password',
-      }).then((response) => response);
-      await expect
-        .poll(async () => {
-          const waiting = await pool.query<{ count: string }>(
-            `SELECT count(*)::text AS count FROM pg_stat_activity
-             WHERE datname = current_database()
-               AND $1 = ANY(pg_blocking_pids(pid))
-               AND query LIKE '%FROM floorwalk.sites%FOR UPDATE%'`,
-            [owner.rows[0].pid],
-          );
-          return Number(waiting.rows[0].count);
-        })
-        .toBe(1);
-      await blocker.query(
-        'DELETE FROM floorwalk.site_supervisors WHERE site_id = $1',
-        [siteId],
-      );
-      await blocker.query('COMMIT');
-      const denied = await pending;
-      expect(denied.status).toBe(403);
-      expect(errorResponseSchema.parse(denied.body).code).toBe('FORBIDDEN');
-    } finally {
-      await blocker.query('ROLLBACK');
-      await pending;
-      await pool.query(
-        `INSERT INTO floorwalk.site_supervisors (site_id, user_id)
-         VALUES ($1, $2) ON CONFLICT (site_id) DO UPDATE SET user_id = EXCLUDED.user_id`,
-        [siteId, supervisorId],
-      );
-      blocker.release();
-    }
+    expect(errorResponseSchema.parse(denied.body).code).toBe('FORBIDDEN');
   });
 
   it('disables users by revoking every session, blocks login, then allows re-enable', async () => {
     const created = await create(adminCookie, {
-      email: newEmail(),
+      loginName: newLoginName(),
       displayName: '停用测试',
-      role: 'inspector',
+      role: 'store_manager',
       siteId,
       password: 'initial-password',
     }).expect(201);
     const user = adminUserSchema.parse(created.body);
     createdUserIds.push(user.id);
-    const firstCookie = await login(user.email, 'initial-password');
-    const secondCookie = await login(user.email, 'initial-password');
+    const firstCookie = await login(user.loginName, 'initial-password');
+    const secondCookie = await login(user.loginName, 'initial-password');
     await patchUser(user.id).send({ disabled: true }).expect(200);
     await request(app.getHttpServer())
       .get('/api/me')
@@ -254,7 +181,7 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
       .expect(401);
     await request(app.getHttpServer())
       .post('/api/auth/session')
-      .send({ email: user.email, password: 'initial-password' })
+      .send({ loginName: user.loginName, password: 'initial-password' })
       .expect(401);
     const hashes = [firstCookie, secondCookie].map((cookie) =>
       hashSessionId(cookie.slice('fw_session='.length)),
@@ -268,22 +195,19 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
       sessionRows.rows.every((row) => row.revoked_at instanceof Date),
     ).toBe(true);
     await patchUser(user.id).send({ disabled: false }).expect(200);
-    await login(user.email, 'initial-password');
+    await login(user.loginName, 'initial-password');
   });
 
-  it('rejects supervisor access outside assigned inspector accounts and hides other organizations', async () => {
+  it('rejects manager access and hides other organizations', async () => {
     const otherInspector = await pool.query<{ id: string }>(
-      "SELECT id FROM floorwalk.users WHERE email = 'inspector+nb-007@northbean.example'",
+      "SELECT id FROM floorwalk.users WHERE login_name = 'inspector+nb-007@northbean.example'",
     );
-    const forbidden = await patchUser(
-      otherInspector.rows[0].id,
-      supervisorCookie,
-    )
+    const forbidden = await patchUser(otherInspector.rows[0].id, managerCookie)
       .send({ disabled: true })
       .expect(403);
     expect(errorResponseSchema.parse(forbidden.body).code).toBe('FORBIDDEN');
     const otherAdmin = await pool.query<{ id: string }>(
-      "SELECT id FROM floorwalk.users WHERE email = 'admin@demo2.example'",
+      "SELECT id FROM floorwalk.users WHERE login_name = 'admin@demo2.example'",
     );
     const hidden = await patchUser(otherAdmin.rows[0].id)
       .send({ disabled: true })
@@ -295,12 +219,8 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
     expect(errorResponseSchema.parse(lastAdmin.body).code).toBe(
       'INVALID_STATE',
     );
-    const localSupervisor = await pool.query<{ id: string }>(
-      "SELECT id FROM floorwalk.users WHERE role = 'supervisor' AND org_id = (SELECT org_id FROM floorwalk.users WHERE id = $1) LIMIT 1",
-      [adminId],
-    );
-    for (const id of [adminId, localSupervisor.rows[0].id]) {
-      const denied = await patchUser(id, supervisorCookie)
+    for (const id of [adminId, otherInspector.rows[0].id]) {
+      const denied = await patchUser(id, managerCookie)
         .send({ disabled: true })
         .expect(403);
       expect(errorResponseSchema.parse(denied.body).code).toBe('FORBIDDEN');
@@ -309,16 +229,16 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
 
   it('resets a password, requires the next login to change it, and revokes all sessions', async () => {
     const created = await create(adminCookie, {
-      email: newEmail(),
+      loginName: newLoginName(),
       displayName: '重置测试',
-      role: 'inspector',
+      role: 'store_manager',
       siteId,
       password: 'initial-password',
     }).expect(201);
     const user = adminUserSchema.parse(created.body);
     createdUserIds.push(user.id);
-    const firstCookie = await login(user.email, 'initial-password');
-    const secondCookie = await login(user.email, 'initial-password');
+    const firstCookie = await login(user.loginName, 'initial-password');
+    const secondCookie = await login(user.loginName, 'initial-password');
     const reset = await request(app.getHttpServer())
       .post('/api/admin/users/' + user.id + '/password')
       .set('Cookie', adminCookie)
@@ -351,9 +271,9 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
       .expect(401);
     await request(app.getHttpServer())
       .post('/api/auth/session')
-      .send({ email: user.email, password: 'initial-password' })
+      .send({ loginName: user.loginName, password: 'initial-password' })
       .expect(401);
-    const newCookie = await login(user.email, 'reset-password');
+    const newCookie = await login(user.loginName, 'reset-password');
     const blocked = await request(app.getHttpServer())
       .get('/api/inspector/today')
       .set('Cookie', newCookie)
@@ -367,15 +287,15 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
 
   it('does not let an in-flight password change overwrite an administrator reset', async () => {
     const created = await create(adminCookie, {
-      email: newEmail(),
+      loginName: newLoginName(),
       displayName: '并发重置测试',
-      role: 'inspector',
+      role: 'store_manager',
       siteId,
       password: 'initial-password',
     }).expect(201);
     const user = adminUserSchema.parse(created.body);
     createdUserIds.push(user.id);
-    const cookie = await login(user.email, 'initial-password');
+    const cookie = await login(user.loginName, 'initial-password');
     const tokenHash = hashSessionId(cookie.slice('fw_session='.length));
     const blocker = await pool.connect();
     let pending: Promise<request.Response> | undefined;
@@ -439,16 +359,16 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
 
   it('changes the initial password, retains this session, and revokes others', async () => {
     const created = await create(adminCookie, {
-      email: newEmail(),
+      loginName: newLoginName(),
       displayName: '首次改密测试',
-      role: 'inspector',
+      role: 'store_manager',
       siteId,
       password: 'initial-password',
     }).expect(201);
     const user = adminUserSchema.parse(created.body);
     createdUserIds.push(user.id);
-    const currentCookie = await login(user.email, 'initial-password');
-    const otherCookie = await login(user.email, 'initial-password');
+    const currentCookie = await login(user.loginName, 'initial-password');
+    const otherCookie = await login(user.loginName, 'initial-password');
 
     await request(app.getHttpServer())
       .get('/api/inspector/today')
@@ -501,6 +421,6 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
       [user.id],
     );
     expect(state.rows[0].must_change_password).toBe(false);
-    await login(user.email, 'changed-password');
+    await login(user.loginName, 'changed-password');
   });
 });

@@ -17,6 +17,10 @@ export function HomePage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [organizations, setOrganizations] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [orgId, setOrgId] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [checkingSession, setCheckingSession] = useState(
@@ -55,8 +59,13 @@ export function HomePage() {
     event.preventDefault();
     setBusy(true);
     setError('');
-    void login(email, password)
+    void login(email.trim(), password, orgId || undefined)
       .then((session) => {
+        if ('organizations' in session) {
+          setOrganizations(session.organizations);
+          setOrgId('');
+          return;
+        }
         writeSession(session);
         void navigate({
           to: session.user.mustChangePassword ? '/change-password' : '/console',
@@ -92,7 +101,7 @@ export function HomePage() {
         <div className="fw-login__intro">
           <p className="fw-page-eyebrow">连锁门店运营</p>
           <h1>让每一次巡检都有据可循。</h1>
-          <p>店员现场记录，主管审核，总部掌握每家门店的最近表现。</p>
+          <p>店长现场记录，商家管理员审核并掌握门店表现。</p>
           <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
             <ShieldCheck className="size-4" aria-hidden="true" />
             账号权限按角色分流
@@ -102,7 +111,7 @@ export function HomePage() {
           <div>
             <h2 id="login-heading">登录工作台</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              使用企业邮箱和密码继续。
+              使用登录名和密码继续。
             </p>
           </div>
           <form className="mt-6 grid gap-4" onSubmit={onSubmit}>
@@ -120,16 +129,20 @@ export function HomePage() {
             )}
             <div className="grid gap-2">
               <label htmlFor="email" className="text-sm font-medium">
-                邮箱
+                登录名
               </label>
               <input
                 id="email"
                 name="email"
-                type="email"
+                type="text"
                 autoComplete="username"
                 required
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setOrganizations([]);
+                  setOrgId('');
+                }}
                 className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
@@ -144,10 +157,32 @@ export function HomePage() {
                 autoComplete="current-password"
                 required
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  setOrganizations([]);
+                  setOrgId('');
+                }}
                 className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
+            {organizations.length > 0 && (
+              <label className="grid gap-2 text-sm font-medium">
+                选择商家
+                <select
+                  required
+                  value={orgId}
+                  onChange={(event) => setOrgId(event.target.value)}
+                  className="h-10 rounded-md border bg-background px-3 text-sm"
+                >
+                  <option value="">请选择商家</option>
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <Button type="submit" className="mt-2" disabled={busy}>
               {busy ? (
                 '正在登录…'

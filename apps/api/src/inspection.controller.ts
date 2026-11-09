@@ -152,6 +152,10 @@ export class InspectionController {
          RETURNING id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt"`,
         [request.user.siteId, input.templateId, request.user.id],
       );
+      await client.query(
+        'INSERT INTO floorwalk.inspection_participants (inspection_id, user_id) VALUES ($1, $2)',
+        [inspection.rows[0].id, request.user.id],
+      );
       const items = await client.query(
         'SELECT position, title, photo_required, critical FROM floorwalk.template_items WHERE template_id = $1 ORDER BY position',
         [input.templateId],
@@ -211,9 +215,8 @@ export class InspectionController {
       await client.query('BEGIN');
       const inspectionResult = await client.query(
         `SELECT i.id, i.site_id AS "siteId", i.inspector_id AS "inspectorId", i.status,
-            s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+            s.org_id AS "orgId"
          FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
-         LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
          WHERE i.id = $1 FOR UPDATE OF i`,
         [id],
       );
@@ -243,6 +246,10 @@ export class InspectionController {
           code: 'NOT_FOUND',
           message: '检查项不存在。',
         });
+      await client.query(
+        'INSERT INTO floorwalk.inspection_participants (inspection_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [id, request.user.id],
+      );
       const evidence = await client.query(
         `SELECT id, inspection_item_id AS "inspectionItemId", storage_key AS "storageKey",
           mime, size, created_at AS "createdAt"
@@ -283,9 +290,8 @@ export class InspectionController {
       const inspectionResult = await client.query(
         `SELECT i.id, i.site_id AS "siteId", i.template_id AS "templateId", i.inspector_id AS "inspectorId",
             i.status, i.score, i.submitted_at AS "submittedAt", i.decided_at AS "decidedAt",
-            i.created_at AS "createdAt", s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+            i.created_at AS "createdAt", s.org_id AS "orgId"
          FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
-         LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
          WHERE i.id = $1 FOR UPDATE OF i`,
         [id],
       );

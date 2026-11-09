@@ -19,7 +19,6 @@ import { HttpErrorFilter } from './http-exception.filter.js';
 describe('admin API', () => {
   let app: NestExpressApplication;
   let inspectorCookie: string;
-  let supervisorCookie: string;
   let hqCookie: string;
   let initialCurrentTemplateId: string;
   const testCodePrefix = `FW013-${randomUUID()}`;
@@ -45,18 +44,17 @@ describe('admin API', () => {
       await initialPool.end();
     }
 
-    const login = async (email: string) => {
+    const login = async (loginName: string) => {
       const response = await request(app.getHttpServer())
         .post('/api/auth/session')
-        .send({ email, password: 'northbean-demo' })
+        .send({ loginName, password: 'northbean-demo' })
         .expect(201);
       loginResponseSchema.parse(response.body);
       return (response.headers['set-cookie'] as unknown as string[])[0].split(
         ';',
       )[0];
     };
-    inspectorCookie = await login('inspector@northbean.example');
-    supervisorCookie = await login('supervisor@northbean.example');
+    inspectorCookie = await login('manager2@northbean.example');
     hqCookie = await login('hq@northbean.example');
   }, 60000);
 
@@ -129,7 +127,7 @@ describe('admin API', () => {
   it('persists site creation, rename, deactivation, and reactivation', async () => {
     const created = await request(app.getHttpServer())
       .post('/api/admin/sites')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ code: `${testCodePrefix}-A`, name: '新门店' })
       .expect(201);
     const site = siteResponseSchema.parse(created.body);
@@ -144,7 +142,7 @@ describe('admin API', () => {
 
     const deactivated = await request(app.getHttpServer())
       .patch(`/api/admin/sites/${site.id}`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ active: false })
       .expect(200);
     expect(siteResponseSchema.parse(deactivated.body).active).toBe(false);
@@ -176,18 +174,16 @@ describe('admin API', () => {
     }
   });
 
-  it('allows both administrator roles and rejects inspector access to every site endpoint', async () => {
-    for (const cookie of [supervisorCookie, hqCookie]) {
-      await request(app.getHttpServer())
-        .get('/api/admin/sites')
-        .set('Cookie', cookie)
-        .expect(200);
-      await request(app.getHttpServer())
-        .post('/api/admin/sites')
-        .set('Cookie', cookie)
-        .send({ code: `${testCodePrefix}-${randomUUID()}`, name: '权限门店' })
-        .expect(201);
-    }
+  it('allows administrator and rejects store manager access to every site endpoint', async () => {
+    await request(app.getHttpServer())
+      .get('/api/admin/sites')
+      .set('Cookie', hqCookie)
+      .expect(200);
+    await request(app.getHttpServer())
+      .post('/api/admin/sites')
+      .set('Cookie', hqCookie)
+      .send({ code: `${testCodePrefix}-${randomUUID()}`, name: '权限门店' })
+      .expect(201);
 
     await request(app.getHttpServer())
       .get('/api/admin/sites')
@@ -200,7 +196,7 @@ describe('admin API', () => {
       .expect(403);
     const created = await request(app.getHttpServer())
       .post('/api/admin/sites')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ code: `${testCodePrefix}-UPDATE-DENIED`, name: '权限门店' })
       .expect(201);
     await request(app.getHttpServer())
@@ -213,13 +209,13 @@ describe('admin API', () => {
   it('returns 400 for invalid input, 409 for duplicate codes, and 404 for missing sites', async () => {
     await request(app.getHttpServer())
       .post('/api/admin/sites')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ code: '', name: '无效门店' })
       .expect(400);
 
     await request(app.getHttpServer())
       .post('/api/admin/sites')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ code: `${testCodePrefix}-DUP`, name: '重复门店' })
       .expect(201);
     await request(app.getHttpServer())
@@ -230,12 +226,12 @@ describe('admin API', () => {
 
     await request(app.getHttpServer())
       .patch(`/api/admin/sites/${randomUUID()}`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ name: '不存在' })
       .expect(404);
     await request(app.getHttpServer())
       .patch('/api/admin/sites/not-a-uuid')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ name: '无效 ID' })
       .expect(400);
   });
@@ -243,7 +239,7 @@ describe('admin API', () => {
   it('persists templates transactionally and keeps submitted inspection snapshots unchanged', async () => {
     const created = await request(app.getHttpServer())
       .post('/api/admin/templates')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 模板`,
         items: [
@@ -329,7 +325,7 @@ describe('admin API', () => {
 
     const selected = await request(app.getHttpServer())
       .post(`/api/admin/templates/${template.id}/current`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
     expect(templateResponseSchema.parse(selected.body).isCurrent).toBe(true);
     const listed = await request(app.getHttpServer())
@@ -356,11 +352,10 @@ describe('admin API', () => {
   });
 
   it('allows administrator template access and rejects inspector requests', async () => {
-    for (const cookie of [supervisorCookie, hqCookie])
-      await request(app.getHttpServer())
-        .get('/api/admin/templates')
-        .set('Cookie', cookie)
-        .expect(200);
+    await request(app.getHttpServer())
+      .get('/api/admin/templates')
+      .set('Cookie', hqCookie)
+      .expect(200);
 
     await request(app.getHttpServer())
       .get('/api/admin/templates')
@@ -376,7 +371,7 @@ describe('admin API', () => {
       .expect(403);
     const template = await request(app.getHttpServer())
       .post('/api/admin/templates')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 权限模板`,
         items: [{ title: '项', photoRequired: false, critical: false }],
@@ -407,13 +402,13 @@ describe('admin API', () => {
   it('validates template items, duplicate names, and missing templates', async () => {
     await request(app.getHttpServer())
       .post('/api/admin/templates')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({ name: `${testCodePrefix} 空模板`, items: [] })
       .expect(400);
 
     const created = await request(app.getHttpServer())
       .post('/api/admin/templates')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 冲突模板`,
         items: [{ title: '项', photoRequired: false, critical: false }],
@@ -430,7 +425,7 @@ describe('admin API', () => {
       .expect(409);
     const otherTemplate = await request(app.getHttpServer())
       .post('/api/admin/templates')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 另一模板`,
         items: [{ title: '另一项', photoRequired: false, critical: false }],
@@ -454,7 +449,7 @@ describe('admin API', () => {
       .expect(409);
     const retained = await request(app.getHttpServer())
       .get('/api/admin/templates')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .expect(200);
     expect(
       retained.body.find((item: { id: string }) => item.id === created.body.id)
@@ -462,7 +457,7 @@ describe('admin API', () => {
     ).toBe(`${testCodePrefix} 冲突模板`);
     await request(app.getHttpServer())
       .put(`/api/admin/templates/${created.body.id}`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 冲突模板`,
         items: [
@@ -472,7 +467,7 @@ describe('admin API', () => {
       .expect(400);
     await request(app.getHttpServer())
       .put(`/api/admin/templates/${created.body.id}`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 冲突模板`,
         items: [
@@ -482,7 +477,7 @@ describe('admin API', () => {
       .expect(200);
     await request(app.getHttpServer())
       .put(`/api/admin/templates/${randomUUID()}`)
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 不存在`,
         items: [
@@ -554,7 +549,7 @@ describe('admin API', () => {
     const initialToday = todayResponseSchema.parse(todayBefore.body);
     const template = await request(app.getHttpServer())
       .post('/api/admin/templates')
-      .set('Cookie', supervisorCookie)
+      .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 停用测试模板`,
         items: [
@@ -587,7 +582,7 @@ describe('admin API', () => {
     try {
       await request(app.getHttpServer())
         .patch(`/api/admin/sites/${initialToday.site.id}`)
-        .set('Cookie', supervisorCookie)
+        .set('Cookie', hqCookie)
         .send({ active: false })
         .expect(200);
       const stopped = await request(app.getHttpServer())
@@ -618,19 +613,19 @@ describe('admin API', () => {
 
       await request(app.getHttpServer())
         .post(`/api/inspections/${created.body.id}/review`)
-        .set('Cookie', supervisorCookie)
+        .set('Cookie', hqCookie)
         .send({ action: 'start' })
         .expect(201);
       const reviewed = await request(app.getHttpServer())
         .post(`/api/inspections/${created.body.id}/review`)
-        .set('Cookie', supervisorCookie)
+        .set('Cookie', hqCookie)
         .send({ action: 'approve' })
         .expect(201);
       expect(reviewed.body.status).toBe('passed');
     } finally {
       await request(app.getHttpServer())
         .patch(`/api/admin/sites/${initialToday.site.id}`)
-        .set('Cookie', supervisorCookie)
+        .set('Cookie', hqCookie)
         .send({ active: true })
         .expect(200);
     }

@@ -30,6 +30,7 @@ import { DATABASE_POOL } from './db/pool.provider.js';
 import {
   assertInspectionAccess,
   assertRole,
+  getInspectionAccess,
   iso,
   type AuthedRequest,
   type UploadedImage,
@@ -64,8 +65,7 @@ export class ChatController {
       before: request.query.before,
       limit: request.query.limit,
     }) as { after?: string; before?: string; limit: number };
-    const inspection = await this.getInspection(id);
-    assertInspectionAccess(inspection, request.user);
+    await getInspectionAccess(this.pool, id, request.user);
 
     const direction =
       query.before !== undefined
@@ -182,13 +182,9 @@ export class ChatController {
   ) {
     assertRole(request.user, ...apiRoutes.getMessageImageUrl.roles);
     const result = await this.pool.query(
-      `SELECT m.storage_key AS "storageKey", i.site_id AS "siteId",
-          i.id, i.inspector_id AS "inspectorId", s.org_id AS "orgId",
-          ss.user_id AS "supervisorUserId"
+      `SELECT m.storage_key AS "storageKey", i.id
        FROM floorwalk.chat_messages m
        JOIN floorwalk.inspections i ON i.id = m.inspection_id
-       JOIN floorwalk.sites s ON s.id = i.site_id
-       LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
        WHERE m.id = $1`,
       [id],
     );
@@ -198,7 +194,7 @@ export class ChatController {
         code: 'NOT_FOUND',
         message: '聊天图片不存在。',
       });
-    assertInspectionAccess(message, request.user);
+    await getInspectionAccess(this.pool, message.id, request.user);
     return chatImageUrlResponseSchema.parse(
       await this.signImage(message.storageKey),
     );
@@ -207,9 +203,8 @@ export class ChatController {
   private async getInspection(id: string) {
     const result = await this.pool.query(
       `SELECT i.id, i.site_id AS "siteId", i.inspector_id AS "inspectorId",
-          s.org_id AS "orgId", ss.user_id AS "supervisorUserId"
+          s.org_id AS "orgId"
        FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
-       LEFT JOIN floorwalk.site_supervisors ss ON ss.site_id = s.id
        WHERE i.id = $1`,
       [id],
     );

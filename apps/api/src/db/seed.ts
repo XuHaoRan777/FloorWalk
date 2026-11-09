@@ -58,7 +58,7 @@ export async function seedDatabase(
     );
     previousKeys = previousFiles.rows.map((row) => row.storage_key);
     await client.query(
-      'TRUNCATE TABLE floorwalk.chat_messages, floorwalk.sessions, floorwalk.reviews, floorwalk.evidence, floorwalk.inspection_items, floorwalk.inspections, floorwalk.site_supervisors, floorwalk.users, floorwalk.template_items, floorwalk.templates, floorwalk.sites, floorwalk.organizations RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE floorwalk.chat_messages, floorwalk.sessions, floorwalk.reviews, floorwalk.evidence, floorwalk.inspection_participants, floorwalk.inspection_items, floorwalk.inspections, floorwalk.users, floorwalk.template_items, floorwalk.templates, floorwalk.sites, floorwalk.organizations RESTART IDENTITY CASCADE',
     );
     const orgResult = await client.query<{ id: string }>(
       `INSERT INTO floorwalk.organizations (name) VALUES ('Northbean') RETURNING id`,
@@ -87,41 +87,22 @@ export async function seedDatabase(
           ? 'inspector@northbean.example'
           : `inspector+nb-${String(index).padStart(3, '0')}@northbean.example`;
       const result = await client.query<{ id: string }>(
-        `INSERT INTO floorwalk.users (org_id, email, password_hash, display_name, role, site_id)
-         VALUES ($1, $2, $3, $4, 'inspector', $5) RETURNING id`,
-        [orgId, email, passwordHash, `Northbean ${code} 店员`, sites.get(code)],
+        `INSERT INTO floorwalk.users (org_id, login_name, password_hash, display_name, role, site_id)
+         VALUES ($1, $2, $3, $4, 'store_manager', $5) RETURNING id`,
+        [orgId, email, passwordHash, `Northbean ${code} 店长`, sites.get(code)],
       );
       inspectors.set(code, result.rows[0].id);
     }
-    const supervisorResult = await client.query<{ id: string }>(
-      `INSERT INTO floorwalk.users (org_id, email, password_hash, display_name, role, site_id)
-       VALUES ($1, 'supervisor@northbean.example', $2, 'Northbean 主管', 'supervisor', NULL)
-       RETURNING id`,
-      [orgId, passwordHash],
-    );
-    const secondSupervisorResult = await client.query<{ id: string }>(
-      `INSERT INTO floorwalk.users (org_id, email, password_hash, display_name, role, site_id)
-       VALUES ($1, 'supervisor+2@northbean.example', $2, 'Northbean 主管二', 'supervisor', NULL)
-       RETURNING id`,
+    const adminResult = await client.query<{ id: string }>(
+      `INSERT INTO floorwalk.users (org_id, login_name, password_hash, display_name, role, site_id)
+       VALUES ($1, 'hq@northbean.example', $2, 'Northbean 商家管理员', 'admin', NULL) RETURNING id`,
       [orgId, passwordHash],
     );
     await client.query(
-      `INSERT INTO floorwalk.users (org_id, email, password_hash, display_name, role, site_id)
-       VALUES ($1, 'hq@northbean.example', $2, 'Northbean 商家管理员', 'admin', NULL)`,
-      [orgId, passwordHash],
+      `INSERT INTO floorwalk.users (org_id, login_name, password_hash, display_name, role, site_id)
+       VALUES ($1, 'manager2@northbean.example', $2, 'Northbean NB-001 店长二', 'store_manager', $3)`,
+      [orgId, passwordHash, sites.get('NB-001')],
     );
-    const supervisorBySite = new Map<string, string>();
-    for (const [code, siteId] of sites) {
-      const supervisorId =
-        Number(code.slice(3)) <= 6
-          ? supervisorResult.rows[0].id
-          : secondSupervisorResult.rows[0].id;
-      supervisorBySite.set(code, supervisorId);
-      await client.query(
-        'INSERT INTO floorwalk.site_supervisors (site_id, user_id) VALUES ($1, $2)',
-        [siteId, supervisorId],
-      );
-    }
 
     let sequence = 0;
     const nextTime = () => {
@@ -143,7 +124,7 @@ export async function seedDatabase(
         status: index === 12 ? 'failed' : 'passed',
         createdAt: nextTime(),
         failPosition: index === 1 ? 8 : index === 12 ? 3 : null,
-        reviewerId: supervisorBySite.get(code) ?? null,
+        reviewerId: adminResult.rows[0].id,
         reviewAction: index === 12 ? 'fail' : 'approve',
       });
     }
@@ -170,9 +151,7 @@ export async function seedDatabase(
         createdAt: nextTime(),
         failPosition: extra.status === 'submitted' ? null : 3,
         reviewerId:
-          extra.status === 'submitted'
-            ? null
-            : (supervisorBySite.get(extra.code) ?? null),
+          extra.status === 'submitted' ? null : adminResult.rows[0].id,
         reviewAction:
           extra.status === 'failed'
             ? 'fail'
@@ -193,7 +172,7 @@ export async function seedDatabase(
        ORDER BY i.created_at DESC LIMIT 1`,
       [orgId],
     );
-    const supervisorId = supervisorResult.rows[0].id;
+    const supervisorId = adminResult.rows[0].id;
     const inspection = reworkInspection.rows[0];
     if (!inspection) throw new Error('NB-002 打回演示单创建失败。');
     await client.query(
@@ -224,31 +203,28 @@ export async function seedDatabase(
     const secondSiteId = secondSiteResult.rows[0].id;
     const secondOrgUsers = new Map<string, string>();
     for (const [role, displayName] of [
-      ['inspector', '演示二号店员'],
-      ['supervisor', '演示二号主管'],
+      ['store_manager', '演示二号店长'],
       ['admin', '演示二号管理员'],
     ] as const) {
       const result = await client.query<{ id: string }>(
-        `INSERT INTO floorwalk.users (org_id, email, password_hash, display_name, role, site_id)
+        `INSERT INTO floorwalk.users (org_id, login_name, password_hash, display_name, role, site_id)
          VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
         [
           secondOrgId,
-          `${role}@demo2.example`,
+          role === 'store_manager'
+            ? 'inspector@northbean.example'
+            : 'admin@demo2.example',
           passwordHash,
           displayName,
           role,
-          role === 'inspector' ? secondSiteId : null,
+          role === 'store_manager' ? secondSiteId : null,
         ],
       );
       secondOrgUsers.set(role, result.rows[0].id);
     }
-    await client.query(
-      'INSERT INTO floorwalk.site_supervisors (site_id, user_id) VALUES ($1, $2)',
-      [secondSiteId, secondOrgUsers.get('supervisor')],
-    );
     const secondTemplateId = await insertTemplate(client, secondOrgId, true);
-    const secondInspectorId = secondOrgUsers.get('inspector');
-    const secondReviewerId = secondOrgUsers.get('supervisor');
+    const secondInspectorId = secondOrgUsers.get('store_manager');
+    const secondReviewerId = secondOrgUsers.get('admin');
     if (!secondInspectorId || !secondReviewerId)
       throw new Error('演示二号账号创建失败。');
     await insertInspection(client, storage, writtenKeys, {
@@ -333,6 +309,10 @@ async function insertInspection(
     ],
   );
   const inspectionId = inspectionResult.rows[0].id;
+  await client.query(
+    'INSERT INTO floorwalk.inspection_participants (inspection_id, user_id) VALUES ($1, $2)',
+    [inspectionId, input.inspectorId],
+  );
   const reworkItemIds: string[] = [];
   let passedItems = 0;
   for (const item of seedItems) {
