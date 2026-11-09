@@ -4,7 +4,7 @@
 
 ## 1. 入口与会话
 
-FloorWalk 是连锁门店巡检的三端作品样本：店员按清单现场拍照，主管审核，总部看门店得分。不是支付产品，不是 CardFlow 换皮。沟通使用中文。产品基线见 [`docs/context/product.md`](docs/context/product.md)。
+FloorWalk 是中小连锁门店巡检的三端作品样本：店长按日程现场逐条拍照，AI 逐条审核，商家管理员看各店完成率和分数。不是支付产品，不是 CardFlow 换皮。沟通使用中文。产品基线见 [`docs/context/product.md`](docs/context/product.md)。
 
 新会话只读三样：本文件；目标工作单元的 `spec.md`、`plan.md` 及其「涉及的当前事实」列出的 `docs/specs/` 小节（修正模式改读 [`docs/testlog.md`](docs/testlog.md) 中仍为 `待同步|待审查` 的行）；然后跑 `python scripts/validate_docs.py` 和 `git status --short`。目标单元由用户指定，未指定时查 [`docs/backlog.md`](docs/backlog.md)「当前工作」。其余按需：[`docs/specs/README.md`](docs/specs/README.md) 定位模块时读；[`docs/pitfalls.md`](docs/pitfalls.md) 动手前按触发条件 grep，不通读；`backlog.md` 开单、归档、问进度时读。已归档单元是历史，只在当前 `spec.md`「依赖」列出或用户点名时读，不作为事实来源。
 
