@@ -86,4 +86,4 @@ Web 固定源码 commit `e16c87f213a5ba5e45964e9b67c792105ec74d26`，gluestack �
 - 本地适配（只在本项目）：内核第 12 节加完全访问下的边界；`.worktreeinclude`、测试槽位、`proc.mjs` 的服务表。并行组与接力、`active-units-max`、停止条件加「已批准 spec 有矛盾或要改」、Subagent 按会话计、常驻进程走起停脚本已于 2026-11-03 抽回模板（workflow `c8b91d4`、`2c57c30`、`63aee92`），2026-11-04 同步回本项目，内核上限随模板改为 8500。
 - 2026-11-07 同步：拆分接力与并行组指南，接力在主目录当前分支执行；补跨单元 AC 检查（从当天起、不追溯归档单元）、配置键检查工具及对应测试。保留项目授权、内核上限 8500、硬线路径与测试槽位；配置键分组尚未登记，见上文「配置」。验证：`python -m unittest discover -s scripts/tests -t .` 77/77 通过；用户授权「收一下」后，升迁审核去重修正并清空两条缓冲，普通文档校验通过。
 - Git 工作树已存在，执行起点 HEAD `1778848`，起始工作区干净，已配置 origin；用户于 2026-10-06 确认真机验收并授权当前单元归档、提交与推送。
-- `scripts/hooks/commit-msg` 已提供，未启用（`core.hooksPath` 未设）：`Mode: fix` 的代码提交须暂存 testlog；改到 `scripts/workflow.conf` 登记的 `hardline` 路径须有「硬线：」行。启用须按用户授权办理：`git config core.hooksPath scripts/hooks`，工作树共用这项设置。
+- `scripts/hooks/commit-msg` 已启用（2026-11-09 用户原话"启用钩子"，`core.hooksPath scripts/hooks`）：`Mode: fix` 的代码提交须暂存 testlog；改到 `scripts/workflow.conf` 登记的 `hardline` 路径须有「硬线：」行。工作树共用这项设置；停用须用户授权（`git config --unset core.hooksPath`）。
