@@ -4,13 +4,15 @@
 
 ## 当前状态
 
-- 工作单元状态：`approved`
+- 工作单元状态：`blocked`
 - 归档状态：`active`
 - 当前任务：无
-- 阻塞：无
-- 下一步：开工时按 relay.md 核对上游，Preflight 后拆任务表（≤8 行）
+- 阻塞：AC-01 未点名新增邮件配置键，现行最终审查规则要求配置键在 AC 原文中列出。
+- 下一步：等待用户确认 AC-01 的补充方案；确认后补录 Preflight 的既有数据只读计数，再拆任务表（≤8 行）。
 
 <!-- Preflight：编码前在此写一到三行——要动哪些模块；涉及既有数据时的只读统计计数；后端/库/开发者工具是否能起。不需要章节名。 -->
+
+接力开工核对：涉及 API、数据库迁移、shared、Web、Mobile 和相关测试；文档、上游提交、数据库和槽位 API 预检通过。既有数据只读计数待补录。
 
 ## 任务表
 
@@ -46,3 +48,7 @@
 ## 决策与偏差
 
 <!-- 只记会影响后续的：用户决策、放弃的方案、发现的范围外问题。每条一行。归档时把仍然重要的升入 adr/、specs/ 或 pitfalls.md。 -->
+
+- 卡在：AC-01 未列配置键名，且写的是 `.env.example`；实际 API 模板分开发和生产两份，新增键须在 AC 原文点名。
+- 要用户定什么：是否批准补充 AC-01 的配置键名及两份 API 模板路径，并决定阿里云邮件推送 API 接入地址是否可配置。
+- 可选项和倾向：倾向列 `MAIL_DRIVER`、`MAIL_FROM_ADDRESS`、`ALIYUN_DM_ACCESS_KEY_ID`、`ALIYUN_DM_ACCESS_KEY_SECRET`、`ALIYUN_DM_ENDPOINT`，分别用于驱动、发信地址、凭据及地域接入地址；另一选项是不加最后一键并固定接入地址。两份模板为 `apps/api/.env.development.example` 和 `apps/api/.env.production.example`；原有验收边界不变。
