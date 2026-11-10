@@ -125,7 +125,9 @@ export function ReviewDetail({
                     <h3 className="font-medium">{item.title}</h3>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {item.critical ? '严重项 · ' : ''}
-                      {item.photoRequired ? '需要照片' : '无需照片'}
+                      {item.minPhotoCount > 0
+                        ? `至少 ${item.minPhotoCount} 张照片`
+                        : '无需照片，备注必填'}
                     </p>
                   </div>
                   <span
@@ -138,6 +140,11 @@ export function ReviewDetail({
                         : '未填写'}
                   </span>
                 </div>
+                {item.acceptanceCriteria && (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    验收要点：{item.acceptanceCriteria}
+                  </p>
+                )}
                 {item.note && (
                   <p className="mt-3 border-l-2 border-accent bg-raised px-3 py-2 text-sm">
                     备注：{item.note}

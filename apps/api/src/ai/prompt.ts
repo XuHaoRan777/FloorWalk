@@ -46,7 +46,6 @@ export async function buildReviewMessages(
       text: [
         `检查项编号：${item.itemId}`,
         `标题：${item.title}`,
-        `必拍：${item.photoRequired ? '是' : '否'}`,
         `严重项：${item.critical ? '是' : '否'}`,
         `最少张数：${item.minPhotos}`,
         `验收要点：${item.acceptanceCriteria}`,

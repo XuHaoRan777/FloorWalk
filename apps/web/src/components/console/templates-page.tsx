@@ -1,165 +1,142 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  ArrowDown,
-  ArrowUp,
   ClipboardList,
   LoaderCircle,
   Plus,
   RotateCcw,
   Save,
-  Star,
 } from 'lucide-react';
-import type { TemplateItem } from '@libs/shared';
+import type { AiStandard, QuickSetupTemplateRequest } from '@libs/shared';
 import { Button } from '@/components/ui/button';
 import {
   createAdminTemplate,
+  getAdminAiStandards,
   getAdminTemplates,
-  setCurrentAdminTemplate,
+  quickSetupAdminTemplate,
   updateAdminTemplate,
   type AdminTemplate,
 } from '@/lib/api/admin';
 import { getErrorMessage } from './helpers';
 import { ErrorBanner } from './error-banner';
+import {
+  newDraftItem,
+  TemplateItemsEditor,
+  type DraftItem,
+} from './template-items-editor';
 
-type DraftItem = Pick<TemplateItem, 'title' | 'photoRequired' | 'critical'> & {
-  key: string;
-};
-
-function draftItems(template: AdminTemplate): DraftItem[] {
-  return template.items.map((item) => ({
-    key: item.id,
-    title: item.title,
-    photoRequired: item.photoRequired,
-    critical: item.critical,
-  }));
-}
+const quickOptions = [
+  ['coffee', '咖啡店'],
+  ['restaurant', '餐馆'],
+  ['florist', '花店'],
+] as const;
 
 export function TemplatesPage() {
   const [templates, setTemplates] = useState<AdminTemplate[]>([]);
+  const [standards, setStandards] = useState<AiStandard[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState('');
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const [aiStandardId, setAiStandardId] = useState('');
   const [items, setItems] = useState<DraftItem[]>([]);
   const [isNew, setIsNew] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const initialized = useRef(false);
-  const selected = useMemo(
-    () => templates.find((template) => template.id === selectedId),
-    [selectedId, templates],
-  );
-
+  const [notice, setNotice] = useState('');
+  const select = useCallback((template: AdminTemplate) => {
+    setSelectedId(template.id);
+    setName(template.name);
+    setAiEnabled(template.aiEnabled);
+    setAiStandardId(template.aiStandardId ?? '');
+    setItems(
+      template.items.map((item) => ({
+        ...item,
+        key: item.id,
+        minPhotoCount: String(item.minPhotoCount),
+      })),
+    );
+    setIsNew(false);
+    setError('');
+    setNotice('');
+  }, []);
   const load = useCallback(() => {
     setLoading(true);
     setError('');
-    void getAdminTemplates()
-      .then((result) => {
-        setTemplates(result);
-        if (!initialized.current && result[0]) {
-          initialized.current = true;
-          setSelectedId(result[0].id);
-          setName(result[0].name);
-          setItems(draftItems(result[0]));
-        }
+    void Promise.all([getAdminTemplates(), getAdminAiStandards()])
+      .then(([allTemplates, allStandards]) => {
+        setTemplates(allTemplates);
+        setStandards(allStandards);
+        if (allTemplates[0]) select(allTemplates[0]);
       })
       .catch((reason: unknown) => setError(getErrorMessage(reason)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [select]);
   useEffect(() => load(), [load]);
-
-  const select = (template: AdminTemplate) => {
-    setSelectedId(template.id);
-    setName(template.name);
-    setItems(draftItems(template));
-    setIsNew(false);
-    setError('');
-  };
 
   const startNew = () => {
     setSelectedId(null);
     setName('');
-    setItems([
-      {
-        key: crypto.randomUUID(),
-        title: '',
-        photoRequired: false,
-        critical: false,
-      },
-    ]);
+    setAiEnabled(true);
+    setAiStandardId('');
+    setItems([newDraftItem()]);
     setIsNew(true);
     setError('');
+    setNotice('');
   };
-
-  const move = (index: number, direction: -1 | 1) => {
-    const target = index + direction;
-    if (target < 0 || target >= items.length) return;
-    setItems((current) => {
-      const next = [...current];
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
-  };
-
   const save = async () => {
-    if (!name.trim()) {
-      setError('请输入模板名称。');
+    if (!name.trim() || items.some((item) => !item.title.trim())) {
+      setError('请填写模板名称和检查项标题。');
       return;
     }
-    if (items.length === 0 || items.some((item) => !item.title.trim())) {
-      setError('至少保留一个检查项，并填写检查项标题。');
+    if (aiEnabled && !aiStandardId) {
+      setError('启用 AI 时必须选择审核标准。');
       return;
     }
     setBusy(true);
     setError('');
+    setNotice('');
     try {
+      const input = {
+        name,
+        aiEnabled,
+        aiStandardId: aiStandardId || null,
+        items: items.map(
+          ({ title, critical, minPhotoCount, acceptanceCriteria }, index) => ({
+            position: index + 1,
+            title,
+            critical,
+            minPhotoCount: Number(minPhotoCount),
+            acceptanceCriteria,
+          }),
+        ),
+      };
       const saved = isNew
-        ? await createAdminTemplate({
-            name,
-            items: items.map(({ title, photoRequired, critical }) => ({
-              title,
-              photoRequired,
-              critical,
-            })),
-          })
-        : await updateAdminTemplate(selectedId!, {
-            name,
-            items: items.map(({ title, photoRequired, critical }, index) => ({
-              position: index + 1,
-              title,
-              photoRequired,
-              critical,
-            })),
-          });
-      setTemplates((current) => {
-        const exists = current.some((template) => template.id === saved.id);
-        return exists
-          ? current.map((template) =>
-              template.id === saved.id ? saved : template,
-            )
-          : [...current, saved];
-      });
-      setSelectedId(saved.id);
-      setName(saved.name);
-      setItems(draftItems(saved));
-      setIsNew(false);
+        ? await createAdminTemplate(input)
+        : await updateAdminTemplate(selectedId!, input);
+      setTemplates((all) =>
+        all.some((template) => template.id === saved.id)
+          ? all.map((template) => (template.id === saved.id ? saved : template))
+          : [...all, saved],
+      );
+      select(saved);
+      setNotice('模板已保存。');
     } catch (reason) {
       setError(getErrorMessage(reason));
     } finally {
       setBusy(false);
     }
   };
-
-  const setCurrent = async () => {
-    if (!selected || selected.isCurrent) return;
+  const quickSetup = async (kind: QuickSetupTemplateRequest['kind']) => {
     setBusy(true);
     setError('');
+    setNotice('');
     try {
-      const current = await setCurrentAdminTemplate(selected.id);
-      setTemplates((all) =>
-        all.map((template) => ({
-          ...template,
-          isCurrent: template.id === current.id,
-        })),
+      const result = await quickSetupAdminTemplate({ kind });
+      setTemplates((all) => [...all, result.template]);
+      setStandards((all) => [...all, result.standard]);
+      select(result.template);
+      setNotice(
+        `已生成模板「${result.template.name}」和审核标准「${result.standard.name}」。`,
       );
     } catch (reason) {
       setError(getErrorMessage(reason));
@@ -167,48 +144,71 @@ export function TemplatesPage() {
       setBusy(false);
     }
   };
-
   return (
-    <section className="space-y-5">
+    <section className="space-y-5" aria-busy={busy || loading}>
       <div className="fw-page-heading">
         <div>
           <p className="fw-page-eyebrow">巡检配置</p>
           <h1>模板</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={load}
+            disabled={loading || busy}
+          >
             <RotateCcw aria-hidden="true" />
             刷新
           </Button>
-          <Button size="sm" onClick={startNew}>
+          <Button size="sm" onClick={startNew} disabled={loading || busy}>
             <Plus aria-hidden="true" />
             新建模板
           </Button>
         </div>
       </div>
-      <ErrorBanner message={error} />
+      <div className="flex flex-wrap items-center gap-2 border-y py-3">
+        <span className="mr-1 text-sm text-muted-foreground">快捷配置</span>
+        {quickOptions.map(([kind, label]) => (
+          <Button
+            key={kind}
+            variant="outline"
+            size="sm"
+            disabled={loading || busy}
+            onClick={() => void quickSetup(kind)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+      <div id="template-error">
+        <ErrorBanner message={error} />
+      </div>
+      <p role="status" className="text-sm text-muted-foreground">
+        {busy ? '正在保存配置…' : notice}
+      </p>
       {loading ? (
         <p className="fw-state" role="status">
           <LoaderCircle className="animate-spin" aria-hidden="true" />
           正在加载模板…
         </p>
-      ) : error &&
-        templates.length === 0 &&
-        !isNew ? null : templates.length === 0 && !isNew ? (
-        <div className="fw-state">
-          <ClipboardList aria-hidden="true" />
-          <p>暂无模板</p>
-        </div>
       ) : (
         <>
-          <div className="divide-y border-y">
+          {templates.length === 0 && !isNew && !error && (
+            <div className="fw-state">
+              <ClipboardList aria-hidden="true" />
+              <p>暂无模板，可新建或使用快捷配置。</p>
+            </div>
+          )}
+          <div className="divide-y border-b">
             {templates.map((template) => (
               <button
                 key={template.id}
                 type="button"
+                disabled={busy}
                 aria-pressed={selectedId === template.id && !isNew}
                 onClick={() => select(template)}
-                className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-3 text-left hover:bg-muted/50 aria-pressed:bg-muted/70"
+                className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-3 text-left hover:bg-muted/50 aria-pressed:bg-muted/70 disabled:opacity-60"
               >
                 <span className="min-w-0 flex-1 font-medium">
                   {template.name}
@@ -216,184 +216,87 @@ export function TemplatesPage() {
                 <span className="text-xs text-muted-foreground">
                   {template.items.length} 项
                 </span>
-                {template.isCurrent && (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-warning">
-                    <Star className="size-3" aria-hidden="true" />
-                    当前模板
-                  </span>
-                )}
               </button>
             ))}
           </div>
-          {(selected || isNew) && (
-            <div className="space-y-5 pt-1">
-              <div className="flex flex-wrap items-end gap-3">
-                <label className="grid min-w-64 flex-1 gap-1.5 text-sm font-medium">
+          {(selectedId || isNew) && (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void save();
+              }}
+              aria-describedby={error ? 'template-error' : undefined}
+            >
+              <fieldset disabled={busy} className="space-y-5 pt-1">
+                <label className="grid gap-1.5 text-sm font-medium">
                   模板名称
                   <input
                     className="h-9 rounded-md border bg-background px-3 font-normal"
+                    required
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                   />
                 </label>
-                {selected?.isCurrent && (
-                  <span className="pb-2 text-sm font-medium text-warning">
-                    当前模板
-                  </span>
-                )}
-                {selected && !selected.isCurrent && (
-                  <Button
-                    variant="outline"
-                    onClick={() => void setCurrent()}
-                    disabled={busy}
-                  >
-                    <Star aria-hidden="true" />
-                    设为当前
-                  </Button>
-                )}
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between border-b pb-2">
-                  <h2 className="text-sm font-semibold">检查项</h2>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setItems((current) => [
-                        ...current,
-                        {
-                          key: crypto.randomUUID(),
-                          title: '',
-                          photoRequired: false,
-                          critical: false,
-                        },
-                      ])
-                    }
-                  >
-                    <Plus aria-hidden="true" />
-                    添加检查项
-                  </Button>
-                </div>
-                <ol className="divide-y">
-                  {items.map((item, index) => (
-                    <li
-                      key={item.key}
-                      className="grid gap-3 py-3 lg:grid-cols-[2.5rem_minmax(10rem,1fr)_auto_auto_auto] lg:items-center"
+                <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-end">
+                  <label className="flex h-9 items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={aiEnabled}
+                      onChange={(event) => setAiEnabled(event.target.checked)}
+                    />
+                    启用 AI
+                  </label>
+                  <div className="grid gap-1.5 text-sm font-medium">
+                    <label htmlFor="template-ai-standard">AI 审核标准</label>
+                    <select
+                      id="template-ai-standard"
+                      className="h-9 min-w-0 rounded-md border bg-background px-3 font-normal"
+                      value={aiStandardId}
+                      required={aiEnabled}
+                      onChange={(event) => setAiStandardId(event.target.value)}
+                      aria-describedby="ai-standard-help"
                     >
-                      <span className="text-sm tabular-nums text-muted-foreground">
-                        {index + 1}
-                      </span>
-                      <input
-                        aria-label={`检查项 ${index + 1} 标题`}
-                        className="h-9 min-w-0 rounded-md border bg-background px-3"
-                        value={item.title}
-                        onChange={(event) =>
-                          setItems((all) =>
-                            all.map((entry) =>
-                              entry.key === item.key
-                                ? { ...entry, title: event.target.value }
-                                : entry,
-                            ),
-                          )
-                        }
-                      />
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={item.photoRequired}
-                          onChange={(event) =>
-                            setItems((all) =>
-                              all.map((entry) =>
-                                entry.key === item.key
-                                  ? {
-                                      ...entry,
-                                      photoRequired: event.target.checked,
-                                    }
-                                  : entry,
-                              ),
-                            )
-                          }
-                        />
-                        必拍
-                      </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={item.critical}
-                          onChange={(event) =>
-                            setItems((all) =>
-                              all.map((entry) =>
-                                entry.key === item.key
-                                  ? { ...entry, critical: event.target.checked }
-                                  : entry,
-                              ),
-                            )
-                          }
-                        />
-                        严重项
-                      </label>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="上移"
-                          aria-label={`检查项 ${index + 1} 上移`}
-                          onClick={() => move(index, -1)}
-                          disabled={index === 0}
-                        >
-                          <ArrowUp aria-hidden="true" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="下移"
-                          aria-label={`检查项 ${index + 1} 下移`}
-                          onClick={() => move(index, 1)}
-                          disabled={index === items.length - 1}
-                        >
-                          <ArrowDown aria-hidden="true" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setItems((all) =>
-                              all.filter((entry) => entry.key !== item.key),
-                            )
-                          }
-                          disabled={items.length === 1}
-                        >
-                          移除
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-              <div className="flex flex-wrap gap-2 border-t pt-4">
-                <Button onClick={() => void save()} disabled={busy}>
-                  <Save aria-hidden="true" />
-                  {isNew ? '创建模板' : '保存修改'}
-                </Button>
-                {isNew && (
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setIsNew(false);
-                      const first = templates[0];
-                      if (first) select(first);
-                      else {
-                        setSelectedId(null);
-                        setName('');
-                        setItems([]);
-                      }
-                    }}
-                  >
-                    取消
+                      <option value="">不选择标准</option>
+                      {standards.map((standard) => (
+                        <option key={standard.id} value={standard.id}>
+                          {standard.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <p
+                  id="ai-standard-help"
+                  className="text-sm text-muted-foreground"
+                >
+                  {standards.length
+                    ? '启用 AI 时必须选择审核标准，关闭时可不选。'
+                    : '暂无审核标准，请先到「AI 审核标准」创建，或使用上方快捷配置。'}
+                </p>
+                <TemplateItemsEditor items={items} onChange={setItems} />
+                <div className="flex gap-2 border-t pt-4">
+                  <Button type="submit">
+                    <Save aria-hidden="true" />
+                    {isNew ? '创建模板' : '保存修改'}
                   </Button>
-                )}
-              </div>
-            </div>
+                  {isNew && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        if (templates[0]) select(templates[0]);
+                        else {
+                          setIsNew(false);
+                          setSelectedId(null);
+                        }
+                      }}
+                    >
+                      取消
+                    </Button>
+                  )}
+                </div>
+              </fieldset>
+            </form>
           )}
         </>
       )}

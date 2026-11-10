@@ -29,7 +29,6 @@ it.skipIf(process.env.FW_AI_SMOKE !== '1')(
         {
           itemId: '00000000-0000-4000-8000-000000000022',
           title: '红色方块',
-          photoRequired: true,
           critical: true,
           minPhotos: 1,
           acceptanceCriteria: '照片里应有红色方块。',

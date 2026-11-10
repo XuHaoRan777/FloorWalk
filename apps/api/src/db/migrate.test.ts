@@ -164,7 +164,11 @@ async function loadLegacy(pool: Pool, data: Snapshot) {
             ? 'hq'
             : column === 'role' && row[column] === 'store_manager'
               ? 'inspector'
-              : row[column],
+              : column === 'photo_required'
+                ? (row.photo_required ?? Number(row.min_photo_count) > 0)
+                : column === 'is_current'
+                  ? (row.is_current ?? true)
+                  : row[column],
       );
       await pool.query(
         `INSERT INTO floorwalk.${table} (${columns.map((c) => `"${c}"`).join(', ')}) VALUES (${columns.map((_, i) => `$${i + 1}`).join(', ')})`,
@@ -414,6 +418,155 @@ describe('FW-024 empty migration and administrator constraint', () => {
       client.release();
       await clearSlot(pool);
       await runMigrations(getSlotDatabaseUrl(), storageDir);
+      await pool.end();
+    }
+  }, 60000);
+});
+
+describe('FW-026 template configuration migration', () => {
+  it('maps existing photo flags into template and inspection snapshots', async () => {
+    const pool = createPool(getSlotDatabaseUrl());
+    const client = await pool.connect();
+    try {
+      await clearSlot(pool);
+      for (const migration of migrations.slice(0, 7))
+        for (const sql of migration.sql) await pool.query(sql);
+      await pool.query('CREATE SCHEMA drizzle');
+      await pool.query(
+        'CREATE TABLE drizzle.__drizzle_migrations (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)',
+      );
+      for (const migration of migrations.slice(0, 7))
+        await pool.query(
+          'INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)',
+          [migration.hash, migration.folderMillis],
+        );
+
+      await client.query('BEGIN');
+      const orgId = (
+        await client.query(
+          "INSERT INTO floorwalk.organizations (name) VALUES ('FW-026 migration') RETURNING id",
+        )
+      ).rows[0].id;
+      const adminId = (
+        await client.query(
+          "INSERT INTO floorwalk.users (org_id, login_name, password_hash, display_name, role) VALUES ($1, 'admin@example.test', 'hash', 'Admin', 'admin') RETURNING id",
+          [orgId],
+        )
+      ).rows[0].id;
+      const siteId = (
+        await client.query(
+          "INSERT INTO floorwalk.sites (org_id, code, name) VALUES ($1, 'FW026', 'Migration site') RETURNING id",
+          [orgId],
+        )
+      ).rows[0].id;
+      const templateId = (
+        await client.query(
+          "INSERT INTO floorwalk.templates (org_id, name, is_current) VALUES ($1, 'Migration template', true) RETURNING id",
+          [orgId],
+        )
+      ).rows[0].id;
+      await client.query(
+        'INSERT INTO floorwalk.template_items (template_id, position, title, photo_required, critical) VALUES ($1, 1, $2, false, true), ($1, 2, $3, true, false)',
+        [templateId, 'Optional photo', 'Required photo'],
+      );
+      const inspectionId = (
+        await client.query(
+          'INSERT INTO floorwalk.inspections (site_id, template_id, inspector_id) VALUES ($1, $2, $3) RETURNING id',
+          [siteId, templateId, adminId],
+        )
+      ).rows[0].id;
+      await client.query(
+        'INSERT INTO floorwalk.inspection_items (inspection_id, position, title, photo_required, critical) VALUES ($1, 1, $2, false, true), ($1, 2, $3, true, false)',
+        [inspectionId, 'Optional photo snapshot', 'Required photo snapshot'],
+      );
+      await client.query('COMMIT');
+
+      const storageMigration = migrations[7];
+      for (const sql of storageMigration.sql) await pool.query(sql);
+      await pool.query(
+        'INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)',
+        [storageMigration.hash, storageMigration.folderMillis],
+      );
+
+      const templateItems = await pool.query(
+        'SELECT title, photo_required, min_photo_count, acceptance_criteria FROM floorwalk.template_items ORDER BY position',
+      );
+      expect(templateItems.rows).toEqual([
+        {
+          title: 'Optional photo',
+          photo_required: false,
+          min_photo_count: 0,
+          acceptance_criteria: '',
+        },
+        {
+          title: 'Required photo',
+          photo_required: true,
+          min_photo_count: 1,
+          acceptance_criteria: '',
+        },
+      ]);
+      const inspectionItems = await pool.query(
+        'SELECT title, photo_required, min_photo_count, acceptance_criteria FROM floorwalk.inspection_items ORDER BY position',
+      );
+      expect(inspectionItems.rows).toEqual([
+        {
+          title: 'Optional photo snapshot',
+          photo_required: false,
+          min_photo_count: 0,
+          acceptance_criteria: '',
+        },
+        {
+          title: 'Required photo snapshot',
+          photo_required: true,
+          min_photo_count: 1,
+          acceptance_criteria: '',
+        },
+      ]);
+      expect(
+        (
+          await pool.query(
+            'SELECT ai_enabled, ai_standard_id FROM floorwalk.templates WHERE id = $1',
+            [templateId],
+          )
+        ).rows[0],
+      ).toEqual({ ai_enabled: false, ai_standard_id: null });
+      for (const migration of migrations.slice(8)) {
+        for (const sql of migration.sql) await pool.query(sql);
+        await pool.query(
+          'INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)',
+          [migration.hash, migration.folderMillis],
+        );
+      }
+      const legacyColumns = await pool.query(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema = 'floorwalk' AND
+           ((table_name = 'templates' AND column_name = 'is_current') OR
+            (table_name IN ('template_items', 'inspection_items') AND column_name = 'photo_required'))`,
+      );
+      expect(legacyColumns.rows).toEqual([]);
+      expect(
+        (
+          await pool.query(
+            "SELECT column_default FROM information_schema.columns WHERE table_schema = 'floorwalk' AND table_name = 'templates' AND column_name = 'ai_enabled'",
+          )
+        ).rows[0].column_default,
+      ).toBe('true');
+      expect(
+        (
+          await pool.query(
+            'SELECT min_photo_count, acceptance_criteria FROM floorwalk.inspection_items ORDER BY position',
+          )
+        ).rows,
+      ).toEqual([
+        { min_photo_count: 0, acceptance_criteria: '' },
+        { min_photo_count: 1, acceptance_criteria: '' },
+      ]);
+    } finally {
+      await client.query('ROLLBACK').catch(() => undefined);
+      client.release();
+      await clearSlot(pool);
+      await runMigrations(getSlotDatabaseUrl(), storageDir);
+      await seedDatabase(getSlotDatabaseUrl(), storageDir);
       await pool.end();
     }
   }, 60000);

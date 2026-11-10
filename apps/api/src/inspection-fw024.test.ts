@@ -48,7 +48,7 @@ describe('store transfer inspection access (FW-024 AC-05)', () => {
     ).rows[0].id;
     templateId = (
       await pool.query(
-        'SELECT id FROM floorwalk.templates WHERE org_id = $1 AND is_current',
+        'SELECT id FROM floorwalk.templates WHERE org_id = $1 ORDER BY created_at LIMIT 1',
         [first.org_id],
       )
     ).rows[0].id;

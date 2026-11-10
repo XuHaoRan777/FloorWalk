@@ -110,7 +110,8 @@ export async function loadInspectionDetail(
       message: '门店不存在。',
     });
   const items = await pool.query(
-    `SELECT id, inspection_id AS "inspectionId", position, title, photo_required AS "photoRequired",
+    `SELECT id, inspection_id AS "inspectionId", position, title,
+       min_photo_count AS "minPhotoCount", acceptance_criteria AS "acceptanceCriteria",
         critical, result, note, created_at AS "createdAt"
        FROM floorwalk.inspection_items WHERE inspection_id = $1 ORDER BY position`,
     [inspection.id],

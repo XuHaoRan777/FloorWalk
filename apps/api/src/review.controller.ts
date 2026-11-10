@@ -85,7 +85,7 @@ export class ReviewController {
       assertInspectionAccess(inspection, request.user);
       const items = await client.query(
         `SELECT id, inspection_id AS "inspectionId", position, title,
-           photo_required AS "photoRequired", critical, result, note,
+           min_photo_count AS "minPhotoCount", acceptance_criteria AS "acceptanceCriteria", critical, result, note,
            created_at AS "createdAt"
          FROM floorwalk.inspection_items WHERE inspection_id = $1 ORDER BY position`,
         [id],

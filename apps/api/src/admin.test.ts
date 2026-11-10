@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
+import sharp from 'sharp';
 import {
   loginResponseSchema,
   inspectorRecordsResponseSchema,
@@ -15,15 +16,17 @@ import { createPool } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import { seedDatabase } from './db/seed.js';
 import { HttpErrorFilter } from './http-exception.filter.js';
+import { getStorageDriver } from './storage/index.js';
 
 describe('admin API', () => {
   let app: NestExpressApplication;
   let inspectorCookie: string;
   let hqCookie: string;
-  let initialCurrentTemplateId: string;
+  let initialTemplateId: string;
   const testCodePrefix = `FW013-${randomUUID()}`;
   const createdTemplateIds: string[] = [];
   const createdInspectionIds: string[] = [];
+  const createdEvidenceKeys: string[] = [];
 
   beforeAll(async () => {
     await runMigrations();
@@ -37,9 +40,9 @@ describe('admin API', () => {
     const initialPool = createPool();
     try {
       const current = await initialPool.query<{ id: string }>(
-        'SELECT id FROM floorwalk.templates WHERE is_current',
+        "SELECT t.id FROM floorwalk.templates t JOIN floorwalk.organizations o ON o.id = t.org_id WHERE o.name = 'Northbean' AND t.name = '开店检查'",
       );
-      initialCurrentTemplateId = current.rows[0].id;
+      initialTemplateId = current.rows[0].id;
     } finally {
       await initialPool.end();
     }
@@ -84,23 +87,6 @@ describe('admin API', () => {
           [createdInspectionIds],
         );
       }
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        await client.query(
-          'UPDATE floorwalk.templates SET is_current = false WHERE is_current',
-        );
-        await client.query(
-          'UPDATE floorwalk.templates SET is_current = true WHERE id = $1',
-          [initialCurrentTemplateId],
-        );
-        await client.query('COMMIT');
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
-      }
       if (createdTemplateIds.length) {
         await pool.query(
           'DELETE FROM floorwalk.template_items WHERE template_id = ANY($1::uuid[])',
@@ -121,6 +107,8 @@ describe('admin API', () => {
     } finally {
       await pool.end();
       await app.close();
+      const storage = await getStorageDriver();
+      await Promise.all(createdEvidenceKeys.map((key) => storage.delete(key)));
     }
   });
 
@@ -236,22 +224,58 @@ describe('admin API', () => {
       .expect(400);
   });
 
-  it('persists templates transactionally and keeps submitted inspection snapshots unchanged', async () => {
+  it('selects any tenant template, enforces photos and notes, and keeps snapshots unchanged', async () => {
     const created = await request(app.getHttpServer())
       .post('/api/admin/templates')
       .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 模板`,
+        aiEnabled: false,
         items: [
-          { title: '初始一', photoRequired: false, critical: false },
-          { title: '初始二', photoRequired: false, critical: true },
+          {
+            title: '初始一',
+            minPhotoCount: 0,
+            acceptanceCriteria: '填写现场整洁情况',
+            critical: false,
+          },
+          {
+            title: '初始二',
+            minPhotoCount: 2,
+            acceptanceCriteria: '拍摄正面和侧面',
+            critical: true,
+          },
         ],
       })
       .expect(201);
     const template = templateResponseSchema.parse(created.body);
     createdTemplateIds.push(template.id);
-    expect(template.isCurrent).toBe(false);
     expect(template.items.map((item) => item.position)).toEqual([1, 2]);
+    const today = await request(app.getHttpServer())
+      .get('/api/inspector/today')
+      .set('Cookie', inspectorCookie)
+      .expect(200);
+    const available = todayResponseSchema.parse(today.body).templates;
+    expect(available.map((value) => value.id)).toEqual(
+      expect.arrayContaining([initialTemplateId, template.id]),
+    );
+    const foreignPool = createPool();
+    try {
+      const foreignTemplateId = (
+        await foreignPool.query(
+          "SELECT t.id FROM floorwalk.templates t JOIN floorwalk.organizations o ON o.id = t.org_id WHERE o.name = '演示二号'",
+        )
+      ).rows[0].id;
+      expect(available.some((value) => value.id === foreignTemplateId)).toBe(
+        false,
+      );
+      await request(app.getHttpServer())
+        .post('/api/inspections')
+        .set('Cookie', inspectorCookie)
+        .send({ templateId: foreignTemplateId })
+        .expect(404);
+    } finally {
+      await foreignPool.end();
+    }
 
     const createdInspection = await request(app.getHttpServer())
       .post('/api/inspections')
@@ -267,8 +291,63 @@ describe('admin API', () => {
       await request(app.getHttpServer())
         .patch(`/api/inspections/${createdInspection.body.id}/items/${item.id}`)
         .set('Cookie', inspectorCookie)
-        .send({ result: 'pass' })
+        .send({ result: 'pass', note: '   ' })
         .expect(200);
+    const photoItem = initialItems.body.items[1];
+    const photo = await sharp({
+      create: { width: 2, height: 2, channels: 3, background: '#ffffff' },
+    })
+      .jpeg()
+      .toBuffer();
+    const upload = async () => {
+      const response = await request(app.getHttpServer())
+        .post(
+          `/api/inspections/${createdInspection.body.id}/items/${photoItem.id}/evidence`,
+        )
+        .set('Cookie', inspectorCookie)
+        .attach('file', photo, {
+          filename: 'fw026.jpg',
+          contentType: 'image/jpeg',
+        })
+        .expect(201);
+      createdEvidenceKeys.push(response.body.storageKey);
+    };
+    await upload();
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${createdInspection.body.id}/submit`)
+      .set('Cookie', inspectorCookie)
+      .expect(422);
+    await request(app.getHttpServer())
+      .patch(
+        `/api/inspections/${createdInspection.body.id}/items/${initialItems.body.items[0].id}`,
+      )
+      .set('Cookie', inspectorCookie)
+      .send({ result: 'pass', note: '现场已检查' })
+      .expect(200);
+    // A valid note still cannot compensate for one missing photo.
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${createdInspection.body.id}/submit`)
+      .set('Cookie', inspectorCookie)
+      .expect(422);
+    await upload();
+    await request(app.getHttpServer())
+      .patch(
+        `/api/inspections/${createdInspection.body.id}/items/${initialItems.body.items[0].id}`,
+      )
+      .set('Cookie', inspectorCookie)
+      .send({ result: 'pass', note: '' })
+      .expect(200);
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${createdInspection.body.id}/submit`)
+      .set('Cookie', inspectorCookie)
+      .expect(422);
+    await request(app.getHttpServer())
+      .patch(
+        `/api/inspections/${createdInspection.body.id}/items/${initialItems.body.items[0].id}`,
+      )
+      .set('Cookie', inspectorCookie)
+      .send({ result: 'pass', note: '现场已检查' })
+      .expect(200);
     await request(app.getHttpServer())
       .post(`/api/inspections/${createdInspection.body.id}/submit`)
       .set('Cookie', inspectorCookie)
@@ -278,7 +357,7 @@ describe('admin API', () => {
       const pool = createPool();
       try {
         const result = await pool.query(
-          `SELECT i.status, i.score, ii.position, ii.title, ii.photo_required,
+          `SELECT i.status, i.score, ii.position, ii.title, ii.min_photo_count, ii.acceptance_criteria,
              ii.critical, ii.result
            FROM floorwalk.inspections i
            JOIN floorwalk.inspection_items ii ON ii.inspection_id = i.id
@@ -291,28 +370,44 @@ describe('admin API', () => {
       }
     };
     const before = await readInspectionSnapshot(createdInspection.body.id);
+    expect(before).toEqual([
+      expect.objectContaining({
+        min_photo_count: 0,
+        acceptance_criteria: '填写现场整洁情况',
+        critical: false,
+      }),
+      expect.objectContaining({
+        min_photo_count: 2,
+        acceptance_criteria: '拍摄正面和侧面',
+        critical: true,
+      }),
+    ]);
     const updated = await request(app.getHttpServer())
       .put(`/api/admin/templates/${template.id}`)
       .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 模板新版`,
+        aiEnabled: false,
         items: [
           {
             position: 1,
             title: '新版一',
-            photoRequired: false,
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
             critical: true,
           },
           {
             position: 2,
             title: '新版二',
-            photoRequired: true,
+            minPhotoCount: 1,
+            acceptanceCriteria: '',
             critical: false,
           },
           {
             position: 3,
             title: '新版三',
-            photoRequired: false,
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
             critical: false,
           },
         ],
@@ -322,19 +417,6 @@ describe('admin API', () => {
     expect(await readInspectionSnapshot(createdInspection.body.id)).toEqual(
       before,
     );
-
-    const selected = await request(app.getHttpServer())
-      .post(`/api/admin/templates/${template.id}/current`)
-      .set('Cookie', hqCookie)
-      .expect(200);
-    expect(templateResponseSchema.parse(selected.body).isCurrent).toBe(true);
-    const listed = await request(app.getHttpServer())
-      .get('/api/admin/templates')
-      .set('Cookie', hqCookie)
-      .expect(200);
-    expect(
-      listed.body.filter((item: { isCurrent: boolean }) => item.isCurrent),
-    ).toEqual([expect.objectContaining({ id: template.id })]);
 
     const nextInspection = await request(app.getHttpServer())
       .post('/api/inspections')
@@ -366,7 +448,15 @@ describe('admin API', () => {
       .set('Cookie', inspectorCookie)
       .send({
         name: `${testCodePrefix} 越权模板`,
-        items: [{ title: '项', photoRequired: false, critical: false }],
+        aiEnabled: false,
+        items: [
+          {
+            title: '项',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
+        ],
       })
       .expect(403);
     const template = await request(app.getHttpServer())
@@ -374,7 +464,15 @@ describe('admin API', () => {
       .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 权限模板`,
-        items: [{ title: '项', photoRequired: false, critical: false }],
+        aiEnabled: false,
+        items: [
+          {
+            title: '项',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
+        ],
       })
       .expect(201);
     createdTemplateIds.push(template.body.id);
@@ -383,19 +481,17 @@ describe('admin API', () => {
       .set('Cookie', inspectorCookie)
       .send({
         name: `${testCodePrefix} 权限模板修改`,
+        aiEnabled: false,
         items: [
           {
             position: 1,
             title: '项修改',
-            photoRequired: false,
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
             critical: false,
           },
         ],
       })
-      .expect(403);
-    await request(app.getHttpServer())
-      .post(`/api/admin/templates/${template.body.id}/current`)
-      .set('Cookie', inspectorCookie)
       .expect(403);
   });
 
@@ -411,7 +507,15 @@ describe('admin API', () => {
       .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 冲突模板`,
-        items: [{ title: '项', photoRequired: false, critical: false }],
+        aiEnabled: false,
+        items: [
+          {
+            title: '项',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
+        ],
       })
       .expect(201);
     createdTemplateIds.push(created.body.id);
@@ -420,7 +524,15 @@ describe('admin API', () => {
       .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 冲突模板`,
-        items: [{ title: '项二', photoRequired: false, critical: false }],
+        aiEnabled: false,
+        items: [
+          {
+            title: '项二',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
+        ],
       })
       .expect(409);
     const otherTemplate = await request(app.getHttpServer())
@@ -428,7 +540,15 @@ describe('admin API', () => {
       .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 另一模板`,
-        items: [{ title: '另一项', photoRequired: false, critical: false }],
+        aiEnabled: false,
+        items: [
+          {
+            title: '另一项',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
+        ],
       })
       .expect(201);
     createdTemplateIds.push(otherTemplate.body.id);
@@ -437,11 +557,13 @@ describe('admin API', () => {
       .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 另一模板`,
+        aiEnabled: false,
         items: [
           {
             position: 1,
             title: '不应替换',
-            photoRequired: false,
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
             critical: false,
           },
         ],
@@ -460,8 +582,15 @@ describe('admin API', () => {
       .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 冲突模板`,
+        aiEnabled: false,
         items: [
-          { position: 2, title: '断序', photoRequired: false, critical: false },
+          {
+            position: 2,
+            title: '断序',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
         ],
       })
       .expect(400);
@@ -470,8 +599,15 @@ describe('admin API', () => {
       .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 冲突模板`,
+        aiEnabled: false,
         items: [
-          { position: 1, title: '项', photoRequired: false, critical: false },
+          {
+            position: 1,
+            title: '项',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
         ],
       })
       .expect(200);
@@ -480,14 +616,17 @@ describe('admin API', () => {
       .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 不存在`,
+        aiEnabled: false,
         items: [
-          { position: 1, title: '项', photoRequired: false, critical: false },
+          {
+            position: 1,
+            title: '项',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
         ],
       })
-      .expect(404);
-    await request(app.getHttpServer())
-      .post(`/api/admin/templates/${randomUUID()}/current`)
-      .set('Cookie', hqCookie)
       .expect(404);
   });
 
@@ -510,7 +649,7 @@ describe('admin API', () => {
       pending = request(app.getHttpServer())
         .post('/api/inspections')
         .set('Cookie', inspectorCookie)
-        .send({ templateId: initialCurrentTemplateId })
+        .send({ templateId: initialTemplateId })
         .then((response) => {
           if (response.status === 201)
             createdInspectionIds.push(response.body.id);
@@ -552,8 +691,14 @@ describe('admin API', () => {
       .set('Cookie', hqCookie)
       .send({
         name: `${testCodePrefix} 停用测试模板`,
+        aiEnabled: false,
         items: [
-          { title: '停用测试检查项', photoRequired: false, critical: false },
+          {
+            title: '停用测试检查项',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
         ],
       })
       .expect(201);
@@ -572,7 +717,7 @@ describe('admin API', () => {
       await request(app.getHttpServer())
         .patch(`/api/inspections/${created.body.id}/items/${item.id}`)
         .set('Cookie', inspectorCookie)
-        .send({ result: 'pass' })
+        .send({ result: 'pass', note: '现场已检查' })
         .expect(200);
     await request(app.getHttpServer())
       .post(`/api/inspections/${created.body.id}/submit`)

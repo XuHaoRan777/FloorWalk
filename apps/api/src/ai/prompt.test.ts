@@ -18,7 +18,6 @@ describe('审核请求', () => {
         {
           itemId: '00000000-0000-4000-8000-000000000001',
           title: '冷柜',
-          photoRequired: true,
           critical: true,
           minPhotos: 2,
           acceptanceCriteria: '无污渍',
@@ -28,7 +27,6 @@ describe('审核请求', () => {
         {
           itemId: '00000000-0000-4000-8000-000000000002',
           title: '地面',
-          photoRequired: false,
           critical: false,
           minPhotos: 0,
           acceptanceCriteria: '',
@@ -71,7 +69,6 @@ describe('审核请求', () => {
             {
               "text": "检查项编号：00000000-0000-4000-8000-000000000001
       标题：冷柜
-      必拍：是
       严重项：是
       最少张数：2
       验收要点：无污渍
@@ -101,7 +98,6 @@ describe('审核请求', () => {
             {
               "text": "检查项编号：00000000-0000-4000-8000-000000000002
       标题：地面
-      必拍：否
       严重项：否
       最少张数：0
       验收要点：

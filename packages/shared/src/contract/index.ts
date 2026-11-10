@@ -63,7 +63,8 @@ export const errorCodeSchema = z.enum(errorCodes);
 export const templateSchema = z.object({
   id: uuid,
   name: z.string().min(1),
-  isCurrent: z.boolean(),
+  aiEnabled: z.boolean(),
+  aiStandardId: uuid.nullable(),
   createdAt: timestamp,
 });
 
@@ -72,7 +73,8 @@ export const templateItemSchema = z.object({
   templateId: uuid,
   position: z.number().int().positive(),
   title: z.string().min(1),
-  photoRequired: z.boolean(),
+  minPhotoCount: z.number().int().min(0).max(10),
+  acceptanceCriteria: z.string().max(500),
   critical: z.boolean(),
   createdAt: timestamp,
 });
@@ -94,7 +96,8 @@ export const inspectionItemSchema = z.object({
   inspectionId: uuid,
   position: z.number().int().positive(),
   title: z.string().min(1),
-  photoRequired: z.boolean(),
+  minPhotoCount: z.number().int().min(0).max(10),
+  acceptanceCriteria: z.string().max(500),
   critical: z.boolean(),
   result: inspectionItemResultSchema,
   note: z.string().nullable(),
@@ -150,9 +153,11 @@ export const loginResponseSchema = z.union([
 
 export const todayResponseSchema = z.object({
   site: siteSchema,
-  template: templateSchema.extend({
-    items: z.array(templateItemSchema),
-  }),
+  templates: z.array(
+    templateSchema.extend({
+      items: z.array(templateItemSchema),
+    }),
+  ),
   submittedToday: z.boolean(),
   reworkInspections: z.array(inspectionSchema),
 });
@@ -228,34 +233,48 @@ export const adminTemplateSchema = templateSchema.extend({
   items: z.array(templateItemSchema),
 });
 
-export const createTemplateRequestSchema = z.object({
-  name: z.string().trim().min(1),
-  items: z
-    .array(
-      z.object({
-        title: z.string().trim().min(1),
-        photoRequired: z.boolean(),
-        critical: z.boolean(),
-      }),
-    )
-    .min(1),
+const templateItemInputSchema = z.object({
+  title: z.string().trim().min(1),
+  minPhotoCount: z.number().int().min(0).max(10),
+  acceptanceCriteria: z.string().max(500),
+  critical: z.boolean(),
 });
 
-export const updateTemplateRequestSchema = z
-  .object({
-    name: z.string().trim().min(1),
+const templateInputSchema = z.object({
+  name: z.string().trim().min(1),
+  aiEnabled: z.boolean().default(true),
+  aiStandardId: uuid.nullable().default(null),
+});
+
+function requireAiStandard(
+  value: { aiEnabled: boolean; aiStandardId: string | null },
+  context: z.RefinementCtx,
+) {
+  if (value.aiEnabled && value.aiStandardId === null) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['aiStandardId'],
+      message: '启用 AI 时必须选择审核标准。',
+    });
+  }
+}
+
+export const createTemplateRequestSchema = templateInputSchema
+  .extend({ items: z.array(templateItemInputSchema).min(1) })
+  .superRefine(requireAiStandard);
+
+export const updateTemplateRequestSchema = templateInputSchema
+  .extend({
     items: z
       .array(
-        z.object({
+        templateItemInputSchema.extend({
           position: z.number().int().positive(),
-          title: z.string().trim().min(1),
-          photoRequired: z.boolean(),
-          critical: z.boolean(),
         }),
       )
       .min(1),
   })
   .superRefine((value, context) => {
+    requireAiStandard(value, context);
     if (value.items.some((item, index) => item.position !== index + 1)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
@@ -267,6 +286,29 @@ export const updateTemplateRequestSchema = z
 
 export const adminTemplatesResponseSchema = z.array(adminTemplateSchema);
 export const templateResponseSchema = adminTemplateSchema;
+
+export const aiStandardSchema = z.object({
+  id: uuid,
+  name: z.string().min(1),
+  prompt: z.string().min(1).max(4000),
+  createdAt: timestamp,
+});
+
+export const createAiStandardRequestSchema = z.object({
+  name: z.string().trim().min(1),
+  prompt: z.string().min(1).max(4000),
+});
+export const updateAiStandardRequestSchema = createAiStandardRequestSchema;
+export const adminAiStandardsResponseSchema = z.array(aiStandardSchema);
+export const aiStandardResponseSchema = aiStandardSchema;
+
+export const quickSetupTemplateRequestSchema = z.object({
+  kind: z.enum(['coffee', 'restaurant', 'florist']),
+});
+export const quickSetupTemplateResponseSchema = z.object({
+  template: adminTemplateSchema,
+  standard: aiStandardSchema,
+});
 
 export const createInspectionRequestSchema = z.object({
   templateId: uuid,
@@ -361,7 +403,8 @@ export const databaseConstraints = {
     'users(org_id, login_name)',
     "users.org_id WHERE role = 'admin'",
     'inspection_participants(inspection_id, user_id)',
-    'templates.is_current WHERE is_current = true',
+    'ai_review_standards(org_id, name)',
+    'ai_review_standards(org_id, id)',
     'template_items(template_id, position)',
     'sessions.token_hash',
     'chat_messages.seq',
@@ -380,10 +423,16 @@ export const databaseConstraints = {
     'email_verifications.code_hash IS NOT NULL OR purpose = password_recovery',
     "users.role IN ('admin', 'store_manager')",
     'users.role = store_manager requires site_id; admin requires NULL site_id',
+    'ai_review_standards.name is not blank',
+    'char_length(ai_review_standards.prompt) BETWEEN 1 AND 4000',
     'template_items.position > 0',
+    'template_items.min_photo_count BETWEEN 0 AND 10',
+    'char_length(template_items.acceptance_criteria) <= 500',
     "inspections.status IN ('draft', 'submitted', 'in_review', 'passed', 'rework', 'failed')",
     'inspections.score IS NULL OR inspections.score BETWEEN 0 AND 100',
     'inspection_items.position > 0',
+    'inspection_items.min_photo_count BETWEEN 0 AND 10',
+    'char_length(inspection_items.acceptance_criteria) <= 500',
     "inspection_items.result IN ('pending', 'pass', 'fail')",
     'evidence.size >= 0',
     "reviews.action IN ('start', 'approve', 'rework', 'fail')",
@@ -702,13 +751,45 @@ export const apiRoutes = {
     responseSchema: templateResponseSchema,
     successStatus: 200,
   },
-  setCurrentAdminTemplate: {
-    method: 'POST',
-    path: '/api/admin/templates/:id/current',
+  listAdminAiStandards: {
+    method: 'GET',
+    path: '/api/admin/ai-standards',
     roles: ['admin'],
     requestSchema: null,
-    responseSchema: templateResponseSchema,
+    responseSchema: adminAiStandardsResponseSchema,
     successStatus: 200,
+  },
+  createAdminAiStandard: {
+    method: 'POST',
+    path: '/api/admin/ai-standards',
+    roles: ['admin'],
+    requestSchema: createAiStandardRequestSchema,
+    responseSchema: aiStandardResponseSchema,
+    successStatus: 201,
+  },
+  updateAdminAiStandard: {
+    method: 'PUT',
+    path: '/api/admin/ai-standards/:id',
+    roles: ['admin'],
+    requestSchema: updateAiStandardRequestSchema,
+    responseSchema: aiStandardResponseSchema,
+    successStatus: 200,
+  },
+  deleteAdminAiStandard: {
+    method: 'DELETE',
+    path: '/api/admin/ai-standards/:id',
+    roles: ['admin'],
+    requestSchema: null,
+    responseSchema: z.undefined(),
+    successStatus: 204,
+  },
+  quickSetupAdminTemplate: {
+    method: 'POST',
+    path: '/api/admin/templates/quick-setup',
+    roles: ['admin'],
+    requestSchema: quickSetupTemplateRequestSchema,
+    responseSchema: quickSetupTemplateResponseSchema,
+    successStatus: 201,
   },
 } as const satisfies Record<string, ApiRouteDefinition>;
 
@@ -724,6 +805,22 @@ export type ReviewAction = z.infer<typeof reviewActionSchema>;
 export type ErrorCode = z.infer<typeof errorCodeSchema>;
 export type Template = z.infer<typeof templateSchema>;
 export type TemplateItem = z.infer<typeof templateItemSchema>;
+export type AiStandard = z.infer<typeof aiStandardSchema>;
+export type AdminAiStandardsResponse = z.infer<
+  typeof adminAiStandardsResponseSchema
+>;
+export type CreateAiStandardRequest = z.infer<
+  typeof createAiStandardRequestSchema
+>;
+export type UpdateAiStandardRequest = z.infer<
+  typeof updateAiStandardRequestSchema
+>;
+export type QuickSetupTemplateRequest = z.infer<
+  typeof quickSetupTemplateRequestSchema
+>;
+export type QuickSetupTemplateResponse = z.infer<
+  typeof quickSetupTemplateResponseSchema
+>;
 export type Inspection = z.infer<typeof inspectionSchema>;
 export type InspectionItem = z.infer<typeof inspectionItemSchema>;
 export type Evidence = z.infer<typeof evidenceSchema>;
@@ -790,9 +887,10 @@ export function validateInspectionSubmission(input: {
   if (input.items.some((item) => item.result === 'pending'))
     throw new Error('INCOMPLETE');
   if (
-    input.items.some(
-      (item) =>
-        item.photoRequired && (input.evidenceCountByItemId[item.id] ?? 0) < 1,
+    input.items.some((item) =>
+      item.minPhotoCount === 0
+        ? !item.note?.trim()
+        : (input.evidenceCountByItemId[item.id] ?? 0) < item.minPhotoCount,
     )
   )
     throw new Error('INCOMPLETE');

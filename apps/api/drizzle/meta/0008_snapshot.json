@@ -1,0 +1,1296 @@
+{
+  "id": "fccd19ee-e8c2-4058-af32-b5d24762198d",
+  "prevId": "9cb4e7e8-1ff4-4aff-9b3f-49b97fa5b942",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "floorwalk.ai_review_standards": {
+      "name": "ai_review_standards",
+      "schema": "floorwalk",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prompt": {
+          "name": "prompt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ai_review_standards_org_id_organizations_id_fk": {
+          "name": "ai_review_standards_org_id_organizations_id_fk",
+          "tableFrom": "ai_review_standards",
+          "tableTo": "organizations",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["org_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "ai_review_standards_org_name_unique": {
+          "name": "ai_review_standards_org_name_unique",
+          "nullsNotDistinct": false,
+          "columns": ["org_id", "name"]
+        },
+        "ai_review_standards_org_id_id_unique": {
+          "name": "ai_review_standards_org_id_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["org_id", "id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "ai_review_standards_name_nonempty_check": {
+          "name": "ai_review_standards_name_nonempty_check",
+          "value": "char_length(btrim(\"floorwalk\".\"ai_review_standards\".\"name\")) > 0"
+        },
+        "ai_review_standards_prompt_length_check": {
+          "name": "ai_review_standards_prompt_length_check",
+          "value": "char_length(\"floorwalk\".\"ai_review_standards\".\"prompt\") BETWEEN 1 AND 4000"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "floorwalk.chat_messages": {
+      "name": "chat_messages",
+      "schema": "floorwalk",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "seq": {
+          "name": "seq",
+          "type": "bigserial",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inspection_id": {
+          "name": "inspection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "author_id": {
+          "name": "author_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "storage_key": {
+          "name": "storage_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mime": {
+          "name": "mime",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "size": {
+          "name": "size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "chat_messages_inspection_seq_idx": {
+          "name": "chat_messages_inspection_seq_idx",
+          "columns": [
+            {
+              "expression": "inspection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "seq",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "chat_messages_inspection_id_inspections_id_fk": {
+          "name": "chat_messages_inspection_id_inspections_id_fk",
+          "tableFrom": "chat_messages",
+          "tableTo": "inspections",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["inspection_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "chat_messages_author_id_users_id_fk": {
+          "name": "chat_messages_author_id_users_id_fk",
+          "tableFrom": "chat_messages",
+          "tableTo": "users",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["author_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "chat_messages_seq_unique": {
+          "name": "chat_messages_seq_unique",
+          "nullsNotDistinct": false,
+          "columns": ["seq"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "chat_messages_body_or_image_check": {
+          "name": "chat_messages_body_or_image_check",
+          "value": "\"floorwalk\".\"chat_messages\".\"body\" IS NOT NULL OR \"floorwalk\".\"chat_messages\".\"storage_key\" IS NOT NULL"
+        },
+        "chat_messages_body_length_check": {
+          "name": "chat_messages_body_length_check",
+          "value": "\"floorwalk\".\"chat_messages\".\"body\" IS NULL OR char_length(\"floorwalk\".\"chat_messages\".\"body\") <= 1000"
+        },
+        "chat_messages_image_fields_check": {
+          "name": "chat_messages_image_fields_check",
+          "value": "(\"floorwalk\".\"chat_messages\".\"storage_key\" IS NULL AND \"floorwalk\".\"chat_messages\".\"mime\" IS NULL AND \"floorwalk\".\"chat_messages\".\"size\" IS NULL)\n        OR (\"floorwalk\".\"chat_messages\".\"storage_key\" IS NOT NULL AND \"floorwalk\".\"chat_messages\".\"mime\" IS NOT NULL AND \"floorwalk\".\"chat_messages\".\"size\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "floorwalk.email_verifications": {
+      "name": "email_verifications",
+      "schema": "floorwalk",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code_hash": {
+          "name": "code_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "requested_at": {
+          "name": "requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verified_at": {
+          "name": "verified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recovery_token_hash": {
+          "name": "recovery_token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "consumed_at": {
+          "name": "consumed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "email_verifications_scope_requested_idx": {
+          "name": "email_verifications_scope_requested_idx",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "purpose",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "requested_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "email_verifications_expires_idx": {
+          "name": "email_verifications_expires_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "email_verifications_active_unique": {
+          "name": "email_verifications_active_unique",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "purpose",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"floorwalk\".\"email_verifications\".\"consumed_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "email_verifications_purpose_check": {
+          "name": "email_verifications_purpose_check",
+          "value": "\"floorwalk\".\"email_verifications\".\"purpose\" IN ('registration', 'password_recovery')"
+        },
+        "email_verifications_attempt_count_check": {
+          "name": "email_verifications_attempt_count_check",
+          "value": "\"floorwalk\".\"email_verifications\".\"attempt_count\" BETWEEN 0 AND 5"
+        },
+        "email_verifications_code_hash_check": {
+          "name": "email_verifications_code_hash_check",
+          "value": "\"floorwalk\".\"email_verifications\".\"code_hash\" IS NOT NULL OR \"floorwalk\".\"email_verifications\".\"purpose\" = 'password_recovery'"
+        },
+        "email_verifications_recovery_token_check": {
+          "name": "email_verifications_recovery_token_check",
+          "value": "\"floorwalk\".\"email_verifications\".\"recovery_token_hash\" IS NULL OR (\"floorwalk\".\"email_verifications\".\"verified_at\" IS NOT NULL AND \"floorwalk\".\"email_verifications\".\"purpose\" = 'password_recovery')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "floorwalk.evidence": {
+      "name": "evidence",
+      "schema": "floorwalk",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "inspection_item_id": {
+          "name": "inspection_item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "storage_key": {
+          "name": "storage_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mime": {
+          "name": "mime",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "size": {
+          "name": "size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "evidence_inspection_item_id_inspection_items_id_fk": {
+          "name": "evidence_inspection_item_id_inspection_items_id_fk",
+          "tableFrom": "evidence",
+          "tableTo": "inspection_items",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["inspection_item_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "floorwalk.inspection_items": {
+      "name": "inspection_items",
+      "schema": "floorwalk",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "inspection_id": {
+          "name": "inspection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "min_photo_count": {
+          "name": "min_photo_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "acceptance_criteria": {
+          "name": "acceptance_criteria",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "critical": {
+          "name": "critical",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "result": {
+          "name": "result",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "inspection_items_inspection_id_inspections_id_fk": {
+          "name": "inspection_items_inspection_id_inspections_id_fk",
+          "tableFrom": "inspection_items",
+          "tableTo": "inspections",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["inspection_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "inspection_items_min_photo_count_check": {
+          "name": "inspection_items_min_photo_count_check",
+          "value": "\"floorwalk\".\"inspection_items\".\"min_photo_count\" BETWEEN 0 AND 10"
+        },
+        "inspection_items_acceptance_criteria_length_check": {
+          "name": "inspection_items_acceptance_criteria_length_check",
+          "value": "char_length(\"floorwalk\".\"inspection_items\".\"acceptance_criteria\") <= 500"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "floorwalk.inspection_participants": {
+      "name": "inspection_participants",
+      "schema": "floorwalk",
+      "columns": {
+        "inspection_id": {
+          "name": "inspection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "inspection_participants_inspection_id_inspections_id_fk": {
+          "name": "inspection_participants_inspection_id_inspections_id_fk",
+          "tableFrom": "inspection_participants",
+          "tableTo": "inspections",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["inspection_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "inspection_participants_user_id_users_id_fk": {
+          "name": "inspection_participants_user_id_users_id_fk",
+          "tableFrom": "inspection_participants",
+          "tableTo": "users",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "inspection_participants_inspection_id_user_id_pk": {
+          "name": "inspection_participants_inspection_id_user_id_pk",
+          "columns": ["inspection_id", "user_id"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "floorwalk.inspections": {
+      "name": "inspections",
+      "schema": "floorwalk",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "template_id": {
+          "name": "template_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inspector_id": {
+          "name": "inspector_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "inspections_site_id_sites_id_fk": {
+          "name": "inspections_site_id_sites_id_fk",
+          "tableFrom": "inspections",
+          "tableTo": "sites",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["site_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspections_template_id_templates_id_fk": {
+          "name": "inspections_template_id_templates_id_fk",
+          "tableFrom": "inspections",
+          "tableTo": "templates",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["template_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspections_inspector_id_users_id_fk": {
+          "name": "inspections_inspector_id_users_id_fk",
+          "tableFrom": "inspections",
+          "tableTo": "users",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["inspector_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "floorwalk.organizations": {
+      "name": "organizations",
+      "schema": "floorwalk",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Asia/Shanghai'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "floorwalk.reviews": {
+      "name": "reviews",
+      "schema": "floorwalk",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "inspection_id": {
+          "name": "inspection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reviewer_id": {
+          "name": "reviewer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "comment": {
+          "name": "comment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rework_item_ids": {
+          "name": "rework_item_ids",
+          "type": "uuid[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "reviews_inspection_id_inspections_id_fk": {
+          "name": "reviews_inspection_id_inspections_id_fk",
+          "tableFrom": "reviews",
+          "tableTo": "inspections",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["inspection_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "reviews_reviewer_id_users_id_fk": {
+          "name": "reviews_reviewer_id_users_id_fk",
+          "tableFrom": "reviews",
+          "tableTo": "users",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["reviewer_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "floorwalk.sessions": {
+      "name": "sessions",
+      "schema": "floorwalk",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "sessions_user_id_idx": {
+          "name": "sessions_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "sessions_user_id_users_id_fk": {
+          "name": "sessions_user_id_users_id_fk",
+          "tableFrom": "sessions",
+          "tableTo": "users",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "sessions_token_hash_unique": {
+          "name": "sessions_token_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": ["token_hash"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "floorwalk.sites": {
+      "name": "sites",
+      "schema": "floorwalk",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deactivated_at": {
+          "name": "deactivated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sites_org_id_organizations_id_fk": {
+          "name": "sites_org_id_organizations_id_fk",
+          "tableFrom": "sites",
+          "tableTo": "organizations",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["org_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "sites_org_code_unique": {
+          "name": "sites_org_code_unique",
+          "nullsNotDistinct": false,
+          "columns": ["org_id", "code"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "floorwalk.template_items": {
+      "name": "template_items",
+      "schema": "floorwalk",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "template_id": {
+          "name": "template_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "min_photo_count": {
+          "name": "min_photo_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "acceptance_criteria": {
+          "name": "acceptance_criteria",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "critical": {
+          "name": "critical",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "template_items_template_id_templates_id_fk": {
+          "name": "template_items_template_id_templates_id_fk",
+          "tableFrom": "template_items",
+          "tableTo": "templates",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["template_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "template_items_template_position_unique": {
+          "name": "template_items_template_position_unique",
+          "nullsNotDistinct": false,
+          "columns": ["template_id", "position"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "template_items_min_photo_count_check": {
+          "name": "template_items_min_photo_count_check",
+          "value": "\"floorwalk\".\"template_items\".\"min_photo_count\" BETWEEN 0 AND 10"
+        },
+        "template_items_acceptance_criteria_length_check": {
+          "name": "template_items_acceptance_criteria_length_check",
+          "value": "char_length(\"floorwalk\".\"template_items\".\"acceptance_criteria\") <= 500"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "floorwalk.templates": {
+      "name": "templates",
+      "schema": "floorwalk",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ai_enabled": {
+          "name": "ai_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "ai_standard_id": {
+          "name": "ai_standard_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "templates_org_id_organizations_id_fk": {
+          "name": "templates_org_id_organizations_id_fk",
+          "tableFrom": "templates",
+          "tableTo": "organizations",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["org_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "templates_org_ai_standard_fk": {
+          "name": "templates_org_ai_standard_fk",
+          "tableFrom": "templates",
+          "tableTo": "ai_review_standards",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["org_id", "ai_standard_id"],
+          "columnsTo": ["org_id", "id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "templates_org_name_unique": {
+          "name": "templates_org_name_unique",
+          "nullsNotDistinct": false,
+          "columns": ["org_id", "name"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "templates_ai_standard_required_check": {
+          "name": "templates_ai_standard_required_check",
+          "value": "\"floorwalk\".\"templates\".\"ai_enabled\" = false OR \"floorwalk\".\"templates\".\"ai_standard_id\" IS NOT NULL"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "floorwalk.users": {
+      "name": "users",
+      "schema": "floorwalk",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "login_name": {
+          "name": "login_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "must_change_password": {
+          "name": "must_change_password",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "disabled_at": {
+          "name": "disabled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "users_one_admin_per_org": {
+          "name": "users_one_admin_per_org",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"floorwalk\".\"users\".\"role\" = 'admin'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "users_org_id_organizations_id_fk": {
+          "name": "users_org_id_organizations_id_fk",
+          "tableFrom": "users",
+          "tableTo": "organizations",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["org_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "users_site_id_sites_id_fk": {
+          "name": "users_site_id_sites_id_fk",
+          "tableFrom": "users",
+          "tableTo": "sites",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["site_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "users_created_by_users_id_fk": {
+          "name": "users_created_by_users_id_fk",
+          "tableFrom": "users",
+          "tableTo": "users",
+          "schemaTo": "floorwalk",
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_org_login_name_unique": {
+          "name": "users_org_login_name_unique",
+          "nullsNotDistinct": false,
+          "columns": ["org_id", "login_name"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "users_role_check": {
+          "name": "users_role_check",
+          "value": "\"floorwalk\".\"users\".\"role\" IN ('admin', 'store_manager')"
+        },
+        "users_role_site_check": {
+          "name": "users_role_site_check",
+          "value": "(\"floorwalk\".\"users\".\"role\" = 'store_manager' AND \"floorwalk\".\"users\".\"site_id\" IS NOT NULL) OR (\"floorwalk\".\"users\".\"role\" = 'admin' AND \"floorwalk\".\"users\".\"site_id\" IS NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {
+    "floorwalk": "floorwalk"
+  },
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

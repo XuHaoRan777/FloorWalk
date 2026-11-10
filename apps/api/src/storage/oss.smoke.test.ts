@@ -149,7 +149,6 @@ it.skipIf(!combinedEnabled || combinedSkipReason.length > 0)(
             {
               itemId,
               title: '红色方块',
-              photoRequired: true,
               critical: true,
               minPhotos: 1,
               acceptanceCriteria: '照片里应有红色方块',

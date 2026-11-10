@@ -4,6 +4,7 @@ import {
   boolean,
   bigserial,
   check,
+  foreignKey,
   index,
   integer,
   pgSchema,
@@ -137,6 +138,31 @@ export const emailVerifications = floorwalk.table(
   ],
 );
 
+export const aiReviewStandards = floorwalk.table(
+  'ai_review_standards',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id),
+    name: text('name').notNull(),
+    prompt: text('prompt').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    unique('ai_review_standards_org_name_unique').on(table.orgId, table.name),
+    unique('ai_review_standards_org_id_id_unique').on(table.orgId, table.id),
+    check(
+      'ai_review_standards_name_nonempty_check',
+      sql`char_length(btrim(${table.name})) > 0`,
+    ),
+    check(
+      'ai_review_standards_prompt_length_check',
+      sql`char_length(${table.prompt}) BETWEEN 1 AND 4000`,
+    ),
+  ],
+);
+
 export const templates = floorwalk.table(
   'templates',
   {
@@ -145,14 +171,21 @@ export const templates = floorwalk.table(
       .notNull()
       .references(() => organizations.id),
     name: text('name').notNull(),
-    isCurrent: boolean('is_current').notNull().default(false),
+    aiEnabled: boolean('ai_enabled').notNull().default(true),
+    aiStandardId: uuid('ai_standard_id'),
     createdAt: createdAt(),
   },
   (table) => [
     unique('templates_org_name_unique').on(table.orgId, table.name),
-    uniqueIndex('templates_single_current_idx')
-      .on(table.orgId)
-      .where(sql`${table.isCurrent} = true`),
+    foreignKey({
+      name: 'templates_org_ai_standard_fk',
+      columns: [table.orgId, table.aiStandardId],
+      foreignColumns: [aiReviewStandards.orgId, aiReviewStandards.id],
+    }).onDelete('restrict'),
+    check(
+      'templates_ai_standard_required_check',
+      sql`${table.aiEnabled} = false OR ${table.aiStandardId} IS NOT NULL`,
+    ),
   ],
 );
 
@@ -165,7 +198,8 @@ export const templateItems = floorwalk.table(
       .references(() => templates.id),
     position: integer('position').notNull(),
     title: text('title').notNull(),
-    photoRequired: boolean('photo_required').notNull().default(false),
+    minPhotoCount: integer('min_photo_count').notNull().default(0),
+    acceptanceCriteria: text('acceptance_criteria').notNull().default(''),
     critical: boolean('critical').notNull().default(false),
     createdAt: createdAt(),
   },
@@ -173,6 +207,14 @@ export const templateItems = floorwalk.table(
     unique('template_items_template_position_unique').on(
       table.templateId,
       table.position,
+    ),
+    check(
+      'template_items_min_photo_count_check',
+      sql`${table.minPhotoCount} BETWEEN 0 AND 10`,
+    ),
+    check(
+      'template_items_acceptance_criteria_length_check',
+      sql`char_length(${table.acceptanceCriteria}) <= 500`,
     ),
   ],
 );
@@ -195,19 +237,33 @@ export const inspections = floorwalk.table('inspections', {
   createdAt: createdAt(),
 });
 
-export const inspectionItems = floorwalk.table('inspection_items', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  inspectionId: uuid('inspection_id')
-    .notNull()
-    .references(() => inspections.id),
-  position: integer('position').notNull(),
-  title: text('title').notNull(),
-  photoRequired: boolean('photo_required').notNull(),
-  critical: boolean('critical').notNull(),
-  result: text('result').notNull().default('pending'),
-  note: text('note'),
-  createdAt: createdAt(),
-});
+export const inspectionItems = floorwalk.table(
+  'inspection_items',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    inspectionId: uuid('inspection_id')
+      .notNull()
+      .references(() => inspections.id),
+    position: integer('position').notNull(),
+    title: text('title').notNull(),
+    minPhotoCount: integer('min_photo_count').notNull().default(0),
+    acceptanceCriteria: text('acceptance_criteria').notNull().default(''),
+    critical: boolean('critical').notNull(),
+    result: text('result').notNull().default('pending'),
+    note: text('note'),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    check(
+      'inspection_items_min_photo_count_check',
+      sql`${table.minPhotoCount} BETWEEN 0 AND 10`,
+    ),
+    check(
+      'inspection_items_acceptance_criteria_length_check',
+      sql`char_length(${table.acceptanceCriteria}) <= 500`,
+    ),
+  ],
+);
 
 export const inspectionParticipants = floorwalk.table(
   'inspection_participants',

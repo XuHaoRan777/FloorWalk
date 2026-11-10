@@ -38,7 +38,7 @@
 | --- | --- | --- | --- | --- |
 | FW-024 | [角色收成两层](work/FW-024-two-roles/spec.md) | `verified` | 无 | 已交付，等待线尾归档（线一 1/6） |
 | FW-025 | [注册邮箱验证与管理员找回密码](work/FW-025-email-verify-recovery/spec.md) | `verified` | FW-024 | 已交付，等待线尾归档（线一 2/6）；下游 FW-026 |
-| FW-026 | [模板与 AI 审核标准](work/FW-026-templates-ai-criteria/spec.md) | `approved` | FW-024 | 接力待开工（线一 3/6） |
+| FW-026 | [模板与 AI 审核标准](work/FW-026-templates-ai-criteria/spec.md) | `verified` | FW-024 | 已交付，等待线尾归档（线一 3/6）；下游 FW-027 |
 | FW-027 | [日程方案与门店日程安排](work/FW-027-schedules/spec.md) | `approved` | FW-026 | 接力待开工（线一 4/6） |
 | FW-028 | [任务与条目状态机](work/FW-028-task-state-machine/spec.md) | `approved` | FW-027 | 接力待开工（线一 5/6） |
 | FW-029 | [Mobile 店长端](work/FW-029-mobile-store-manager/spec.md) | `approved` | FW-028 | 接力待开工（线一 6/6，线尾） |

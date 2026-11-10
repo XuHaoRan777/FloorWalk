@@ -17,7 +17,6 @@ const input: AiReviewInput = {
   items: [1, 2].map((n) => ({
     itemId: `00000000-0000-4000-8000-00000000000${n}`,
     title: `检查项 ${n}`,
-    photoRequired: false,
     critical: n === 1,
     minPhotos: 0,
     acceptanceCriteria: '',

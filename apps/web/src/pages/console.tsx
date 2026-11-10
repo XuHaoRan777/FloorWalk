@@ -45,6 +45,7 @@ import { QueueView } from '@/components/console/queue-view';
 import { ReviewDetail } from '@/components/console/review-detail';
 import { SitesPage } from '@/components/console/sites-page';
 import { TemplatesPage } from '@/components/console/templates-page';
+import { AiStandardsPage } from '@/components/console/ai-standards-page';
 import { UsersPage } from '@/components/console/users-page';
 
 function useConsoleSession() {
@@ -105,7 +106,8 @@ function useConsoleSession() {
   return { session, loading, error, setError, logout };
 }
 
-type ConsoleSection = 'queue' | 'dashboard' | 'sites' | 'templates' | 'users';
+type ConsoleSection =
+  'queue' | 'dashboard' | 'sites' | 'templates' | 'standards' | 'users';
 
 export function ConsolePage() {
   const navigate = useNavigate();
@@ -203,6 +205,18 @@ export function ConsolePage() {
                   </SidebarMenuItem>
                   <SidebarMenuItem>
                     <SidebarMenuButton
+                      isActive={section === 'standards'}
+                      onClick={() => {
+                        setSection('standards');
+                        setSelected(null);
+                      }}
+                    >
+                      <FileText aria-hidden="true" />
+                      <span>AI 审核标准</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
                       isActive={section === 'users'}
                       onClick={() => {
                         setSection('users');
@@ -249,6 +263,8 @@ export function ConsolePage() {
               <SitesPage />
             ) : canManage && section === 'templates' ? (
               <TemplatesPage />
+            ) : canManage && section === 'standards' ? (
+              <AiStandardsPage />
             ) : canManage && section === 'users' ? (
               <UsersPage />
             ) : user.role === 'store_manager' ? (

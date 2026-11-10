@@ -38,7 +38,6 @@ describe('Northbean seed', () => {
       managers: string;
       admins: string;
       templates: string;
-      current_templates: string;
       template_items: string;
     }>(
       `SELECT
@@ -47,7 +46,6 @@ describe('Northbean seed', () => {
       (SELECT COUNT(*) FROM floorwalk.users WHERE org_id = $1 AND role = 'store_manager') AS managers,
       (SELECT COUNT(*) FROM floorwalk.users WHERE org_id = $1 AND role = 'admin') AS admins,
       (SELECT COUNT(*) FROM floorwalk.templates WHERE org_id = $1) AS templates,
-      (SELECT COUNT(*) FROM floorwalk.templates WHERE org_id = $1 AND is_current) AS current_templates,
       (SELECT COUNT(*) FROM floorwalk.template_items ti
        JOIN floorwalk.templates t ON t.id = ti.template_id WHERE t.org_id = $1) AS template_items`,
       [northbeanOrgId],
@@ -58,7 +56,6 @@ describe('Northbean seed', () => {
       managers: '13',
       admins: '1',
       templates: '1',
-      current_templates: '1',
       template_items: '8',
     });
     const siteInspectors = await pool.query<{ site_id: string; count: string }>(
@@ -104,13 +101,13 @@ describe('Northbean seed', () => {
       { role: 'admin', site_org_id: null },
       { role: 'store_manager', site_org_id: secondOrgId },
     ]);
-    const templates = await pool.query<{ is_current: boolean; items: string }>(
-      `SELECT t.is_current, COUNT(ti.id)::text AS items FROM floorwalk.templates t
+    const templates = await pool.query<{ ai_enabled: boolean; items: string }>(
+      `SELECT t.ai_enabled, COUNT(ti.id)::text AS items FROM floorwalk.templates t
        LEFT JOIN floorwalk.template_items ti ON ti.template_id = t.id
        WHERE t.org_id = $1 GROUP BY t.id`,
       [secondOrgId],
     );
-    expect(templates.rows).toEqual([{ is_current: true, items: '8' }]);
+    expect(templates.rows).toEqual([{ ai_enabled: false, items: '8' }]);
     const inspections = await pool.query<{
       status: string;
       score: number;
@@ -239,7 +236,7 @@ describe('Northbean seed', () => {
     const missingEvidence = await pool.query(
       `SELECT ii.id FROM floorwalk.inspection_items ii
        JOIN floorwalk.inspections i ON i.id = ii.inspection_id
-       WHERE i.status <> 'draft' AND ii.photo_required
+       WHERE i.status <> 'draft' AND ii.min_photo_count > 0
        AND NOT EXISTS (
          SELECT 1 FROM floorwalk.evidence e WHERE e.inspection_item_id = ii.id
        )`,

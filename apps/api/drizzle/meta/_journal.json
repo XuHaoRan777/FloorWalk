@@ -50,6 +50,20 @@
       "when": 1794324059805,
       "tag": "0006_fw025_email_verification",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794330294571,
+      "tag": "0007_fw026_template_ai_storage",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794331595499,
+      "tag": "0008_fw026_remove_legacy_template_fields",
+      "breakpoints": true
     }
   ]
 }

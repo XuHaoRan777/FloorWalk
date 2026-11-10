@@ -19,7 +19,6 @@ export const aiReviewInputSchema = z.object({
     z.object({
       itemId: uuid,
       title: z.string().min(1),
-      photoRequired: z.boolean(),
       critical: z.boolean(),
       minPhotos: z.number().int().nonnegative(),
       acceptanceCriteria: z.string(),

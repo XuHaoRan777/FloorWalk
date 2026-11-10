@@ -49,6 +49,7 @@ const services = {
       String(3100 + slot * 10 + 2),
     ],
     env: (slot) => ({
+      FW_SLOT: String(slot),
       EXPO_PUBLIC_API_BASE_URL: `http://127.0.0.1:${3100 + slot * 10}/api`,
       RCT_METRO_PORT: String(3100 + slot * 10 + 2),
       REACT_NATIVE_PACKAGER_HOSTNAME: '127.0.0.1',

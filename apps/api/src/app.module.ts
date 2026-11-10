@@ -7,6 +7,8 @@ import { EvidenceController } from './evidence.controller.js';
 import { ReviewController } from './review.controller.js';
 import { DashboardController } from './dashboard.controller.js';
 import { AdminController } from './admin.controller.js';
+import { AiStandardsController } from './ai-standards.controller.js';
+import { TemplatesController } from './templates.controller.js';
 import { RecordsController } from './records.controller.js';
 import { ChatController } from './chat.controller.js';
 import { OrgsController } from './orgs.controller.js';
@@ -40,6 +42,8 @@ import {
     ReviewController,
     DashboardController,
     AdminController,
+    AiStandardsController,
+    TemplatesController,
     RecordsController,
     ChatController,
     StorageController,

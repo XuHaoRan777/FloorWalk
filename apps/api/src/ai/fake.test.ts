@@ -8,7 +8,6 @@ const input: AiReviewInput = {
   items: ['pass', 'fail'].map((selfResult, index) => ({
     itemId: `00000000-0000-4000-8000-00000000000${index}`,
     title: `检查项 ${index}`,
-    photoRequired: false,
     critical: false,
     minPhotos: 0,
     acceptanceCriteria: '',

@@ -45,9 +45,10 @@ function slotDatabaseUrl() {
 
 async function login(page: Page) {
   await page.goto('/');
-  await page.getByLabel('邮箱').fill(email);
+  await page.getByLabel('登录名').fill(email);
   await page.getByLabel('密码').fill(password);
   await page.getByTestId('login-button').click();
+  await page.getByRole('button', { name: 'Northbean', exact: true }).click();
   await expect(
     page.getByRole('tab', { name: '记录', exact: true }),
   ).toBeVisible();
@@ -80,14 +81,16 @@ async function createTestRecords(page: Page) {
   expect(todayResponse.status()).toBe(200);
   const today = (await todayResponse.json()) as {
     site: { id: string };
-    template: { id: string };
+    templates: Array<{ id: string }>;
   };
+  const templateId = today.templates[0]?.id;
+  expect(templateId).toBeTruthy();
 
   for (let index = 0; index < 19; index += 1) {
     const response = await page
       .context()
       .request.post(`${apiBase}/inspections`, {
-        data: { templateId: today.template.id },
+        data: { templateId },
       });
     expect(response.status()).toBe(201);
     const inspection = (await response.json()) as { id: string };
@@ -97,8 +100,8 @@ async function createTestRecords(page: Page) {
   const pool = createPool(slotDatabaseUrl());
   try {
     const colleague = await pool.query<{ id: string }>(
-      `INSERT INTO floorwalk.users (email, password_hash, display_name, role, site_id, org_id)
-       SELECT $1, 'test-hash', '同店测试店员', 'inspector', id, org_id
+      `INSERT INTO floorwalk.users (login_name, password_hash, display_name, role, site_id, org_id)
+       SELECT $1, 'test-hash', '同店测试店长', 'store_manager', id, org_id
        FROM floorwalk.sites WHERE id = $2
        RETURNING id`,
       [`records-${randomUUID()}@northbean.example`, today.site.id],
@@ -108,16 +111,16 @@ async function createTestRecords(page: Page) {
       `INSERT INTO floorwalk.inspections
          (site_id, template_id, inspector_id, status, score, submitted_at, decided_at)
        VALUES ($1, $2, $3, 'passed', 100, now(), now()) RETURNING id`,
-      [today.site.id, today.template.id, colleagueId],
+      [today.site.id, templateId, colleagueId],
     );
     colleagueInspectionId = record.rows[0].id;
     await pool.query(
       `INSERT INTO floorwalk.inspection_items
-         (inspection_id, position, title, photo_required, critical, result, note)
-       SELECT $1, position, title, photo_required, critical, 'pass',
+         (inspection_id, position, title, min_photo_count, acceptance_criteria, critical, result, note)
+       SELECT $1, position, title, min_photo_count, acceptance_criteria, critical, 'pass',
               CASE WHEN position = 1 THEN '同店店员填写的记录备注' ELSE NULL END
        FROM floorwalk.template_items WHERE template_id = $2`,
-      [colleagueInspectionId, today.template.id],
+      [colleagueInspectionId, templateId],
     );
   } finally {
     await pool.end();

@@ -88,7 +88,11 @@ export function InspectionScreen({
   }
 
   async function addPhoto(itemId: string) {
-    if (!detail) return;
+    if (
+      !detail ||
+      !detail.items.some((item) => item.id === itemId && item.minPhotoCount > 0)
+    )
+      return;
     setError(null);
     setBusyItems((current) => ({ ...current, [itemId]: true }));
     try {
@@ -138,7 +142,9 @@ export function InspectionScreen({
       const missing = latestDetail.items.filter(
         (item) =>
           item.result === 'pending' ||
-          (item.photoRequired && item.evidence.length === 0),
+          (item.minPhotoCount === 0
+            ? !(notes[item.id] ?? item.note ?? '').trim()
+            : item.evidence.length < item.minPhotoCount),
       );
       if (missing.length > 0) {
         setError(`请完成：${missing.map((item) => item.title).join('、')}`);
@@ -229,12 +235,17 @@ export function InspectionScreen({
               <Text className={classes.foreground} style={styles.cardTitle}>
                 {item.position}. {item.title}
               </Text>
-              {item.photoRequired && (
+              {item.minPhotoCount > 0 && (
                 <Text className={classes.required} style={styles.required}>
-                  必拍
+                  最少 {item.minPhotoCount} 张照片
                 </Text>
               )}
             </View>
+            {item.acceptanceCriteria && (
+              <Text className={classes.muted} style={styles.muted}>
+                验收要点：{item.acceptanceCriteria}
+              </Text>
+            )}
             {highlighted && (
               <Text
                 className={classes.highlightText}
@@ -273,20 +284,28 @@ export function InspectionScreen({
                 setNotes((current) => ({ ...current, [item.id]: value }))
               }
               className={classes.noteInput}
-              placeholder="填写现场备注（可选）"
+              placeholder={
+                item.minPhotoCount === 0
+                  ? '填写现场备注（必填）'
+                  : '填写现场备注（可选）'
+              }
               style={styles.noteInput}
               value={notes[item.id] ?? item.note ?? ''}
             />
-            {item.photoRequired && (
-              <PrimaryButton
-                disabled={busyItems[item.id] === true}
-                onPress={() => void addPhoto(item.id)}
-                variant="secondary"
-              >
-                {item.evidence.length
-                  ? `已上传 ${item.evidence.length} 张照片`
-                  : '选择照片'}
-              </PrimaryButton>
+            {item.minPhotoCount > 0 && (
+              <>
+                <Text className={classes.muted} style={styles.muted}>
+                  已上传 {item.evidence.length} 张照片 · 最少{' '}
+                  {item.minPhotoCount} 张
+                </Text>
+                <PrimaryButton
+                  disabled={busyItems[item.id] === true}
+                  onPress={() => void addPhoto(item.id)}
+                  variant="secondary"
+                >
+                  {item.evidence.length ? '继续选择照片' : '选择照片'}
+                </PrimaryButton>
+              </>
             )}
           </View>
         );

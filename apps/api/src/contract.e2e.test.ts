@@ -78,7 +78,6 @@ describe('inspection contract API', () => {
   let otherSiteInspectionId: string;
   let seedEvidenceId: string;
   let templateId: string;
-  let demo2TemplateId: string;
   let chatInspectionId: string;
   let chatImageMessageId: string;
   let nb002InspectorCookie: string;
@@ -92,6 +91,7 @@ describe('inspection contract API', () => {
   const createdProtocolOrgIds: string[] = [];
   const createdProtocolEmails: string[] = [];
   const createdAdminTemplateIds: string[] = [];
+  const createdAiStandardIds: string[] = [];
   const createdChatStorageKeys: string[] = [];
 
   beforeAll(async () => {
@@ -139,15 +139,9 @@ describe('inspection contract API', () => {
       const template = await pool.query<{ id: string }>(
         `SELECT t.id FROM floorwalk.templates t
          JOIN floorwalk.organizations o ON o.id = t.org_id
-         WHERE o.name = 'Northbean' AND t.is_current`,
+         WHERE o.name = 'Northbean' AND t.name = '开店检查'`,
       );
       templateId = template.rows[0].id;
-      const demo2Template = await pool.query<{ id: string }>(
-        `SELECT t.id FROM floorwalk.templates t
-         JOIN floorwalk.organizations o ON o.id = t.org_id
-         WHERE o.name = '演示二号' AND t.is_current`,
-      );
-      demo2TemplateId = demo2Template.rows[0].id;
       const northbeanSite = await pool.query<{ id: string }>(
         "SELECT id FROM floorwalk.sites WHERE code = 'NB-001'",
       );
@@ -218,21 +212,16 @@ describe('inspection contract API', () => {
       try {
         await cleanup.query('BEGIN');
         await cleanup.query(
-          `UPDATE floorwalk.templates SET is_current = false
-           WHERE org_id = (SELECT org_id FROM floorwalk.templates WHERE id = $1)`,
-          [templateId],
-        );
-        await cleanup.query(
-          'UPDATE floorwalk.templates SET is_current = true WHERE id = $1',
-          [templateId],
-        );
-        await cleanup.query(
           'DELETE FROM floorwalk.template_items WHERE template_id = ANY($1::uuid[])',
           [createdAdminTemplateIds],
         );
         await cleanup.query(
           'DELETE FROM floorwalk.templates WHERE id = ANY($1::uuid[])',
           [createdAdminTemplateIds],
+        );
+        await cleanup.query(
+          'DELETE FROM floorwalk.ai_review_standards WHERE id = ANY($1::uuid[])',
+          [createdAiStandardIds],
         );
         await cleanup.query(
           'DELETE FROM floorwalk.sites WHERE id = ANY($1::uuid[])',
@@ -388,7 +377,7 @@ describe('inspection contract API', () => {
   });
 
   it('publishes the complete route table under /api', () => {
-    expect(Object.keys(apiRoutes)).toHaveLength(34);
+    expect(Object.keys(apiRoutes)).toHaveLength(38);
     for (const route of Object.values(apiRoutes)) {
       expect(route.path.startsWith('/api/')).toBe(true);
       expect(route.responseSchema).toBeDefined();
@@ -401,7 +390,7 @@ describe('inspection contract API', () => {
       .get('/api/inspector/today')
       .set('Cookie', demo2InspectorCookie)
       .expect(200);
-    expect(todayResponseSchema.parse(today.body).template.id).not.toBe(
+    expect(todayResponseSchema.parse(today.body).templates[0].id).not.toBe(
       templateId,
     );
   });
@@ -526,7 +515,7 @@ describe('inspection contract API', () => {
                 `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000`,
               )
               .set('Cookie', hqCookie)
-              .send({ result: 'pass' });
+              .send({ result: 'pass', note: '现场已检查' });
             return { status: response.status, body: response.body };
           },
         },
@@ -662,8 +651,14 @@ describe('inspection contract API', () => {
               .set('Cookie', inspectorCookie)
               .send({
                 name: '测试模板',
+                aiEnabled: false,
                 items: [
-                  { title: '测试项', photoRequired: false, critical: false },
+                  {
+                    title: '测试项',
+                    minPhotoCount: 0,
+                    acceptanceCriteria: '',
+                    critical: false,
+                  },
                 ],
               });
             return { status: response.status, body: response.body };
@@ -679,11 +674,13 @@ describe('inspection contract API', () => {
               .set('Cookie', inspectorCookie)
               .send({
                 name: '测试模板',
+                aiEnabled: false,
                 items: [
                   {
                     position: 1,
                     title: '测试项',
-                    photoRequired: false,
+                    minPhotoCount: 0,
+                    acceptanceCriteria: '',
                     critical: false,
                   },
                 ],
@@ -692,18 +689,29 @@ describe('inspection contract API', () => {
           },
         },
       ],
-      [
-        'setCurrentAdminTemplate',
-        {
-          store_manager: async () => {
-            const response = await request(app.getHttpServer())
-              .post(`/api/admin/templates/${templateId}/current`)
-              .set('Cookie', inspectorCookie);
-            return { status: response.status, body: response.body };
-          },
-        },
-      ],
     ]);
+    for (const routeKey of [
+      'listAdminAiStandards',
+      'createAdminAiStandard',
+      'updateAdminAiStandard',
+      'deleteAdminAiStandard',
+      'quickSetupAdminTemplate',
+    ] as const) {
+      deniedByRoute.set(routeKey, {
+        store_manager: async () => {
+          const route = apiRoutes[routeKey];
+          const method = route.method.toLowerCase() as
+            'get' | 'post' | 'put' | 'delete';
+          const agent = request(app.getHttpServer());
+          const response = await agent[method](
+            route.path.replace(':id', randomUUID()),
+          )
+            .set('Cookie', inspectorCookie)
+            .send({});
+          return { status: response.status, body: response.body };
+        },
+      });
+    }
     for (const [routeKey, route] of Object.entries(apiRoutes)) {
       if (route.roles.length === 0) continue;
       for (const role of userRoles) {
@@ -773,12 +781,19 @@ describe('inspection contract API', () => {
       .set('Cookie', hqCookie)
       .send({
         name: 'FW-011 临时模板',
-        items: [{ title: '测试项', photoRequired: false, critical: false }],
+        aiEnabled: false,
+        items: [
+          {
+            title: '测试项',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
+        ],
       })
       .expect(201);
     templateResponseSchema.parse(createdTemplate.body);
     createdAdminTemplateIds.push(createdTemplate.body.id);
-    expect(createdTemplate.body.isCurrent).toBe(false);
 
     const updatedSite = await request(app.getHttpServer())
       .patch(`/api/admin/sites/${createdSite.body.id}`)
@@ -792,28 +807,19 @@ describe('inspection contract API', () => {
       .set('Cookie', hqCookie)
       .send({
         name: '开店检查更新',
+        aiEnabled: false,
         items: [
           {
             position: 1,
             title: '测试项',
-            photoRequired: false,
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
             critical: false,
           },
         ],
       })
       .expect(200);
     templateResponseSchema.parse(updatedTemplate.body);
-
-    const currentTemplate = await request(app.getHttpServer())
-      .post(`/api/admin/templates/${createdTemplate.body.id}/current`)
-      .set('Cookie', hqCookie)
-      .expect(200);
-    templateResponseSchema.parse(currentTemplate.body);
-    expect(currentTemplate.body.isCurrent).toBe(true);
-    await request(app.getHttpServer())
-      .post(`/api/admin/templates/${templateId}/current`)
-      .set('Cookie', hqCookie)
-      .expect(200);
 
     for (const path of ['/api/admin/sites', '/api/admin/templates'])
       await request(app.getHttpServer())
@@ -835,7 +841,15 @@ describe('inspection contract API', () => {
       .set('Cookie', inspectorCookie)
       .send({
         name: '拒绝',
-        items: [{ title: '项', photoRequired: false, critical: false }],
+        aiEnabled: false,
+        items: [
+          {
+            title: '项',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
+        ],
       })
       .expect(403);
     await request(app.getHttpServer())
@@ -843,14 +857,17 @@ describe('inspection contract API', () => {
       .set('Cookie', inspectorCookie)
       .send({
         name: '拒绝',
+        aiEnabled: false,
         items: [
-          { position: 1, title: '项', photoRequired: false, critical: false },
+          {
+            position: 1,
+            title: '项',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
         ],
       })
-      .expect(403);
-    await request(app.getHttpServer())
-      .post(`/api/admin/templates/${templateId}/current`)
-      .set('Cookie', inspectorCookie)
       .expect(403);
     await request(app.getHttpServer())
       .get('/api/inspector/inspections')
@@ -891,19 +908,17 @@ describe('inspection contract API', () => {
       .set('Cookie', demo2AdminCookie)
       .send({
         name: '不得跨商家修改',
+        aiEnabled: false,
         items: [
           {
             position: 1,
             title: '项',
-            photoRequired: false,
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
             critical: false,
           },
         ],
       })
-      .expect(404);
-    await request(app.getHttpServer())
-      .post(`/api/admin/templates/${templateId}/current`)
-      .set('Cookie', demo2AdminCookie)
       .expect(404);
 
     const duplicateSiteCodeAcrossTenants = await request(app.getHttpServer())
@@ -924,8 +939,14 @@ describe('inspection contract API', () => {
       .set('Cookie', hqCookie)
       .send({
         name: northbeanTemplateName,
+        aiEnabled: false,
         items: [
-          { title: 'Northbean 项', photoRequired: false, critical: false },
+          {
+            title: 'Northbean 项',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
         ],
       })
       .expect(201);
@@ -938,7 +959,15 @@ describe('inspection contract API', () => {
       .set('Cookie', demo2AdminCookie)
       .send({
         name: northbeanTemplateName,
-        items: [{ title: '演示项', photoRequired: false, critical: false }],
+        aiEnabled: false,
+        items: [
+          {
+            title: '演示项',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
+        ],
       })
       .expect(201);
     createdAdminTemplateIds.push(duplicateTemplateNameAcrossTenants.body.id);
@@ -947,33 +976,17 @@ describe('inspection contract API', () => {
       .set('Cookie', demo2AdminCookie)
       .send({
         name: northbeanTemplateName,
-        items: [{ title: '重复项', photoRequired: false, critical: false }],
+        aiEnabled: false,
+        items: [
+          {
+            title: '重复项',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
+        ],
       })
       .expect(409);
-
-    await request(app.getHttpServer())
-      .post(
-        `/api/admin/templates/${duplicateTemplateNameAcrossTenants.body.id}/current`,
-      )
-      .set('Cookie', demo2AdminCookie)
-      .expect(200);
-    const northbeanTemplates = await request(app.getHttpServer())
-      .get('/api/admin/templates')
-      .set('Cookie', hqCookie)
-      .expect(200);
-    expect(
-      adminTemplatesResponseSchema
-        .parse(northbeanTemplates.body)
-        .find((template) => template.id === templateId)?.isCurrent,
-    ).toBe(true);
-    await request(app.getHttpServer())
-      .post(`/api/admin/templates/${demo2TemplateId}/current`)
-      .set('Cookie', demo2AdminCookie)
-      .expect(200);
-    await request(app.getHttpServer())
-      .post('/api/admin/templates/00000000-0000-4000-8000-000000000000/current')
-      .set('Cookie', demo2AdminCookie)
-      .expect(404);
   });
 
   it('hides Northbean inspection, evidence, and chat resources from every demo tenant role', async () => {
@@ -1072,7 +1085,7 @@ describe('inspection contract API', () => {
         `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000`,
       )
       .set('Cookie', demo2InspectorCookie)
-      .send({ result: 'pass' })
+      .send({ result: 'pass', note: '现场已检查' })
       .expect(404)
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
@@ -1598,7 +1611,7 @@ describe('inspection contract API', () => {
     const updated = await request(app.getHttpServer())
       .patch(`/api/inspections/${createdInspectionId}/items/${createdItemId}`)
       .set('Cookie', inspectorCookie)
-      .send({ result: 'pass' })
+      .send({ result: 'pass', note: '现场已检查' })
       .expect(200);
     updateInspectionItemResponseSchema.parse(updated.body);
 
@@ -1649,15 +1662,15 @@ describe('inspection contract API', () => {
       );
 
     const skippedPhotoItem = detailBody.items.find(
-      (item) => item.photoRequired && item.id !== createdItemId,
+      (item) => item.minPhotoCount > 0 && item.id !== createdItemId,
     );
     for (const item of detailBody.items.slice(1)) {
       await request(app.getHttpServer())
         .patch(`/api/inspections/${createdInspectionId}/items/${item.id}`)
         .set('Cookie', inspectorCookie)
-        .send({ result: 'pass' })
+        .send({ result: 'pass', note: '现场已检查' })
         .expect(200);
-      if (item.photoRequired && item.id !== skippedPhotoItem?.id)
+      if (item.minPhotoCount > 0 && item.id !== skippedPhotoItem?.id)
         await request(app.getHttpServer())
           .post(
             `/api/inspections/${createdInspectionId}/items/${item.id}/evidence`,
@@ -1791,9 +1804,12 @@ describe('inspection contract API', () => {
       await request(app.getHttpServer())
         .patch(`/api/inspections/${criticalInspectionId}/items/${item.id}`)
         .set('Cookie', inspectorCookie)
-        .send({ result: item.id === criticalItemId ? 'fail' : 'pass' })
+        .send({
+          result: item.id === criticalItemId ? 'fail' : 'pass',
+          note: '现场已检查',
+        })
         .expect(200);
-      if (item.photoRequired) {
+      if (item.minPhotoCount > 0) {
         const criticalEvidence = await request(app.getHttpServer())
           .post(
             `/api/inspections/${criticalInspectionId}/items/${item.id}/evidence`,
@@ -1860,7 +1876,9 @@ describe('inspection contract API', () => {
       .set('Cookie', hqCookie)
       .expect(200);
     dashboardSitesResponseSchema.parse(dashboard.body);
-    expect(todayBody.template.items).toHaveLength(8);
+    expect(
+      todayBody.templates.find((template) => template.id === templateId)?.items,
+    ).toHaveLength(8);
 
     const deletedSession = await request(app.getHttpServer())
       .delete('/api/auth/session')
@@ -1909,7 +1927,15 @@ describe('inspection contract API', () => {
       .set('Cookie', hqCookie)
       .send({
         name: 'FW-011 路由表测试模板',
-        items: [{ title: '测试项', photoRequired: false, critical: false }],
+        aiEnabled: false,
+        items: [
+          {
+            title: '测试项',
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
+            critical: false,
+          },
+        ],
       })
       .expect(201);
     const adminTemplateUpdateResponse = await request(app.getHttpServer())
@@ -1917,24 +1943,51 @@ describe('inspection contract API', () => {
       .set('Cookie', hqCookie)
       .send({
         name: 'FW-011 路由表测试模板更新',
+        aiEnabled: false,
         items: [
           {
             position: 1,
             title: '测试项',
-            photoRequired: false,
+            minPhotoCount: 0,
+            acceptanceCriteria: '',
             critical: false,
           },
         ],
       })
       .expect(200);
-    const adminTemplateCurrentResponse = await request(app.getHttpServer())
-      .post(
-        `/api/admin/templates/${adminTemplateCreateResponse.body.id}/current`,
-      )
-      .set('Cookie', hqCookie)
-      .expect(200);
     createdAdminSiteIds.push(adminSiteCreateResponse.body.id);
     createdAdminTemplateIds.push(adminTemplateCreateResponse.body.id);
+    const adminAiStandardCreateResponse = await request(app.getHttpServer())
+      .post('/api/admin/ai-standards')
+      .set('Cookie', hqCookie)
+      .send({ name: '路由表测试标准', prompt: '按检查项验收要点审核。' })
+      .expect(201);
+    createdAiStandardIds.push(adminAiStandardCreateResponse.body.id);
+    const adminAiStandardUpdateResponse = await request(app.getHttpServer())
+      .put(`/api/admin/ai-standards/${adminAiStandardCreateResponse.body.id}`)
+      .set('Cookie', hqCookie)
+      .send({
+        name: '路由表测试标准更新',
+        prompt: '逐项核对验收要点并说明原因。',
+      })
+      .expect(200);
+    const adminAiStandardListResponse = await request(app.getHttpServer())
+      .get('/api/admin/ai-standards')
+      .set('Cookie', hqCookie)
+      .expect(200);
+    const adminAiStandardDeleteResponse = await request(app.getHttpServer())
+      .delete(
+        `/api/admin/ai-standards/${adminAiStandardCreateResponse.body.id}`,
+      )
+      .set('Cookie', hqCookie)
+      .expect(204);
+    const quickSetupResponse = await request(app.getHttpServer())
+      .post('/api/admin/templates/quick-setup')
+      .set('Cookie', hqCookie)
+      .send({ kind: 'coffee' })
+      .expect(201);
+    createdAdminTemplateIds.push(quickSetupResponse.body.template.id);
+    createdAiStandardIds.push(quickSetupResponse.body.standard.id);
     const registrationEmail = `protocol-route-${randomUUID()}@example.test`;
     createdProtocolEmails.push(registrationEmail);
     const registrationCodeResponse = await request(app.getHttpServer())
@@ -2007,7 +2060,11 @@ describe('inspection contract API', () => {
       listAdminTemplates: adminTemplateListResponse,
       createAdminTemplate: adminTemplateCreateResponse,
       updateAdminTemplate: adminTemplateUpdateResponse,
-      setCurrentAdminTemplate: adminTemplateCurrentResponse,
+      listAdminAiStandards: adminAiStandardListResponse,
+      createAdminAiStandard: adminAiStandardCreateResponse,
+      updateAdminAiStandard: adminAiStandardUpdateResponse,
+      deleteAdminAiStandard: adminAiStandardDeleteResponse,
+      quickSetupAdminTemplate: quickSetupResponse,
     };
     for (const [routeKey, route] of Object.entries(apiRoutes)) {
       if (Object.hasOwn(protocolRouteBodies, routeKey)) {

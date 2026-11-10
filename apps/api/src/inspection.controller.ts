@@ -52,18 +52,17 @@ export class InspectionController {
         code: 'FORBIDDEN',
         message: '店员未绑定门店。',
       });
-    const template = await this.pool.query(
-      'SELECT id, name, is_current AS "isCurrent", created_at AS "createdAt" FROM floorwalk.templates WHERE org_id = $1 AND is_current = true LIMIT 1',
+    const templates = await this.pool.query(
+      'SELECT id, name, ai_enabled AS "aiEnabled", ai_standard_id AS "aiStandardId", created_at AS "createdAt" FROM floorwalk.templates WHERE org_id = $1 ORDER BY created_at, id',
       [request.user.orgId],
     );
-    if (!template.rows[0])
-      throw new NotFoundException({
-        code: 'NOT_FOUND',
-        message: '检查模板不存在。',
-      });
     const items = await this.pool.query(
-      'SELECT id, template_id AS "templateId", position, title, photo_required AS "photoRequired", critical, created_at AS "createdAt" FROM floorwalk.template_items WHERE template_id = $1 ORDER BY position',
-      [template.rows[0].id],
+      `SELECT ti.id, ti.template_id AS "templateId", ti.position, ti.title,
+         ti.min_photo_count AS "minPhotoCount", ti.acceptance_criteria AS "acceptanceCriteria",
+         ti.critical, ti.created_at AS "createdAt"
+       FROM floorwalk.template_items ti JOIN floorwalk.templates t ON t.id = ti.template_id
+       WHERE t.org_id = $1 ORDER BY ti.template_id, ti.position`,
+      [request.user.orgId],
     );
     const site = await this.pool.query(
       'SELECT id, code, name, deactivated_at IS NULL AS active, created_at AS "createdAt" FROM floorwalk.sites WHERE id = $1 AND org_id = $2',
@@ -91,14 +90,13 @@ export class InspectionController {
         ...site.rows[0],
         createdAt: iso(site.rows[0].createdAt),
       },
-      template: {
-        ...template.rows[0],
-        createdAt: iso(template.rows[0].createdAt),
-        items: items.rows.map((item) => ({
-          ...item,
-          createdAt: iso(item.createdAt),
-        })),
-      },
+      templates: templates.rows.map((template) => ({
+        ...template,
+        createdAt: iso(template.createdAt),
+        items: items.rows
+          .filter((item) => item.templateId === template.id)
+          .map((item) => ({ ...item, createdAt: iso(item.createdAt) })),
+      })),
       submittedToday: submittedToday.rows[0]?.submittedToday ?? false,
       reworkInspections: rework.rows.map((item) => ({
         ...item,
@@ -119,19 +117,20 @@ export class InspectionController {
         message: '店员未绑定门店。',
       });
     const input = createInspectionRequestSchema.parse(body);
-    const templateExists = await this.pool.query(
-      'SELECT id FROM floorwalk.templates WHERE id = $1 AND org_id = $2',
-      [input.templateId, request.user.orgId],
-    );
-    if (!templateExists.rows[0])
-      throw new NotFoundException({
-        code: 'NOT_FOUND',
-        message: '检查模板不存在。',
-      });
     const pool = this.pool;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      // Coordinate with template edits so the copied item set is one version.
+      const templateExists = await client.query(
+        'SELECT id FROM floorwalk.templates WHERE id = $1 AND org_id = $2 FOR SHARE',
+        [input.templateId, request.user.orgId],
+      );
+      if (!templateExists.rowCount)
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '检查模板不存在。',
+        });
       const site = await client.query<{ deactivatedAt: Date | null }>(
         'SELECT deactivated_at AS "deactivatedAt" FROM floorwalk.sites WHERE id = $1 AND org_id = $2 FOR UPDATE',
         [request.user.siteId, request.user.orgId],
@@ -157,18 +156,19 @@ export class InspectionController {
         [inspection.rows[0].id, request.user.id],
       );
       const items = await client.query(
-        'SELECT position, title, photo_required, critical FROM floorwalk.template_items WHERE template_id = $1 ORDER BY position',
+        'SELECT position, title, min_photo_count, acceptance_criteria, critical FROM floorwalk.template_items WHERE template_id = $1 ORDER BY position',
         [input.templateId],
       );
       for (const item of items.rows) {
         await client.query(
-          `INSERT INTO floorwalk.inspection_items (inspection_id, position, title, photo_required, critical)
-           VALUES ($1, $2, $3, $4, $5)`,
+          `INSERT INTO floorwalk.inspection_items (inspection_id, position, title, min_photo_count, acceptance_criteria, critical)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             inspection.rows[0].id,
             item.position,
             item.title,
-            item.photo_required,
+            item.min_photo_count,
+            item.acceptance_criteria,
             item.critical,
           ],
         );
@@ -237,7 +237,7 @@ export class InspectionController {
          SET result = $1, note = $2
          WHERE id = $3 AND inspection_id = $4
          RETURNING id, inspection_id AS "inspectionId", position, title,
-           photo_required AS "photoRequired", critical, result, note,
+           min_photo_count AS "minPhotoCount", acceptance_criteria AS "acceptanceCriteria", critical, result, note,
            created_at AS "createdAt"`,
         [input.result, input.note ?? null, itemId, inspection.id],
       );
@@ -309,7 +309,7 @@ export class InspectionController {
         });
       const items = await client.query(
         `SELECT id, inspection_id AS "inspectionId", position, title,
-           photo_required AS "photoRequired", critical, result, note,
+           min_photo_count AS "minPhotoCount", acceptance_criteria AS "acceptanceCriteria", critical, result, note,
            created_at AS "createdAt"
          FROM floorwalk.inspection_items WHERE inspection_id = $1 ORDER BY position`,
         [id],
@@ -333,7 +333,8 @@ export class InspectionController {
         if (error instanceof Error && error.message === 'INCOMPLETE')
           throw new UnprocessableEntityException({
             code: 'INCOMPLETE',
-            message: '所有检查项必须完成，必拍项必须有照片。',
+            message:
+              '所有检查项必须完成；不拍照的项须填写备注，其他项须满足最少照片张数。',
           });
         throw error;
       }
