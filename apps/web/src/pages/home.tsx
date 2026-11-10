@@ -194,9 +194,14 @@ export function HomePage() {
               )}
             </Button>
           </form>
-          <Button variant="link" className="mt-4 px-0" asChild>
-            <Link to="/register">注册商家</Link>
-          </Button>
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Button variant="link" className="px-0" asChild>
+              <Link to="/register">注册商家</Link>
+            </Button>
+            <Button variant="link" className="px-0" asChild>
+              <Link to="/forgot-password">忘记密码</Link>
+            </Button>
+          </div>
         </section>
       </main>
     </div>

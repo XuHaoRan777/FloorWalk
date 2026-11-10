@@ -26,6 +26,12 @@ export { getDashboard } from './api/dashboard';
 export { getChatMessages, sendChatMessage } from './api/chat';
 export { getAdminSites, getAdminTemplates } from './api/admin';
 export { getInspectorRecords } from './api/records';
+export {
+  requestRegistrationCode,
+  requestPasswordRecoveryCode,
+  verifyPasswordRecoveryCode,
+  resetPasswordRecovery,
+} from './api/email';
 export * as orgs from './api/orgs';
 export * as users from './api/users';
 

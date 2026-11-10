@@ -18,10 +18,15 @@ import {
 } from '@libs/shared';
 import { hashSessionId, sessionCookie } from './auth.js';
 import { DATABASE_POOL } from './db/pool.provider.js';
+import { EmailVerificationService } from './email-verification.js';
 
 @Controller('api')
 export class OrgsController {
-  constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(DATABASE_POOL) private readonly pool: Pool,
+    @Inject(EmailVerificationService)
+    private readonly verification: EmailVerificationService,
+  ) {}
 
   @Post(apiRoutePath(apiRoutes.createOrg))
   async createOrg(
@@ -32,8 +37,20 @@ export class OrgsController {
     const passwordHash = await argon2.hash(input.password);
     const sessionId = randomBytes(32).toString('base64url');
     const client = await this.pool.connect();
+    let inTransaction = false;
     try {
       await client.query('BEGIN');
+      inTransaction = true;
+      const verified = await this.verification.consumeRegistrationCode(
+        client,
+        input.email,
+        input.verificationCode,
+      );
+      if (!verified) {
+        await client.query('COMMIT');
+        inTransaction = false;
+        throw this.verification.badCode();
+      }
       const orgResult = await client.query<{
         id: string;
         name: string;
@@ -80,10 +97,11 @@ export class OrgsController {
         },
       });
       await client.query('COMMIT');
+      inTransaction = false;
       response.setHeader('Set-Cookie', sessionCookie(sessionId));
       return result;
     } catch (error) {
-      await client.query('ROLLBACK');
+      if (inTransaction) await client.query('ROLLBACK');
       if (
         error instanceof Error &&
         'code' in error &&

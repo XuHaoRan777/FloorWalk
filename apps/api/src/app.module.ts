@@ -11,6 +11,11 @@ import { RecordsController } from './records.controller.js';
 import { ChatController } from './chat.controller.js';
 import { OrgsController } from './orgs.controller.js';
 import { UsersController } from './users.controller.js';
+import { VerificationController } from './verification.controller.js';
+import { PasswordRecoveryController } from './password-recovery.controller.js';
+import { FakeMailboxController } from './fake-mailbox.controller.js';
+import { EmailVerificationService } from './email-verification.js';
+import { createEmailSender, EMAIL_SENDER } from './email/index.js';
 import { getStorageDriver } from './storage/index.js';
 import { getAiReviewer } from './ai/index.js';
 import {
@@ -22,6 +27,8 @@ import {
   providers: [
     databasePoolProvider,
     DatabasePoolLifecycle,
+    { provide: EMAIL_SENDER, useFactory: () => createEmailSender() },
+    EmailVerificationService,
     { provide: 'STORAGE_DRIVER', useFactory: () => getStorageDriver() },
     { provide: 'AI_REVIEWER', useFactory: () => getAiReviewer() },
   ],
@@ -38,6 +45,9 @@ import {
     StorageController,
     OrgsController,
     UsersController,
+    VerificationController,
+    PasswordRecoveryController,
+    FakeMailboxController,
   ],
 })
 export class AppModule {}

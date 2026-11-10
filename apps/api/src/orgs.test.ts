@@ -16,6 +16,7 @@ import { HttpErrorFilter } from './http-exception.filter.js';
 import { createPool } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import { seedDatabase } from './db/seed.js';
+import { clearFakeMailbox } from './email/fake.js';
 
 describe('organization registration (FW-019 AC-01)', () => {
   let app: NestExpressApplication;
@@ -23,6 +24,7 @@ describe('organization registration (FW-019 AC-01)', () => {
   const orgName = `FW019-${randomUUID()}`;
   const createdOrgIds: string[] = [];
   const sessionHashes: string[] = [];
+  const registeredEmails = new Set<string>();
   const input = () => ({
     orgName,
     adminName: '注册管理员',
@@ -31,6 +33,32 @@ describe('organization registration (FW-019 AC-01)', () => {
   });
   const cookieFrom = (response: request.Response) =>
     (response.headers['set-cookie'] as unknown as string[])[0].split(';')[0];
+  const createOrgWithCode = async (
+    registration: {
+      orgName: string;
+      adminName: string;
+      email: string;
+      password: string;
+      timezone?: string;
+    },
+    cookie?: string,
+  ) => {
+    registeredEmails.add(registration.email);
+    await request(app.getHttpServer())
+      .post('/api/auth/registration-code')
+      .send({ email: registration.email })
+      .expect(201);
+    const { code } = await request(app.getHttpServer())
+      .get('/api/testing/mailbox')
+      .query({ recipient: registration.email })
+      .expect(200)
+      .then((response) => response.body as { code: string });
+    const pending = request(app.getHttpServer()).post('/api/orgs');
+    if (cookie) pending.set('Cookie', cookie);
+    return pending
+      .send({ ...registration, verificationCode: code })
+      .expect(201);
+  };
 
   beforeAll(async () => {
     await runMigrations();
@@ -49,6 +77,10 @@ describe('organization registration (FW-019 AC-01)', () => {
     try {
       await client.query('BEGIN');
       await client.query(
+        'DELETE FROM floorwalk.email_verifications WHERE email = ANY($1::text[])',
+        [[...registeredEmails]],
+      );
+      await client.query(
         'DELETE FROM floorwalk.sessions WHERE token_hash = ANY($1::text[])',
         [sessionHashes],
       );
@@ -66,6 +98,7 @@ describe('organization registration (FW-019 AC-01)', () => {
       throw error;
     } finally {
       client.release();
+      clearFakeMailbox();
       await pool.end();
       await app.close();
     }
@@ -73,10 +106,7 @@ describe('organization registration (FW-019 AC-01)', () => {
 
   it('creates only the organization and admin with a usable session and default timezone', async () => {
     const registration = input();
-    const response = await request(app.getHttpServer())
-      .post('/api/orgs')
-      .send(registration)
-      .expect(201);
+    const response = await createOrgWithCode(registration);
     createdOrgIds.push(response.body.org.id);
     const { org, user } = createOrgResponseSchema.parse(response.body);
     expect(org).toMatchObject({ name: orgName, timezone: 'Asia/Shanghai' });
@@ -137,10 +167,7 @@ describe('organization registration (FW-019 AC-01)', () => {
   it.each(['hq@northbean.example', 'admin@demo2.example'])(
     'allows an existing login name in another organization %s',
     async (email) => {
-      const response = await request(app.getHttpServer())
-        .post('/api/orgs')
-        .send({ ...input(), email })
-        .expect(201);
+      const response = await createOrgWithCode({ ...input(), email });
       createdOrgIds.push(response.body.org.id);
       expect(createOrgResponseSchema.parse(response.body).user.loginName).toBe(
         email,
@@ -187,11 +214,10 @@ describe('organization registration (FW-019 AC-01)', () => {
         [originalUser.org.id],
       );
     const before = await snapshot();
-    const response = await request(app.getHttpServer())
-      .post('/api/orgs')
-      .set('Cookie', originalCookie)
-      .send({ ...input(), timezone: 'Europe/London' })
-      .expect(201);
+    const response = await createOrgWithCode(
+      { ...input(), timezone: 'Europe/London' },
+      originalCookie,
+    );
     createdOrgIds.push(response.body.org.id);
     const { org, user } = createOrgResponseSchema.parse(response.body);
     expect(org.id === originalUser.org.id).toBe(false);

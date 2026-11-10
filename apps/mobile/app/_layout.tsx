@@ -31,6 +31,7 @@ function Routes() {
     <Stack screenOptions={{ headerShown: false, contentStyle: styles.app }}>
       <Stack.Protected guard={!session}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="forgot-password" />
       </Stack.Protected>
       <Stack.Protected guard={!!session}>
         <Stack.Screen name="(authenticated)" />

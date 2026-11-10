@@ -43,6 +43,13 @@
       "when": 1794200000000,
       "tag": "0005_fw024_two_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794324059805,
+      "tag": "0006_fw025_email_verification",
+      "breakpoints": true
     }
   ]
 }

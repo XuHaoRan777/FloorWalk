@@ -10,6 +10,7 @@ import { ConsolePage } from './pages/console';
 import { DesignSamplesPage } from './pages/design-samples';
 import { RegisterPage } from './pages/register';
 import { ChangePasswordPage } from './pages/change-password';
+import { ForgotPasswordPage } from './pages/forgot-password';
 
 const rootRoute = createRootRoute({
   component: Outlet,
@@ -41,6 +42,12 @@ const registerRoute = createRoute({
   component: RegisterPage,
 });
 
+const forgotPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/forgot-password',
+  component: ForgotPasswordPage,
+});
+
 const changePasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/change-password',
@@ -58,6 +65,7 @@ export const router = createRouter({
     homeRoute,
     consoleRoute,
     registerRoute,
+    forgotPasswordRoute,
     changePasswordRoute,
     designSamplesRoute,
   ]),

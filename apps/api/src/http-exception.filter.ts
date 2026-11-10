@@ -19,6 +19,7 @@ const statusToCode: Partial<Record<number, ErrorCode>> = {
   [HttpStatus.NOT_FOUND]: 'NOT_FOUND',
   [HttpStatus.CONFLICT]: 'INVALID_STATE',
   [HttpStatus.UNPROCESSABLE_ENTITY]: 'INCOMPLETE',
+  [HttpStatus.TOO_MANY_REQUESTS]: 'RATE_LIMITED',
 };
 
 @Catch()

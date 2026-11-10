@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ScrollView, Text, TextInput, View } from 'react-native';
+import { Link } from 'expo-router';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { api, ApiError, userFacingError } from '../../lib/api';
 import { ErrorBanner } from './error-banner';
 import { PrimaryButton } from './primary-button';
@@ -90,6 +91,24 @@ export function LoginScreen({
           style={styles.input}
           value={password}
         />
+        <Link
+          href={{
+            pathname: '/forgot-password',
+            params: { loginName: email.trim() },
+          }}
+          asChild
+        >
+          <Pressable
+            accessibilityRole="link"
+            className={classes.link}
+            style={styles.touchTarget}
+            testID="forgot-password-link"
+          >
+            <Text className={classes.link} style={styles.link}>
+              忘记密码
+            </Text>
+          </Pressable>
+        </Link>
         <ErrorBanner message={error} />
         {organizations.length > 0 ? (
           organizations.map((org) => (

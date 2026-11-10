@@ -12,6 +12,13 @@ import {
 } from './identity.js';
 import { createOrgRequestSchema, createOrgResponseSchema } from './orgs.js';
 import {
+  requestEmailCodeRequestSchema,
+  requestEmailCodeResponseSchema,
+  verifyPasswordRecoveryCodeRequestSchema,
+  verifyPasswordRecoveryCodeResponseSchema,
+  resetPasswordRecoveryRequestSchema,
+} from './email.js';
+import {
   adminSiteSchema,
   adminUsersResponseSchema,
   changePasswordRequestSchema,
@@ -23,6 +30,7 @@ import {
 
 export * from './identity.js';
 export * from './orgs.js';
+export * from './email.js';
 export * from './users.js';
 export * from './ai.js';
 
@@ -44,6 +52,7 @@ export const errorCodes = [
   'CRITICAL_FAILED',
   'VALIDATION_FAILED',
   'NOT_FOUND',
+  'RATE_LIMITED',
 ] as const;
 
 export const inspectionStatusSchema = z.enum(inspectionStatuses);
@@ -346,6 +355,7 @@ export const evidenceUploadRequestSchema = z.object({
 export const dashboardLatestStatuses = ['passed', 'failed'] as const;
 export const databaseConstraints = {
   unique: [
+    'email_verifications(email, purpose) WHERE consumed_at IS NULL',
     'sites(org_id, code)',
     'templates(org_id, name)',
     'users(org_id, login_name)',
@@ -357,6 +367,7 @@ export const databaseConstraints = {
     'chat_messages.seq',
   ],
   indexes: [
+    'email_verifications(expires_at)',
     'sessions(user_id)',
     'inspections(site_id, status)',
     'inspections(created_at)',
@@ -364,6 +375,9 @@ export const databaseConstraints = {
     'chat_messages(inspection_id, seq)',
   ],
   checks: [
+    "email_verifications.purpose IN ('registration', 'password_recovery')",
+    'email_verifications.attempt_count BETWEEN 0 AND 5',
+    'email_verifications.code_hash IS NOT NULL OR purpose = password_recovery',
     "users.role IN ('admin', 'store_manager')",
     'users.role = store_manager requires site_id; admin requires NULL site_id',
     'template_items.position > 0',
@@ -420,6 +434,38 @@ export const apiRoutes = {
     responseSchema: z.undefined(),
     successStatus: 204,
     allowWhilePasswordChangeRequired: true,
+  },
+  requestRegistrationCode: {
+    method: 'POST',
+    path: '/api/auth/registration-code',
+    roles: [],
+    requestSchema: requestEmailCodeRequestSchema,
+    responseSchema: requestEmailCodeResponseSchema,
+    successStatus: 201,
+  },
+  requestPasswordRecoveryCode: {
+    method: 'POST',
+    path: '/api/auth/password-recovery-code',
+    roles: [],
+    requestSchema: requestEmailCodeRequestSchema,
+    responseSchema: requestEmailCodeResponseSchema,
+    successStatus: 201,
+  },
+  verifyPasswordRecoveryCode: {
+    method: 'POST',
+    path: '/api/auth/password-recovery/verify',
+    roles: [],
+    requestSchema: verifyPasswordRecoveryCodeRequestSchema,
+    responseSchema: verifyPasswordRecoveryCodeResponseSchema,
+    successStatus: 201,
+  },
+  resetPasswordRecovery: {
+    method: 'POST',
+    path: '/api/auth/password-recovery/reset',
+    roles: [],
+    requestSchema: resetPasswordRecoveryRequestSchema,
+    responseSchema: z.undefined(),
+    successStatus: 204,
   },
   me: {
     method: 'GET',

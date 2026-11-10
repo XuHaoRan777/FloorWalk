@@ -56,6 +56,7 @@ export function getSlotEnvironment() {
     HOST: '127.0.0.1',
     DATABASE_URL: getSlotDatabaseUrl(),
     STORAGE_DIR: storageDir,
+    MAIL_DRIVER: 'fake',
   };
 }
 

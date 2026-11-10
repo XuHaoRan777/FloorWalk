@@ -53,6 +53,8 @@ export function getMessage(status: number, code?: string) {
   if (status === 400 || code === 'VALIDATION_FAILED')
     return '提交内容有误，请检查后重试。';
   if (status === 404 || code === 'NOT_FOUND') return '请求的数据不存在。';
+  if (status === 429 || code === 'RATE_LIMITED')
+    return '验证码 60 秒内只能发送一次。';
   return '接口暂时不可用，请稍后重试。';
 }
 

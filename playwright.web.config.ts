@@ -38,6 +38,7 @@ const slotEnvironment = {
   API_PUBLIC_BASE_URL: apiUrl,
   NODE_ENV: 'development',
   CORS_ORIGINS: webUrl,
+  MAIL_DRIVER: 'fake',
 };
 
 export default defineConfig({

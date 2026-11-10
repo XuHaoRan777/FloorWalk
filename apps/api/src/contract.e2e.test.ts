@@ -11,6 +11,7 @@ import { HttpErrorFilter } from './http-exception.filter.js';
 import { createPool } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import { seedDatabase } from './db/seed.js';
+import { clearFakeMailbox } from './email/fake.js';
 import {
   apiRoutes,
   adminSitesResponseSchema,
@@ -89,6 +90,7 @@ describe('inspection contract API', () => {
   const createdChatMessageIds: string[] = [];
   const createdAdminSiteIds: string[] = [];
   const createdProtocolOrgIds: string[] = [];
+  const createdProtocolEmails: string[] = [];
   const createdAdminTemplateIds: string[] = [];
   const createdChatStorageKeys: string[] = [];
 
@@ -244,6 +246,10 @@ describe('inspection contract API', () => {
         cleanup.release();
       }
       await pool.query('DELETE FROM floorwalk.sessions');
+      await pool.query(
+        'DELETE FROM floorwalk.email_verifications WHERE email = ANY($1::text[])',
+        [createdProtocolEmails],
+      );
       const orgCleanup = await pool.connect();
       try {
         await orgCleanup.query('BEGIN');
@@ -282,6 +288,7 @@ describe('inspection contract API', () => {
     } finally {
       await pool.end();
       await app.close();
+      clearFakeMailbox();
       const remaining = createPool();
       try {
         const { rows } = await remaining.query<{ count: string }>(
@@ -296,7 +303,7 @@ describe('inspection contract API', () => {
     }
   });
 
-  const protocolRequest = (
+  const protocolRequest = async (
     routeKey: keyof typeof protocolRouteBodies,
     cookie?: string,
   ) => {
@@ -310,13 +317,24 @@ describe('inspection contract API', () => {
     ](pathname);
     if (cookie) pending.set('Cookie', cookie);
     const body = protocolRouteBodies[routeKey];
-    if (body)
-      pending.send(
-        routeKey === 'createOrg'
-          ? { ...body, email: `protocol-${randomUUID()}@example.test` }
-          : body,
-      );
-    return pending;
+    if (body) {
+      if (routeKey === 'createOrg') {
+        const email = `protocol-${randomUUID()}@example.test`;
+        createdProtocolEmails.push(email);
+        await request(app.getHttpServer())
+          .post('/api/auth/registration-code')
+          .send({ email })
+          .expect(201);
+        const mailbox = await request(app.getHttpServer())
+          .get('/api/testing/mailbox')
+          .query({ recipient: email })
+          .expect(200);
+        pending.send({ ...body, email, verificationCode: mailbox.body.code });
+      } else {
+        pending.send(body);
+      }
+    }
+    return await pending;
   };
 
   it('allows every declared role on protocol routes and rejects anonymous protected access', async () => {
@@ -370,7 +388,7 @@ describe('inspection contract API', () => {
   });
 
   it('publishes the complete route table under /api', () => {
-    expect(Object.keys(apiRoutes)).toHaveLength(30);
+    expect(Object.keys(apiRoutes)).toHaveLength(34);
     for (const route of Object.values(apiRoutes)) {
       expect(route.path.startsWith('/api/')).toBe(true);
       expect(route.responseSchema).toBeDefined();
@@ -1917,9 +1935,57 @@ describe('inspection contract API', () => {
       .expect(200);
     createdAdminSiteIds.push(adminSiteCreateResponse.body.id);
     createdAdminTemplateIds.push(adminTemplateCreateResponse.body.id);
+    const registrationEmail = `protocol-route-${randomUUID()}@example.test`;
+    createdProtocolEmails.push(registrationEmail);
+    const registrationCodeResponse = await request(app.getHttpServer())
+      .post('/api/auth/registration-code')
+      .send({ email: registrationEmail })
+      .expect(201);
+    const registrationMailbox = await request(app.getHttpServer())
+      .get('/api/testing/mailbox')
+      .query({ recipient: registrationEmail })
+      .expect(200);
+    const recoveryOrg = await request(app.getHttpServer())
+      .post('/api/orgs')
+      .send({
+        orgName: `FW-025 route recovery ${randomUUID()}`,
+        adminName: '路由表管理员',
+        email: registrationEmail,
+        password: 'registration-password',
+        verificationCode: registrationMailbox.body.code,
+      })
+      .expect(201);
+    createdProtocolOrgIds.push(recoveryOrg.body.org.id);
+    const passwordRecoveryCodeResponse = await request(app.getHttpServer())
+      .post('/api/auth/password-recovery-code')
+      .send({ email: registrationEmail })
+      .expect(201);
+    const passwordRecoveryMailbox = await request(app.getHttpServer())
+      .get('/api/testing/mailbox')
+      .query({ recipient: registrationEmail })
+      .expect(200);
+    const passwordRecoveryVerification = await request(app.getHttpServer())
+      .post('/api/auth/password-recovery/verify')
+      .send({
+        email: registrationEmail,
+        code: passwordRecoveryMailbox.body.code,
+      })
+      .expect(201);
+    const passwordRecoveryResetResponse = await request(app.getHttpServer())
+      .post('/api/auth/password-recovery/reset')
+      .send({
+        resetToken: passwordRecoveryVerification.body.resetToken,
+        orgId: recoveryOrg.body.org.id,
+        password: 'recovered-password',
+      })
+      .expect(204);
     const routeResponses = {
       createSession: login,
       deleteSession: deletedSession,
+      requestRegistrationCode: registrationCodeResponse,
+      requestPasswordRecoveryCode: passwordRecoveryCodeResponse,
+      verifyPasswordRecoveryCode: passwordRecoveryVerification,
+      resetPasswordRecovery: passwordRecoveryResetResponse,
       me,
       today,
       createInspection: created,

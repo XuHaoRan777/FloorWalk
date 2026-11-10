@@ -92,6 +92,51 @@ export const sessions = floorwalk.table(
   (table) => [index('sessions_user_id_idx').on(table.userId)],
 );
 
+export const emailVerifications = floorwalk.table(
+  'email_verifications',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    email: text('email').notNull(),
+    purpose: text('purpose').notNull(),
+    codeHash: text('code_hash'),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    requestedAt: timestamp('requested_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    recoveryTokenHash: text('recovery_token_hash'),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('email_verifications_scope_requested_idx').on(
+      table.email,
+      table.purpose,
+      table.requestedAt,
+    ),
+    index('email_verifications_expires_idx').on(table.expiresAt),
+    uniqueIndex('email_verifications_active_unique')
+      .on(table.email, table.purpose)
+      .where(sql`${table.consumedAt} IS NULL`),
+    check(
+      'email_verifications_purpose_check',
+      sql`${table.purpose} IN ('registration', 'password_recovery')`,
+    ),
+    check(
+      'email_verifications_attempt_count_check',
+      sql`${table.attemptCount} BETWEEN 0 AND 5`,
+    ),
+    check(
+      'email_verifications_code_hash_check',
+      sql`${table.codeHash} IS NOT NULL OR ${table.purpose} = 'password_recovery'`,
+    ),
+    check(
+      'email_verifications_recovery_token_check',
+      sql`${table.recoveryTokenHash} IS NULL OR (${table.verifiedAt} IS NOT NULL AND ${table.purpose} = 'password_recovery')`,
+    ),
+  ],
+);
+
 export const templates = floorwalk.table(
   'templates',
   {
