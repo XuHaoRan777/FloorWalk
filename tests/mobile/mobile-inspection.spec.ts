@@ -11,6 +11,7 @@ async function readToday(page: import('@playwright/test').Page) {
   expect(response.status()).toBe(200);
   return response.json() as Promise<{
     site: { name: string };
+    tasks: Array<{ id: string; templateName: string }>;
   }>;
 }
 
@@ -56,7 +57,13 @@ test('店长登录、重启保持登录、查看我的并退出', async ({ page 
   await expect(
     page.getByRole('heading', { name: today.site.name }),
   ).toBeVisible();
-  await expect(page.getByText('今日任务暂不可用')).toBeVisible();
+  if (today.tasks.length === 0) {
+    await expect(page.getByText('今天没有巡检任务。')).toBeVisible();
+  } else {
+    await expect(
+      page.getByTestId(`today-task-${today.tasks[0].id}`),
+    ).toContainText(today.tasks[0].templateName);
+  }
   await expect(page.getByTestId('start-inspection')).toHaveCount(0);
   await expect(page.getByTestId('submit-inspection')).toHaveCount(0);
 
@@ -114,9 +121,88 @@ test('今日任务页不崩溃且隐藏旧建单和提交入口', async ({ page 
   await page.getByLabel('密码').fill(password);
   await page.getByTestId('login-button').click();
   await expect(page.getByRole('tab', { name: '今日待巡' })).toBeVisible();
-  await expect(page.getByText('今日任务暂不可用')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '今日任务' })).toBeVisible();
   await expect(page.getByTestId('start-inspection')).toHaveCount(0);
   await expect(page.getByTestId('submit-inspection')).toHaveCount(0);
+});
+
+test('今日任务显示模板、四种状态和商家时区的跨零点时间', async ({ page }) => {
+  const siteId = '00000000-0000-4000-8000-000000000101';
+  const templateId = '00000000-0000-4000-8000-000000000102';
+  const tasks = [
+    {
+      id: '00000000-0000-4000-8000-000000000201',
+      status: 'not_started',
+      templateName: '跨午夜任务',
+      startsAt: '2026-11-09T14:00:00.000Z',
+      dueAt: '2026-11-09T16:30:00.000Z',
+    },
+    {
+      id: '00000000-0000-4000-8000-000000000202',
+      status: 'in_progress',
+      templateName: '进行中任务',
+      startsAt: '2026-11-09T01:00:00.000Z',
+      dueAt: '2026-11-09T02:00:00.000Z',
+    },
+    {
+      id: '00000000-0000-4000-8000-000000000203',
+      status: 'submitted',
+      templateName: '已提交任务',
+      startsAt: '2026-11-09T03:00:00.000Z',
+      dueAt: '2026-11-09T04:00:00.000Z',
+    },
+    {
+      id: '00000000-0000-4000-8000-000000000204',
+      status: 'overdue',
+      templateName: '逾期任务',
+      startsAt: '2026-11-09T05:00:00.000Z',
+      dueAt: '2026-11-09T06:00:00.000Z',
+    },
+  ].map((task, index) => ({
+    ...task,
+    siteId,
+    templateId,
+    taskDate: '2026-11-09',
+    position: index,
+    createdAt: '2026-11-09T00:00:00.000Z',
+  }));
+  await page.route('**/api/inspector/today', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        site: {
+          id: siteId,
+          code: 'TEST',
+          name: '示例门店',
+          active: true,
+          createdAt: '2026-11-01T00:00:00.000Z',
+        },
+        timezone: 'Asia/Shanghai',
+        tasks,
+        templates: [],
+        submittedToday: false,
+        reworkInspections: [],
+      }),
+    }),
+  );
+
+  await page.goto('/');
+  await page.getByLabel('登录名').fill(loginName);
+  await page.getByLabel('密码').fill(password);
+  await page.getByTestId('login-button').click();
+
+  await expect(page.getByRole('heading', { name: '示例门店' })).toBeVisible();
+  await expect(page.getByTestId(`today-task-${tasks[0].id}`)).toContainText(
+    '跨午夜任务',
+  );
+  await expect(page.getByTestId(`today-task-${tasks[0].id}`)).toContainText(
+    '22:00～次日 00:30',
+  );
+  await expect(page.getByText('状态：未开始')).toBeVisible();
+  await expect(page.getByText('状态：进行中')).toBeVisible();
+  await expect(page.getByText('状态：已提交')).toBeVisible();
+  await expect(page.getByText('状态：逾期')).toBeVisible();
 });
 
 test('首次启动时删除旧的本地 token 并显示登录页', async ({ page }) => {

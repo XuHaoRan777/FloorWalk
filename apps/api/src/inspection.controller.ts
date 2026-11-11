@@ -19,8 +19,13 @@ import type { Pool } from 'pg';
 import { AuthGuard } from './auth.js';
 import { DATABASE_POOL } from './db/pool.provider.js';
 import {
+  TASK_SCHEDULER_CLOCK,
+  type TaskSchedulerClock,
+} from './task-scheduler.js';
+import {
   type AuthedRequest,
   iso,
+  getDateInTimezone,
   getShanghaiDayBounds,
   assertRole,
   getInspectionAccess,
@@ -29,7 +34,11 @@ import {
 
 @Controller('api')
 export class InspectionController {
-  constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(DATABASE_POOL) private readonly pool: Pool,
+    @Inject(TASK_SCHEDULER_CLOCK)
+    private readonly clock: TaskSchedulerClock,
+  ) {}
 
   @UseGuards(AuthGuard)
   @Get(apiRoutePath(apiRoutes.today))
@@ -56,9 +65,12 @@ export class InspectionController {
       [request.user.orgId],
     );
     const site = await this.pool.query(
-      `SELECT id, code, name, deactivated_at IS NULL AS active,
-         created_at AS "createdAt"
-       FROM floorwalk.sites WHERE id = $1 AND org_id = $2`,
+      `SELECT site.id, site.code, site.name,
+         site.deactivated_at IS NULL AS active,
+         site.created_at AS "createdAt", org.timezone
+       FROM floorwalk.sites site
+       JOIN floorwalk.organizations org ON org.id = site.org_id
+       WHERE site.id = $1 AND site.org_id = $2`,
       [request.user.siteId, request.user.orgId],
     );
     if (!site.rows[0])
@@ -66,6 +78,18 @@ export class InspectionController {
         code: 'NOT_FOUND',
         message: '门店不存在。',
       });
+    const taskDate = getDateInTimezone(this.clock.now(), site.rows[0].timezone);
+    const tasks = await this.pool.query(
+      `SELECT task.id, task.site_id AS "siteId",
+         task.template_id AS "templateId", task.task_date::text AS "taskDate",
+         task.position, task.starts_at AS "startsAt", task.due_at AS "dueAt",
+         task.status, task.created_at AS "createdAt", template.name AS "templateName"
+       FROM floorwalk.inspection_tasks task
+       JOIN floorwalk.templates template ON template.id = task.template_id
+       WHERE task.org_id = $1 AND task.site_id = $2 AND task.task_date = $3::date
+       ORDER BY task.starts_at, task.position, task.occurrence, task.id`,
+      [request.user.orgId, request.user.siteId, taskDate],
+    );
     const rework = await this.pool.query(
       `SELECT id, site_id AS "siteId", template_id AS "templateId",
          inspector_id AS "inspectorId", status, score,
@@ -88,6 +112,13 @@ export class InspectionController {
         ...site.rows[0],
         createdAt: iso(site.rows[0].createdAt),
       },
+      timezone: site.rows[0].timezone,
+      tasks: tasks.rows.map((task) => ({
+        ...task,
+        startsAt: iso(task.startsAt),
+        dueAt: iso(task.dueAt),
+        createdAt: iso(task.createdAt),
+      })),
       templates: templates.rows.map((template) => ({
         ...template,
         createdAt: iso(template.createdAt),

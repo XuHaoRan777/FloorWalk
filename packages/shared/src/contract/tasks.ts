@@ -22,6 +22,10 @@ export const inspectionTaskSchema = z.object({
   createdAt: timestamp,
 });
 
+export const inspectorTodayTaskSchema = inspectionTaskSchema.extend({
+  templateName: z.string().min(1),
+});
+
 export const inspectionItemDecisionResults = [
   'pass',
   'rework',
@@ -53,6 +57,7 @@ export const inspectionItemDecisionSchema = z.object({
 });
 
 export type InspectionTask = z.infer<typeof inspectionTaskSchema>;
+export type InspectorTodayTask = z.infer<typeof inspectorTodayTaskSchema>;
 export type InspectionTaskStatus = z.infer<typeof inspectionTaskStatusSchema>;
 export type InspectionItemDecisionResult = z.infer<
   typeof inspectionItemDecisionResultSchema

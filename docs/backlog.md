@@ -41,7 +41,7 @@
 | FW-026 | [模板与 AI 审核标准](work/FW-026-templates-ai-criteria/spec.md)           | `verified`    | FW-024 | 已交付，等待线尾归档（线一 3/6）；下游 FW-027 |
 | FW-027 | [日程方案与门店日程安排](work/FW-027-schedules/spec.md)                   | `verified`    | FW-026 | 已交付，等待线尾归档（线一 4/6）；下游 FW-028 |
 | FW-028 | [任务与条目状态机](work/FW-028-task-state-machine/spec.md)                | `verified`    | FW-027 | 已交付，等待线尾归档（线一 5/6）；下游 FW-029 |
-| FW-029 | [Mobile 店长端](work/FW-029-mobile-store-manager/spec.md)                 | `blocked`     | FW-028 | 等用户决定 AC-02 打回原因契约（线一 6/6，线尾） |
+| FW-029 | [Mobile 店长端](work/FW-029-mobile-store-manager/spec.md)                 | `in_progress` | FW-028 | T01 今日任务列表（线一 6/6，线尾）              |
 
 ## 待开单元（未批准，按建议顺序）
 

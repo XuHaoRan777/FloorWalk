@@ -40,6 +40,7 @@ import {
   inspectionItemDecisionResults,
   inspectionItemSelfAssessmentSchema,
   inspectionTaskSchema,
+  inspectorTodayTaskSchema,
   taskItemUploadMetadataSchema,
 } from './tasks.js';
 
@@ -206,6 +207,8 @@ export const loginResponseSchema = z.union([
 
 export const todayResponseSchema = z.object({
   site: siteSchema,
+  timezone: z.string().min(1),
+  tasks: z.array(inspectorTodayTaskSchema),
   templates: z.array(
     templateSchema.extend({
       items: z.array(templateItemSchema),

@@ -4,15 +4,15 @@
 
 ## 当前状态
 
-- 工作单元状态：`blocked`
+- 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：代码前契约核对
-- 阻塞：AC-02 要求打回原因，但 FW-028 的判定契约与存储没有原因字段；需用户决定是否调整 AC 或扩大审核数据契约。
-- 下一步：等用户决定后再拆任务表和写代码。
+- 当前任务：T02 任务详情读取与时间状态
+- 阻塞：无
+- 下一步：完成 T02，取得 AC-02、AC-04、AC-07 证据。
 
 <!-- Preflight：编码前在此写一到三行——要动哪些模块；涉及既有数据时的只读统计计数；后端/库/开发者工具是否能起。不需要章节名。 -->
 
-Preflight：预期涉及 `apps/mobile`、`packages/shared`、`apps/api`；SDK 57 已有 `expo-image-picker`，可从用户动作调用系统相机。`proc.mjs status` 为空，3018–3020 未监听；`local-pg18` 正在运行并发布 5433。
+Preflight：涉及 `apps/mobile`、`packages/shared`、`apps/api`；SDK 57 已有 `expo-image-picker`，用户动作可调起系统相机。FW-028 提交 `6ed277e` 存在且 `packages/shared/src/contract/` 可读；`proc.mjs status` 为空，3018–3020 未监听，`local-pg18` 发布 5433。
 
 Preflight：`python scripts/validate_docs.py --env-keys` 报 workflow.conf 没有可检查的配置分组；按接力批准记录由用户手动核对配置，Agent 未读取 `.env*` 内容。
 
@@ -20,7 +20,11 @@ Preflight：`python scripts/validate_docs.py --env-keys` 报 workflow.conf 没�
 
 | ID | 任务 | 状态 | 交付的 AC 与证据 |
 | --- | --- | --- | --- |
-| T01 |  | `pending` |  |
+| T01 | 今日任务 API 与列表 | `done` | AC-01：本店任务、模板名、时间窗、四种状态和跨零点显示；API 契约测试与 Mobile e2e |
+| T02 | 任务详情读取与时间状态 | `in_progress` | AC-02、AC-04、AC-07：检查项、结论、提交人、上传时间、操作窗口及聊天 |
+| T03 | 相机拍摄、逐项上传与刷新 | `pending` | AC-03、AC-05、AC-08：相机限定、张数/备注门槛、同店最新提交人、模拟器主流程 |
+| T04 | 按任务显示记录 | `pending` | AC-06：任务状态与分数、调店后仅可见参与过的历史 |
+| T05 | 最终代码审查 | `pending` | AC-01～AC-08：受影响套件、类型检查、lint、构建、原生模拟器证据及独立审查 |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
 方式 B 按用户可观察的切片切，不按数据、后端、前端分层切：每行写交付哪几条 AC，并在本任务内取得它们的证据；一条 AC 跨几个切片时记在完成它的那个任务。可以有一个先行任务只做数据结构与共享契约（表、迁移、共享类型，不含接口和页面），这一列写「无，机器门」。不设"Agent 验收""机器门汇总"这类只收集其他任务证据的任务；单元结束的全量套件和构建在「最终代码审查」任务里、派审查之前跑。
@@ -30,15 +34,9 @@ Preflight：`python scripts/validate_docs.py --env-keys` 报 workflow.conf 没�
 
 | 任务 | status | command | artifact | 备注 |
 | --- | --- | --- | --- | --- |
+| T01 | passed | `pnpm --filter @apps/api test -- tasks.test.ts`; `FW_SLOT=1 pnpm exec playwright test --config=playwright.mobile.config.ts tests/mobile/mobile-inspection.spec.ts --grep "今日任务显示模板、四种状态"` | `apps/api/src/tasks.test.ts`; `tests/mobile/mobile-inspection.spec.ts` | 同店、同商家时区日期过滤通过；页面显示四种状态和 `22:00～次日 00:30`。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
-
-## 交接
-
-<!-- 方式 A 机器门过后写这两行，方式 B 删掉本节。不写逐条验收脚本。第一行写实现与讨论时说定的不同之处（AC 改动、没做的、做法变了的），没有写"无"；第二行在讨论时的功能点之外，只列机器验不了的（真钱、真机、真回调），没有写"无"。 -->
-
-- 和讨论时不一样的：
-- 需要你测的：
 
 ## 回修
 
@@ -51,6 +49,4 @@ Preflight：`python scripts/validate_docs.py --env-keys` 报 workflow.conf 没�
 
 <!-- 只记会影响后续的：用户决策、放弃的方案、发现的范围外问题。每条一行。归档时把仍然重要的升入 adr/、specs/ 或 pitfalls.md。 -->
 
-- 卡在哪：FW-029 AC-02 要求打回附理由；FW-028 `taskItemDecisionRequestSchema` 只接受结论，`inspection_item_decisions` 只保存前后结论、操作人和时间，Mobile 可读的 `taskReviewItemSchema` 也没有理由。
-- 要用户定什么：是否将 AC-02 收窄为显示打回结论，待后续 AI 审核单元提供理由；还是扩展审核写入与读取契约，使打回原因成为持久化、可验证的数据。
-- 可选项和倾向：倾向先收窄 FW-029 AC-02，避免虚构打回理由或把后续 AI 语义提前塞进 FW-029；若选扩展，需同步修订已批准规格并将 `specs/inspection.md`「巡检规则」「接口」「数据结构」列入涉及事实，评估是否需要版本化迁移。
+- 2026-11-11：用户选择 A；AC-02 改为只显示打回结论，理由留给后续 AI 审核单元，不扩展 FW-028 判定写契约。

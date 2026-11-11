@@ -34,6 +34,21 @@ export function getShanghaiDayBounds(now = new Date()) {
   return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
 }
 
+export function getDateInTimezone(now: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 export function assertRole(
   user: AuthUser,
   ...roles: readonly AuthUser['role'][]

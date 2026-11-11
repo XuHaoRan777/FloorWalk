@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Pool } from 'pg';
 import request from 'supertest';
+import { todayResponseSchema } from '@libs/shared';
 import { AppModule } from './app.module.js';
 import { hashSessionId } from './auth.js';
 import { createPool } from './db/client.js';
@@ -38,15 +39,15 @@ describe('FW-028 task uploads', () => {
   const otherManagerCookie = `fw_session=${otherManagerToken}`;
   let nextOccurrence = 0;
 
-  async function createTask() {
+  async function createTask(taskSiteId = siteId, taskDate = '2026-11-09') {
     const taskId = randomUUID();
     await pool.query(
       `INSERT INTO floorwalk.inspection_tasks
          (id, org_id, site_id, template_id, task_date, position, occurrence,
           starts_at, due_at)
-       VALUES ($1, $2, $3, $4, '2026-11-09', 0, $5,
+       VALUES ($1, $2, $3, $4, $5::date, 0, $6,
          '2026-11-09T11:00:00Z', '2026-11-09T12:00:00Z')`,
-      [taskId, orgId, siteId, templateId, nextOccurrence++],
+      [taskId, orgId, taskSiteId, templateId, taskDate, nextOccurrence++],
     );
     return taskId;
   }
@@ -254,6 +255,25 @@ describe('FW-028 task uploads', () => {
       await pool.end();
     }
   }, 60000);
+
+  it('lists only this store’s tasks for its timezone date', async () => {
+    const currentTaskId = await createTask();
+    const otherSiteTaskId = await createTask(otherSiteId);
+    const nextDayTaskId = await createTask(siteId, '2026-11-10');
+    const response = await request(app.getHttpServer())
+      .get('/api/inspector/today')
+      .set('Cookie', managerCookie)
+      .expect(200);
+    const today = todayResponseSchema.parse(response.body);
+
+    expect(today.timezone).toBe('Asia/Shanghai');
+    expect(today.tasks.map((task) => task.id)).toContain(currentTaskId);
+    expect(today.tasks.map((task) => task.id)).not.toContain(otherSiteTaskId);
+    expect(today.tasks.map((task) => task.id)).not.toContain(nextDayTaskId);
+    expect(
+      today.tasks.find((task) => task.id === currentTaskId)?.templateName,
+    ).toBe('FW-028 upload template');
+  });
 
   it('serializes first uploads and replaces each item as one submission', async () => {
     now = new Date('2026-11-09T10:30:00.000Z');
