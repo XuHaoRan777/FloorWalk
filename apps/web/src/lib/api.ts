@@ -8,6 +8,11 @@ export type {
   InspectionDetail,
   DashboardSite,
 } from './api/types';
+export type {
+  TaskReview,
+  TaskReviewItem,
+  TaskItemDecisionRequest,
+} from '@libs/shared';
 export { ApiError, UnauthorizedError } from './api/errors';
 export { unauthorizedEvent } from './api/request';
 export {
@@ -21,7 +26,11 @@ export {
 export { login, deleteSession, getMe, changePassword } from './api/auth';
 export { getInspection } from './api/inspection';
 export { getEvidenceUrl } from './api/evidence';
-export { getReviewQueue, reviewInspection } from './api/review';
+export {
+  getTaskReviewQueue,
+  getTaskReview,
+  decideTaskItem,
+} from './api/review';
 export { getDashboard } from './api/dashboard';
 export { getChatMessages, sendChatMessage } from './api/chat';
 export { getAdminSites, getAdminTemplates } from './api/admin';
@@ -38,7 +47,11 @@ export * as users from './api/users';
 import { login, deleteSession, getMe } from './api/auth';
 import { getInspection } from './api/inspection';
 import { getEvidenceUrl } from './api/evidence';
-import { getReviewQueue, reviewInspection } from './api/review';
+import {
+  getTaskReviewQueue,
+  getTaskReview,
+  decideTaskItem,
+} from './api/review';
 import { getDashboard } from './api/dashboard';
 import { getChatMessages, sendChatMessage } from './api/chat';
 import { getAdminSites, getAdminTemplates } from './api/admin';
@@ -54,8 +67,9 @@ export const api = {
   getMe,
   getInspection,
   getEvidenceUrl,
-  getReviewQueue,
-  reviewInspection,
+  getTaskReviewQueue,
+  getTaskReview,
+  decideTaskItem,
   getDashboard,
   getChatMessages,
   sendChatMessage,

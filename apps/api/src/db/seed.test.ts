@@ -113,18 +113,25 @@ describe('Northbean seed', () => {
       score: number;
       template_org_id: string;
       inspector_org_id: string;
-      reviewer_org_id: string;
-      action: string;
+      decision_org_count: string;
+      decisions_same_org: boolean;
+      decisions: string;
     }>(
       `SELECT i.status, i.score, t.org_id AS template_org_id,
-         u.org_id AS inspector_org_id, reviewer.org_id AS reviewer_org_id, r.action
+         u.org_id AS inspector_org_id,
+         COUNT(DISTINCT actor.org_id)::text AS decision_org_count,
+         bool_and(actor.org_id = $1) AS decisions_same_org,
+         COUNT(decision.id)::text AS decisions
        FROM floorwalk.inspections i
        JOIN floorwalk.sites s ON s.id = i.site_id
        JOIN floorwalk.templates t ON t.id = i.template_id
        JOIN floorwalk.users u ON u.id = i.inspector_id
-       LEFT JOIN floorwalk.reviews r ON r.inspection_id = i.id
-       LEFT JOIN floorwalk.users reviewer ON reviewer.id = r.reviewer_id
-       WHERE s.org_id = $1`,
+       JOIN floorwalk.inspection_items item ON item.inspection_id = i.id
+       JOIN floorwalk.inspection_item_decisions decision
+         ON decision.inspection_item_id = item.id
+       JOIN floorwalk.users actor ON actor.id = decision.actor_id
+       WHERE s.org_id = $1
+       GROUP BY i.status, i.score, t.org_id, u.org_id`,
       [secondOrgId],
     );
     expect(inspections.rows).toEqual([
@@ -133,8 +140,9 @@ describe('Northbean seed', () => {
         score: 100,
         template_org_id: secondOrgId,
         inspector_org_id: secondOrgId,
-        reviewer_org_id: secondOrgId,
-        action: 'approve',
+        decision_org_count: '1',
+        decisions_same_org: true,
+        decisions: '8',
       },
     ]);
   });
@@ -169,7 +177,6 @@ describe('Northbean seed', () => {
     expect(extraStatuses.rows).toEqual([
       { status: 'failed', count: '3' },
       { status: 'rework', count: '2' },
-      { status: 'submitted', count: '2' },
     ]);
     const total = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM floorwalk.inspections i
@@ -232,6 +239,49 @@ describe('Northbean seed', () => {
     expect(scores.rows).toHaveLength(0);
   });
 
+  it('links every seeded inspection to a task in the past seven days with first-judgment data', async () => {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const firstDay = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const tasks = await pool.query<{
+      inspections: string;
+      tasks: string;
+      minDate: string;
+      maxDate: string;
+      items: string;
+      selfAssessments: string;
+      firstResults: string;
+      decisions: string;
+    }>(
+      `SELECT count(DISTINCT inspection.id)::text AS inspections,
+         count(DISTINCT task.id)::text AS tasks,
+         min(task.task_date)::text AS "minDate",
+         max(task.task_date)::text AS "maxDate",
+         count(item.id)::text AS items,
+         count(item.id) FILTER (WHERE item.first_self_assessment IS NOT NULL)::text AS "selfAssessments",
+         count(item.id) FILTER (WHERE item.first_result IS NOT NULL)::text AS "firstResults",
+         count(decision.id)::text AS decisions
+       FROM floorwalk.inspections inspection
+       JOIN floorwalk.sites site ON site.id = inspection.site_id
+       JOIN floorwalk.inspection_tasks task ON task.id = inspection.task_id
+       JOIN floorwalk.inspection_items item ON item.inspection_id = inspection.id
+       LEFT JOIN floorwalk.inspection_item_decisions decision
+         ON decision.inspection_item_id = item.id
+       WHERE site.org_id IN ($1, $2)`,
+      [northbeanOrgId, secondOrgId],
+    );
+    expect(tasks.rows[0]).toMatchObject({
+      inspections: '19',
+      tasks: '19',
+      minDate: firstDay.toISOString().slice(0, 10),
+      maxDate: today.toISOString().slice(0, 10),
+      items: '152',
+      selfAssessments: '152',
+      firstResults: '152',
+      decisions: '152',
+    });
+  });
+
   it('satisfies photo and review invariants and writes seed files', async () => {
     const missingEvidence = await pool.query(
       `SELECT ii.id FROM floorwalk.inspection_items ii
@@ -243,20 +293,15 @@ describe('Northbean seed', () => {
     );
     expect(missingEvidence.rows).toHaveLength(0);
 
-    const missingReviews = await pool.query(
+    const missingDecisions = await pool.query(
       `SELECT i.id FROM floorwalk.inspections i
-       WHERE i.status IN ('passed', 'failed')
-       AND NOT EXISTS (SELECT 1 FROM floorwalk.reviews r WHERE r.inspection_id = i.id)
-       UNION ALL
-       SELECT i.id FROM floorwalk.inspections i
-       WHERE i.status = 'rework'
-       AND NOT EXISTS (
-         SELECT 1 FROM floorwalk.reviews r
-         WHERE r.inspection_id = i.id AND r.action = 'rework'
-           AND cardinality(r.rework_item_ids) > 0
+       JOIN floorwalk.inspection_items item ON item.inspection_id = i.id
+       WHERE item.uploaded_at IS NOT NULL AND NOT EXISTS (
+         SELECT 1 FROM floorwalk.inspection_item_decisions decision
+         WHERE decision.inspection_item_id = item.id
        )`,
     );
-    expect(missingReviews.rows).toHaveLength(0);
+    expect(missingDecisions.rows).toHaveLength(0);
 
     const files = await pool.query<{ storage_key: string; org_id: string }>(
       `SELECT e.storage_key, s.org_id FROM floorwalk.evidence e

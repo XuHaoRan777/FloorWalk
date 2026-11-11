@@ -1,75 +1,80 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Check, LoaderCircle, RotateCcw, X } from 'lucide-react';
-import {
-  reviewInspection,
-  type InspectionDetail,
-  type Review,
-} from '@/lib/api';
+import type { InspectionItemDecisionResult, TaskReview } from '@libs/shared';
+import { decideTaskItem, getTaskReview } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { ErrorBanner } from './error-banner';
 import { EvidenceImage } from './evidence-image';
-import { formatTime, getErrorMessage } from './helpers';
-import { actionLabel } from './labels';
-import { StatusPill } from './status-pill';
+import { getErrorMessage } from './helpers';
 import { ChatPanel } from './chat-panel';
 
+const resultLabel: Record<InspectionItemDecisionResult, string> = {
+  pass: '通过',
+  rework: '打回',
+  fail: '不合格',
+};
+
+function uploadTime(value: string | null) {
+  if (!value) return '未上传';
+  return new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(value));
+}
+
 export function ReviewDetail({
-  initialInspection,
+  initialTask,
   canReview,
   canSendChat,
   onBack,
 }: {
-  initialInspection: InspectionDetail;
+  initialTask: TaskReview;
   canReview: boolean;
   canSendChat: boolean;
   onBack: () => void;
 }) {
-  const [inspection, setInspection] = useState(initialInspection);
+  const [task, setTask] = useState(initialTask);
+  const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState('');
-  const [comment, setComment] = useState('');
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [reworkPrompt, setReworkPrompt] = useState(false);
-  const startedAtOpen = canReview && initialInspection.status === 'submitted';
-  const criticalFailure = inspection.items.some(
-    (item) => item.critical && item.result === 'fail',
-  );
-  // StrictMode 在开发模式会把 effect 跑两次；同一张单只自动开始审核一次，第二次会被 API 判为 INVALID_STATE
-  const startRequestedFor = useRef<string | null>(null);
+  const [busyItemId, setBusyItemId] = useState<string | null>(null);
+  const locked = task.decidedAt !== null;
   useEffect(() => {
-    if (!canReview || inspection.status !== 'submitted') return;
-    if (startRequestedFor.current === inspection.id) return;
-    startRequestedFor.current = inspection.id;
-    setBusy(true);
-    void reviewInspection(inspection.id, { action: 'start' })
-      .then(setInspection)
-      .catch((reason: unknown) => setError(getErrorMessage(reason)))
-      .finally(() => setBusy(false));
-  }, [canReview, inspection.id, inspection.status]);
-  const submitReview = (action: Review['action']) => {
-    if (action === 'rework' && selectedItems.length === 0) {
-      setReworkPrompt(true);
-      setError('打回时至少选择一个检查项。');
-      return;
-    }
+    const graceDeadline = new Date(task.dueAt).getTime() + 60 * 60 * 1000;
+    const delay = graceDeadline - Date.now();
+    const timer = window.setTimeout(
+      () => setNow(Date.now()),
+      Math.max(0, delay) + 1,
+    );
+    return () => window.clearTimeout(timer);
+  }, [task.dueAt]);
+  const reworkAllowed = now <= new Date(task.dueAt).getTime() + 60 * 60 * 1000;
+
+  async function refresh() {
     setBusy(true);
     setError('');
-    void reviewInspection(inspection.id, {
-      action,
-      comment: comment.trim() || null,
-      ...(action === 'rework' ? { reworkItemIds: selectedItems } : {}),
-    })
-      .then(setInspection)
-      .then(() => setReworkPrompt(false))
-      .catch((reason: unknown) => setError(getErrorMessage(reason)))
-      .finally(() => setBusy(false));
-  };
-  const toggleItem = (id: string) =>
-    setSelectedItems((current) =>
-      current.includes(id)
-        ? current.filter((item) => item !== id)
-        : [...current, id],
-    );
+    try {
+      setTask(await getTaskReview(task.id));
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function decide(itemId: string, result: InspectionItemDecisionResult) {
+    setBusyItemId(itemId);
+    setError('');
+    try {
+      setTask(await decideTaskItem(task.id, itemId, { result }));
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    } finally {
+      setBusyItemId(null);
+    }
+  }
+
   return (
     <>
       <div className="fw-page-heading items-start">
@@ -83,61 +88,97 @@ export function ReviewDetail({
             <ArrowLeft aria-hidden="true" />
             返回队列
           </Button>
-          <p className="fw-page-eyebrow">{inspection.site.code}</p>
-          <h1>{inspection.site.name}</h1>
+          <p className="fw-page-eyebrow">
+            {task.site.code} · {task.taskDate}
+          </p>
+          <h1>{task.site.name}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {task.templateName} · 截止 {uploadTime(task.dueAt)}
+          </p>
         </div>
         <div className="flex items-center gap-3">
-          <StatusPill status={inspection.status} />
-          <span className="text-2xl font-semibold">
-            {inspection.score === null ? '—' : `${inspection.score} 分`}
+          <span className="text-sm font-medium">
+            {task.inspectionStatus === 'passed'
+              ? '通过'
+              : task.inspectionStatus === 'failed'
+                ? '不合格'
+                : locked
+                  ? '已判定'
+                  : '待判定'}
           </span>
+          <span className="text-2xl font-semibold">
+            {task.score === null ? '—' : `${task.score} 分`}
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="刷新任务"
+            title="刷新任务"
+            onClick={() => void refresh()}
+            disabled={busy}
+          >
+            <RotateCcw aria-hidden="true" />
+          </Button>
         </div>
       </div>
       <ErrorBanner message={error} />
       {busy && (
         <div
-          className="mb-6 flex items-center gap-2 text-sm text-muted-foreground"
+          className="mb-4 flex items-center gap-2 text-sm text-muted-foreground"
           role="status"
         >
           <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-          正在处理审核…
+          正在更新任务…
         </div>
       )}
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-        <section className="space-y-3" aria-labelledby="items-heading">
-          <div className="flex items-center justify-between">
-            <h2 id="items-heading" className="fw-section-title">
-              检查项
-            </h2>
-            <span className="text-sm text-muted-foreground">
-              提交于 {formatTime(inspection.submittedAt)}
-            </span>
+      <section className="space-y-3" aria-labelledby="items-heading">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="items-heading" className="fw-section-title">
+            检查项
+          </h2>
+          <span className="text-sm text-muted-foreground">
+            {task.items.filter((item) => item.uploadedAt).length}/
+            {task.items.length} 项已上传
+            {task.decidedAt ? ` · 判定于 ${uploadTime(task.decidedAt)}` : ''}
+          </span>
+        </div>
+        {task.items.length === 0 ? (
+          <div className="fw-state">
+            <p>此任务没有可判定的检查项。</p>
           </div>
-          {inspection.items.length === 0 ? (
-            <div className="fw-state">
-              <p>暂无检查项记录</p>
-            </div>
-          ) : (
-            inspection.items.map((item) => (
+        ) : (
+          task.items.map((item) => {
+            const itemBusy = busyItemId === item.id;
+            const canDecide =
+              canReview && (locked || item.uploadedAt !== null) && !busy;
+            return (
               <article key={item.id} className="fw-list-row py-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h3 className="font-medium">{item.title}</h3>
+                    <h3 className="font-medium">
+                      {item.position}. {item.title}
+                      {item.critical ? ' · 严重项' : ''}
+                    </h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {item.critical ? '严重项 · ' : ''}
                       {item.minPhotoCount > 0
                         ? `至少 ${item.minPhotoCount} 张照片`
-                        : '无需照片，备注必填'}
+                        : '可不上传照片，需填写备注'}
+                      {item.incomplete ? ' · 未完成' : ''}
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {item.uploadedByName ?? '系统'} · 上传于{' '}
+                      {uploadTime(item.uploadedAt)}
+                      {item.selfAssessment
+                        ? ` · 自评${item.selfAssessment === 'pass' ? '通过' : '不通过'}`
+                        : ''}
                     </p>
                   </div>
                   <span
-                    className={`text-sm font-medium ${item.result === 'pass' ? 'text-success' : item.result === 'fail' ? 'text-destructive' : 'text-muted-foreground'}`}
+                    className={`text-sm font-medium ${item.result === 'pass' ? 'text-success' : item.result === 'fail' ? 'text-destructive' : item.result === 'rework' ? 'text-warning' : 'text-muted-foreground'}`}
                   >
-                    {item.result === 'pass'
-                      ? '通过'
-                      : item.result === 'fail'
-                        ? '不通过'
-                        : '未填写'}
+                    {item.result === 'pending'
+                      ? '待判定'
+                      : resultLabel[item.result]}
                   </span>
                 </div>
                 {item.acceptanceCriteria && (
@@ -150,16 +191,6 @@ export function ReviewDetail({
                     备注：{item.note}
                   </p>
                 )}
-                {canReview && reworkPrompt && (
-                  <label className="mt-3 flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedItems.includes(item.id)}
-                      onChange={() => toggleItem(item.id)}
-                    />
-                    选择为打回项
-                  </label>
-                )}
                 {item.evidence.length > 0 && (
                   <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {item.evidence.map((evidence) => (
@@ -167,92 +198,63 @@ export function ReviewDetail({
                     ))}
                   </div>
                 )}
-              </article>
-            ))
-          )}
-        </section>
-        <aside className="space-y-4">
-          {canReview && (
-            <section className="border-t pt-4" aria-busy={busy}>
-              <h2 className="font-semibold">审核决定</h2>
-              <textarea
-                aria-label="审核意见（可选）"
-                value={comment}
-                onChange={(event) => setComment(event.target.value)}
-                placeholder="填写审核意见（可选）"
-                className="mt-3 min-h-24 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              {criticalFailure && (
-                <p className="mt-3 text-sm text-destructive">
-                  存在严重项不合格，不能通过。
-                </p>
-              )}
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button
-                  onClick={() => submitReview('approve')}
-                  disabled={busy || criticalFailure}
-                >
-                  <Check aria-hidden="true" />
-                  通过
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setReworkPrompt(true);
-                    setError('打回时至少选择一个检查项。');
-                  }}
-                  disabled={busy}
-                >
-                  <RotateCcw aria-hidden="true" />
-                  打回
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => submitReview('fail')}
-                  disabled={busy}
-                >
-                  <X aria-hidden="true" />
-                  判不合格
-                </Button>
-                {reworkPrompt && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => submitReview('rework')}
-                    disabled={busy}
+                {canReview && (
+                  <div
+                    className="mt-4 flex flex-wrap gap-2"
+                    aria-label={`${item.title}判定`}
                   >
-                    确认打回
-                  </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => void decide(item.id, 'pass')}
+                      disabled={
+                        !canDecide || itemBusy || item.result === 'pass'
+                      }
+                    >
+                      <Check aria-hidden="true" />
+                      通过
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void decide(item.id, 'rework')}
+                      disabled={
+                        !canDecide ||
+                        !reworkAllowed ||
+                        itemBusy ||
+                        item.result === 'rework'
+                      }
+                    >
+                      <RotateCcw aria-hidden="true" />
+                      打回
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => void decide(item.id, 'fail')}
+                      disabled={
+                        !canDecide || itemBusy || item.result === 'fail'
+                      }
+                    >
+                      <X aria-hidden="true" />
+                      不合格
+                    </Button>
+                  </div>
                 )}
-              </div>
-            </section>
-          )}
-          <section className="border-t pt-4">
-            <h2 className="font-semibold">审核历史</h2>
-            <ol className="mt-3 space-y-3">
-              {inspection.reviews.length === 0 ? (
-                <li className="text-sm text-muted-foreground">
-                  {startedAtOpen ? '开始审核（已自动提交）' : '暂无审核记录'}
-                </li>
-              ) : (
-                inspection.reviews.map((review) => (
-                  <li key={review.id} className="border-l-2 pl-3 text-sm">
-                    <p className="font-medium">{actionLabel[review.action]}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatTime(review.createdAt)}
-                    </p>
-                    {review.comment && (
-                      <p className="mt-1 text-muted-foreground">
-                        {review.comment}
-                      </p>
-                    )}
-                  </li>
-                ))
-              )}
-            </ol>
-          </section>
-        </aside>
-      </div>
-      <ChatPanel inspectionId={inspection.id} canSend={canSendChat} />
+                {itemBusy && (
+                  <span className="sr-only" role="status">
+                    正在保存判定
+                  </span>
+                )}
+              </article>
+            );
+          })
+        )}
+      </section>
+      {task.inspectionId && (
+        <div className="mt-6">
+          <ChatPanel inspectionId={task.inspectionId} canSend={canSendChat} />
+        </div>
+      )}
     </>
   );
 }

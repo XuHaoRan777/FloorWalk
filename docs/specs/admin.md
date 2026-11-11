@@ -1,22 +1,22 @@
 # 门店与模板管理
 
-代码（归档时再生成）：`apps/api/src/admin.controller.ts`、`apps/web/src/components/console/sites-page.tsx`、`apps/web/src/components/console/templates-page.tsx`；Web 客户端为 `apps/web/src/lib/api/admin.ts`。
+代码（归档时再生成）：`apps/api/src/admin.controller.ts`、`apps/api/src/users.controller.ts`、`apps/api/src/templates.controller.ts`、`apps/web/src/components/console/`；Web 客户端为 `apps/web/src/lib/api/`。
 
 ## 权限
 
-商家管理员可以管理本商家的门店与模板；主管仅能读取和管理自己被指派门店范围内的数据，且不能指派主管；店员调用管理接口返回 403。Web 控制台侧栏提供「门店」「模板」分区。网络或 400/403/404/409 错误以中文提示，401 返回登录页。
+只有商家管理员可以管理本商家的门店、账号与模板；店长调用管理接口返回 403。每个商家只有一个管理员；管理员不能创建或停用管理员账号。管理员创建店长时绑定一家门店，之后可调店。Web 控制台侧栏提供「门店」「账号」「模板」分区。网络或 400/403/404/409 错误以中文提示，401 返回登录页。
 
 ## 门店与停用
 
-门店页列出当前账号范围内的门店并标记「已停用」。商家管理员可以用编码与名称新建启用门店、改名、停用和重新启用；主管只管理名下门店。编码在商家内不可重复，冲突返回 409；不存在或跨商家资源返回 404，非法请求返回 400。新建门店不会创建员工账号。商家管理员可从本商家的主管账号中指派或取消门店主管，一店最多一位；重新指派立即更新主管的队列范围。
+门店页列出本商家的门店、启用状态和绑定的店长。商家管理员可以用编码与名称新建启用门店、改名、停用和重新启用。编码在商家内不可重复，冲突返回 409；不存在或跨商家资源返回 404，非法请求返回 400。新建门店不会创建店长账号；管理员在账号页创建店长并绑定门店，也可调店。
 
-停用保留门店和历史数据，写入 `deactivated_at`；重新启用清空它。店员仍可登录、看记录和历史详情，但今日待巡显示「门店已停用」，不显示开始按钮，服务端拒绝新建巡检。已提交的单主管仍可审完。总部看板保留最近判定分数并标「已停用」；重新启用恢复开始巡检。建单与停用通过门店行锁协调。
+停用保留门店和历史数据，写入 `deactivated_at`；重新启用清空它。店长仍可登录、看记录和历史详情。停用门店不再生成当天任务；同步时删除尚未开始且没有巡检记录的任务，已开始任务保持不变。对停用门店的任务首次上传会被服务端拒绝；已经创建巡检记录的任务仍可继续逐条处理。总部看板保留最近判定分数并标「已停用」。
 
-## 模板与当前模板
+## 模板
 
-模板页列出全部模板并标记当前模板；可新建，编辑名称与检查项，增删检查项、改标题、勾选必拍和严重项、上下移动顺序。至少一项，`position` 从 1 连续；名称重复返回 409，不存在返回 404，非法请求返回 400。新模板不自动成为当前模板。
+模板页列出本商家的模板，可新建、快捷创建、编辑名称与检查项，并设置 AI 开关和审核标准。检查项可增删、改标题、调整最低照片张数、验收要点与严重项、上下移动顺序；至少一项，`position` 从 1 连续。模板名称重复返回 409，不存在返回 404，非法请求返回 400。模板不设全商家唯一的「当前模板」；具体任务使用哪份模板由[日程方案](schedules.md)逐项决定。
 
-保存时在一个事务里改名并整体替换检查项。设置当前模板使用事务，按固定顺序锁定模板，取消原当前并启用目标模板；每个商家各有一个当前模板。已有巡检的检查项是建单时快照，修改模板不改变既有结果与分数，之后新建巡检使用修改后的当前模板。多人编辑采用后保存的内容。
+保存时在一个事务里改名并整体替换检查项。已有巡检单的检查项是创建巡检记录时的快照，修改模板不改变已创建巡检的结果与分数。任务生成时记录模板 ID，检查项在首次上传并创建巡检记录时复制；因此，首次上传前修改模板会影响该任务实际使用的检查项。多人编辑采用后保存的内容。
 
 ## 没有的
 
@@ -24,17 +24,18 @@
 
 ## 数据契约（归档时再生成）
 
-| 入口 | 当前契约 | 代码（归档时再生成） |
-| --- | --- | --- |
-| 门店管理 | GET/POST `/api/admin/sites`、PATCH `/api/admin/sites/:id`；返回 `active` | [控制器](../../apps/api/src/admin.controller.ts)、[共享契约](../../packages/shared/src/contract/index.ts) |
-| 主管指派 | GET `/api/admin/users`；PUT `/api/admin/sites/:id/supervisor`，`userId: null` 取消 | [门店控制器](../../apps/api/src/admin.controller.ts)、[账号控制器](../../apps/api/src/users.controller.ts) |
-| 模板管理 | GET/POST `/api/admin/templates`、PUT `/api/admin/templates/:id`、POST `/api/admin/templates/:id/current` | [控制器](../../apps/api/src/admin.controller.ts) |
-| 持久化 | organizations、sites、site_supervisors、templates、template_items；商家内唯一编码/名称，每商家当前模板部分唯一索引 | [数据结构](inspection.md#数据结构)、[schema](../../apps/api/src/db/schema.ts) |
-| 停用效果 | 今日待巡、新建巡检、总部看板 | [巡检](../../apps/api/src/inspection.controller.ts)、[看板](../../apps/api/src/dashboard.controller.ts)、[Mobile 今日页](../../apps/mobile/components/mobile/today-screen.tsx) |
+| 入口     | 当前契约                                                                                                          | 代码（归档时再生成）                                                                                                                                        |
+| -------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 门店管理 | GET/POST `/api/admin/sites`、PATCH `/api/admin/sites/:id`；返回 `active` 和店长列表                               | [控制器](../../apps/api/src/admin.controller.ts)、[共享契约](../../packages/shared/src/contract/index.ts)                                                   |
+| 店长账号 | GET/POST `/api/admin/users`、PATCH `/api/admin/users/:id`；建号时绑定门店，可调店                                 | [账号控制器](../../apps/api/src/users.controller.ts)                                                                                                        |
+| 模板管理 | GET/POST `/api/admin/templates`、POST `/api/admin/templates/quick-setup`、PUT `/api/admin/templates/:id`          | [控制器](../../apps/api/src/templates.controller.ts)                                                                                                        |
+| 持久化   | organizations、sites、users、templates、template_items；每商家一个管理员，账号登录名与门店编码/模板名均按商家唯一 | [数据结构](inspection.md#数据结构)、[schema](../../apps/api/src/db/)                                                                                        |
+| 停用效果 | 任务日程同步、首次上传、总部看板                                                                                  | [任务日程](../../apps/api/src/task-scheduler.ts)、[任务上传](../../apps/api/src/evidence.controller.ts)、[看板](../../apps/api/src/dashboard.controller.ts) |
 
 ## 修订记录
 
-| 日期 | 用户或调用方可观察的变化 |
-| --- | --- |
-| 2026-10-29 | 门店与模板管理落库并提供 Web 页面；停用限制新建、保留历史与审核，看板标停用；模板修改保持已有巡检快照。 |
+| 日期       | 用户或调用方可观察的变化                                                                                 |
+| ---------- | -------------------------------------------------------------------------------------------------------- |
+| 2026-10-29 | 门店与模板管理落库并提供 Web 页面；停用限制新建、保留历史与审核，看板标停用；模板修改保持已有巡检快照。  |
 | 2026-11-03 | g03 增加商家隔离与主管门店范围；商家管理员可指派主管，门店编码和模板名在商家内唯一、每商家一个当前模板。 |
+| 2026-11-11 | 管理员为唯一商家角色；店长账号直接绑定门店并可调店。模板由周循环日程按任务选用，不再设全商家当前模板。   |

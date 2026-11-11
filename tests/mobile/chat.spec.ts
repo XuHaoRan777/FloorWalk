@@ -22,11 +22,11 @@ function databaseUrlForSlot() {
   return url.toString();
 }
 
-async function signedInContext(email: string) {
+async function signedInContext(loginName: string) {
   const context = await request.newContext();
   contexts.push(context);
   const response = await context.post(`${apiBase}/api/auth/session`, {
-    data: { email, password },
+    data: { loginName, password },
   });
   expect(response.status()).toBe(201);
   return context;
@@ -90,9 +90,9 @@ test.afterAll(async () => {
 test('Expo Web chat pagination, polling, sending, validation and HQ read-only', async ({
   page,
 }) => {
-  const supervisor = await signedInContext('supervisor@northbean.example');
   const staffEmail = 'inspector+nb-002@northbean.example';
   const staff = await signedInContext(staffEmail);
+  const admin = await signedInContext('hq@northbean.example');
   const todayResponse = await staff.get(`${apiBase}/api/inspector/today`);
   const today = (await todayResponse.json()) as {
     reworkInspections: Array<{ id: string }>;
@@ -101,6 +101,15 @@ test('Expo Web chat pagination, polling, sending, validation and HQ read-only', 
   expect(targetInspectionId).toBeTruthy();
   if (!targetInspectionId) return;
   const target = { id: targetInspectionId };
+  const history = await admin.get(
+    `${apiBase}/api/inspections/${target.id}/messages`,
+  );
+  expect(history.status()).toBe(200);
+  const rejectedAdminWrite = await admin.post(
+    `${apiBase}/api/inspections/${target.id}/messages`,
+    { multipart: { text: '总部只读' } },
+  );
+  expect(rejectedAdminWrite.status()).toBe(403);
   for (let index = 0; index < 51; index += 1)
     await sendMessage(staff, target.id, `Mobile 分页消息 ${index + 1}`);
   const pageResponse = await staff.get(
@@ -114,15 +123,17 @@ test('Expo Web chat pagination, polling, sending, validation and HQ read-only', 
   expect(firstPage.hasMoreBefore).toBe(true);
 
   await page.goto('/');
-  await page.getByLabel('邮箱').fill(staffEmail);
+  await page.getByLabel('登录名').fill(staffEmail);
   await page.getByLabel('密码').fill(password);
   await page.getByTestId('login-button').click();
   await expect(page.getByRole('tab', { name: '今日待巡' })).toBeVisible();
-  await page
-    .getByText(/待补交/)
-    .first()
-    .click();
-  await expect(page.getByRole('heading', { name: '巡检详情' })).toBeVisible();
+  await page.getByRole('tab', { name: '记录', exact: true }).click();
+  const recordRow = page.getByTestId(`record-row-${target.id}`);
+  await expect(recordRow).toBeVisible();
+  await recordRow.click();
+  await expect(
+    page.getByRole('heading', { name: '巡检记录详情' }),
+  ).toBeVisible();
   const list = page.getByTestId('chat-message-list');
   await expect(
     list.getByText('Mobile 分页消息 2', { exact: true }),
@@ -130,7 +141,7 @@ test('Expo Web chat pagination, polling, sending, validation and HQ read-only', 
   await expect(
     list.getByText('Mobile 分页消息 51', { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText('店员', { exact: false }).first()).toBeVisible();
+  await expect(page.getByText('店长', { exact: false }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: '加载更早' })).toBeVisible();
   let polls = 0;
   page.on('request', (browserRequest) => {
@@ -176,8 +187,8 @@ test('Expo Web chat pagination, polling, sending, validation and HQ read-only', 
     )
     .toBeCloseTo(anchorBefore, 0);
 
-  await sendMessage(supervisor, target.id, 'Expo Web 外部更新');
-  await expect(list.getByText('Expo Web 外部更新')).toBeVisible({
+  await sendMessage(staff, target.id, 'Expo Web 店长更新');
+  await expect(list.getByText('Expo Web 店长更新')).toBeVisible({
     timeout: 5000,
   });
   if (!earlierPage.hasMoreBefore)
@@ -219,9 +230,9 @@ test('Expo Web chat pagination, polling, sending, validation and HQ read-only', 
   await expect(page.getByRole('button', { name: '发送' })).toBeDisabled();
   await visibility(page, false);
   const interleaved = await sendMessage(
-    supervisor,
+    staff,
     target.id,
-    '本端发送前的主管消息',
+    '本端发送前的店长消息',
   );
   await input.fill('Mobile Web 消息');
   const sentResponse = page.waitForResponse(
@@ -326,11 +337,7 @@ test('Expo Web chat pagination, polling, sending, validation and HQ read-only', 
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(input).toHaveValue('断网发送保留');
   await page.unroute(messagesUrl);
-  const recovered = await sendMessage(
-    supervisor,
-    target.id,
-    'Mobile 网络恢复补拉',
-  );
+  const recovered = await sendMessage(staff, target.id, 'Mobile 网络恢复补拉');
   await expect(page.getByTestId(`chat-message-${recovered.id}`)).toBeVisible({
     timeout: 5000,
   });

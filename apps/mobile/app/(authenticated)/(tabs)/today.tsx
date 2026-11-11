@@ -1,13 +1,12 @@
 import { useCallback } from 'react';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { TodayScreen } from '../../../components/mobile/today-screen';
 import { useSession } from '../../../components/mobile/session-provider';
 import { useToday } from '../../../components/mobile/today-provider';
 
 export default function TodayPage() {
-  const { session, expire } = useSession();
+  const { session } = useSession();
   const { today, loadingError, loadToday } = useToday();
-  const router = useRouter();
   useFocusEffect(
     useCallback(() => {
       void loadToday();
@@ -19,10 +18,6 @@ export default function TodayPage() {
       today={today}
       todayError={loadingError}
       onRefresh={() => void loadToday()}
-      onUnauthorized={expire}
-      onOpenInspection={(id) =>
-        router.push({ pathname: '/inspection/[id]', params: { id } })
-      }
     />
   );
 }

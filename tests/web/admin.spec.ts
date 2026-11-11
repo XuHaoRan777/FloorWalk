@@ -1,11 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { InspectionDetail } from '@libs/shared';
+import type { TaskReview } from '@libs/shared';
 import { createPool } from '../../apps/api/src/db/client.js';
 
 const configuredSlot = Number(process.env.FW_SLOT ?? 3);
 const apiBase = `http://127.0.0.1:${3100 + configuredSlot * 10}/api`;
 const password = 'northbean-demo';
 const createdSiteIds: string[] = [];
+const createdUserIds: string[] = [];
 const createdTemplateIds: string[] = [];
 const createdStandardIds: string[] = [];
 
@@ -19,6 +20,7 @@ async function login(page: Page, loginName = 'hq@northbean.example') {
 test.afterAll(async () => {
   if (
     !createdSiteIds.length &&
+    !createdUserIds.length &&
     !createdTemplateIds.length &&
     !createdStandardIds.length
   )
@@ -27,6 +29,16 @@ test.afterAll(async () => {
   databaseUrl.pathname = `/floorwalk_e2e_${configuredSlot}`;
   const pool = createPool(databaseUrl.toString());
   try {
+    if (createdUserIds.length) {
+      await pool.query(
+        'DELETE FROM floorwalk.sessions WHERE user_id = ANY($1::uuid[])',
+        [createdUserIds],
+      );
+      await pool.query(
+        'DELETE FROM floorwalk.users WHERE id = ANY($1::uuid[])',
+        [createdUserIds],
+      );
+    }
     if (createdTemplateIds.length) {
       await pool.query(
         'DELETE FROM floorwalk.template_items WHERE template_id = ANY($1::uuid[])',
@@ -320,50 +332,89 @@ test('FW-026 AC-02 审核详情展示快照中的最少张数、备注要求和�
 }) => {
   await login(page);
   await expect(page.getByRole('heading', { name: /总部看板/ })).toBeVisible();
-  const queueResponse = await page.request.get(`${apiBase}/review/queue`);
+  const queueResponse = await page.request.get(`${apiBase}/review/tasks`);
   expect(queueResponse.ok()).toBe(true);
-  const [source] = (await queueResponse.json()) as InspectionDetail[];
+  const [source] = (await queueResponse.json()) as TaskReview[];
   expect(source).toBeTruthy();
   const databaseUrl = new URL(process.env.DATABASE_URL ?? '');
   databaseUrl.pathname = `/floorwalk_e2e_${configuredSlot}`;
   const pool = createPool(databaseUrl.toString());
+  let taskId: string | undefined;
   let inspectionId: string | undefined;
   try {
-    const created = await pool.query<{ id: string }>(
-      `INSERT INTO floorwalk.inspections (site_id, template_id, inspector_id, status, submitted_at)
-       VALUES ($1, $2, $3, 'submitted', now()) RETURNING id`,
-      [source.siteId, source.templateId, source.inspectorId],
+    const suffix = Date.now();
+    const siteResponse = await page.request.post(`${apiBase}/admin/sites`, {
+      data: {
+        code: `FW026-${suffix}`,
+        name: `FW-026 快照门店 ${suffix}`,
+      },
+    });
+    expect(siteResponse.status()).toBe(201);
+    const site = (await siteResponse.json()) as { id: string; name: string };
+    createdSiteIds.push(site.id);
+    const managerResponse = await page.request.post(`${apiBase}/admin/users`, {
+      data: {
+        loginName: `fw026-${suffix}@example.test`,
+        displayName: 'FW-026 测试店长',
+        role: 'store_manager',
+        siteId: site.id,
+        password: 'initial-password',
+      },
+    });
+    expect(managerResponse.status()).toBe(201);
+    const manager = (await managerResponse.json()) as { id: string };
+    createdUserIds.push(manager.id);
+    const createdTask = await pool.query<{ id: string; taskDate: string }>(
+      `INSERT INTO floorwalk.inspection_tasks
+       (org_id, site_id, template_id, task_date, position, occurrence,
+        starts_at, due_at, status)
+       SELECT site.org_id, site.id, $2, CURRENT_DATE, 99, 99,
+         now() + interval '1 hour', now() + interval '2 hours', 'submitted'
+       FROM floorwalk.sites site WHERE site.id = $1
+       RETURNING id, task_date::text AS "taskDate"`,
+      [site.id, source.templateId],
     );
-    inspectionId = created.rows[0].id;
+    taskId = createdTask.rows[0].id;
+    const taskDate = createdTask.rows[0].taskDate;
+    const createdInspection = await pool.query<{ id: string }>(
+      `INSERT INTO floorwalk.inspections
+       (task_id, site_id, template_id, inspector_id, status, submitted_at)
+       VALUES ($1, $2, $3, $4, 'submitted', now()) RETURNING id`,
+      [taskId, site.id, source.templateId, manager.id],
+    );
+    inspectionId = createdInspection.rows[0].id;
     await pool.query(
       `INSERT INTO floorwalk.inspection_items
-       (inspection_id, position, title, critical, min_photo_count, acceptance_criteria, result, note)
-       VALUES ($1, 1, 'FW026 两张照片项', false, 2, '台面清洁，物品分类摆放。', 'pass', NULL),
-              ($1, 2, 'FW026 文字说明项', false, 0, '记录现场检查情况。', 'pass', '现场已检查')`,
-      [inspectionId],
+       (inspection_id, position, title, critical, min_photo_count,
+        acceptance_criteria, result, uploaded_by_id, uploaded_at, note)
+       VALUES ($1, 1, 'FW026 两张照片项', false, 2,
+         '台面清洁，物品分类摆放。', 'pending', $2, now(), NULL),
+              ($1, 2, 'FW026 文字说明项', false, 0,
+         '记录现场检查情况。', 'pending', $2, now(), '现场已检查')`,
+      [inspectionId, manager.id],
     );
+    const detailResponse = await page.request.get(
+      `${apiBase}/tasks/${taskId}/review`,
+    );
+    expect(detailResponse.ok()).toBe(true);
+    const detail = (await detailResponse.json()) as TaskReview;
+    expect(detail.inspectionId).toBe(inspectionId);
+    expect(detail.items.map((item) => item.minPhotoCount)).toEqual([2, 0]);
+    expect(detail.items[0]).not.toHaveProperty('photoRequired');
+
     await page
       .getByLabel('控制台导航')
       .getByRole('button', { name: '审核队列', exact: true })
       .click();
-    const detailResponse = page.waitForResponse(
-      (response) =>
-        response.url().endsWith(`/api/inspections/${inspectionId}/review`) &&
-        response.request().method() === 'POST',
-    );
     await page
       .getByRole('button')
-      .filter({ hasText: source.site.name })
-      .last()
+      .filter({ hasText: site.name })
+      .filter({ hasText: taskDate })
+      .first()
       .click();
-    const started = await detailResponse;
-    expect(started.ok()).toBe(true);
-    const detail = (await started.json()) as InspectionDetail;
-    expect(detail.id).toBe(inspectionId);
-    expect(detail.items.map((item) => item.minPhotoCount)).toEqual([2, 0]);
-    expect(detail.items[0]).not.toHaveProperty('photoRequired');
+    await expect(page.getByRole('heading', { name: site.name })).toBeVisible();
     const photoItem = page.getByRole('article').filter({
-      has: page.getByRole('heading', { name: 'FW026 两张照片项', exact: true }),
+      has: page.getByRole('heading', { name: /FW026 两张照片项/ }),
     });
     await expect(photoItem).toContainText('至少 2 张照片');
     await expect(photoItem).not.toContainText('无需照片');
@@ -371,17 +422,12 @@ test('FW-026 AC-02 审核详情展示快照中的最少张数、备注要求和�
     await expect(
       page.getByRole('article').filter({
         has: page.getByRole('heading', {
-          name: 'FW026 文字说明项',
-          exact: true,
+          name: /FW026 文字说明项/,
         }),
       }),
-    ).toContainText('无需照片，备注必填');
+    ).toContainText('可不上传照片，需填写备注');
   } finally {
     if (inspectionId) {
-      await pool.query(
-        'DELETE FROM floorwalk.reviews WHERE inspection_id = $1',
-        [inspectionId],
-      );
       await pool.query(
         'DELETE FROM floorwalk.inspection_items WHERE inspection_id = $1',
         [inspectionId],
@@ -390,6 +436,10 @@ test('FW-026 AC-02 审核详情展示快照中的最少张数、备注要求和�
         inspectionId,
       ]);
     }
+    if (taskId)
+      await pool.query('DELETE FROM floorwalk.inspection_tasks WHERE id = $1', [
+        taskId,
+      ]);
     await pool.end();
   }
 });

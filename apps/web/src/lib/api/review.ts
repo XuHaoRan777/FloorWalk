@@ -1,19 +1,20 @@
-import type { InspectionDetail, Review } from './types';
+import type { TaskItemDecisionRequest, TaskReview } from '@libs/shared';
 import { request } from './request';
 
-export function getReviewQueue() {
-  return request<InspectionDetail[]>('/review/queue');
+export function getTaskReviewQueue() {
+  return request<TaskReview[]>('/review/tasks');
 }
 
-export function reviewInspection(
-  id: string,
-  body: {
-    action: Review['action'];
-    comment?: string | null;
-    reworkItemIds?: string[];
-  },
+export function getTaskReview(taskId: string) {
+  return request<TaskReview>(`/tasks/${taskId}/review`);
+}
+
+export function decideTaskItem(
+  taskId: string,
+  itemId: string,
+  body: TaskItemDecisionRequest,
 ) {
-  return request<InspectionDetail>(`/inspections/${id}/review`, {
+  return request<TaskReview>(`/tasks/${taskId}/items/${itemId}/decision`, {
     method: 'POST',
     body: JSON.stringify(body),
   });

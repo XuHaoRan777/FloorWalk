@@ -7,6 +7,7 @@ import { canAccessSite } from './site-scope.js';
 
 export type AuthedRequest = Request & { user: AuthUser };
 export type UploadedImage = {
+  fieldname: string;
   originalname: string;
   mimetype: string;
   size: number;
@@ -48,7 +49,7 @@ export function assertInspectionAccess(
   inspection: {
     id: string;
     siteId: string;
-    inspectorId: string;
+    inspectorId: string | null;
     orgId: string;
     participated?: boolean;
   },

@@ -35,6 +35,13 @@ import {
   scheduleDefinitionSchema,
   scheduleResponseSchema,
 } from './schedules.js';
+import {
+  inspectionItemDecisionResultSchema,
+  inspectionItemDecisionResults,
+  inspectionItemSelfAssessmentSchema,
+  inspectionTaskSchema,
+  taskItemUploadMetadataSchema,
+} from './tasks.js';
 
 export * from './identity.js';
 export * from './orgs.js';
@@ -42,6 +49,7 @@ export * from './email.js';
 export * from './users.js';
 export * from './ai.js';
 export * from './schedules.js';
+export * from './tasks.js';
 
 export const inspectionStatuses = [
   'draft',
@@ -51,8 +59,10 @@ export const inspectionStatuses = [
   'rework',
   'failed',
 ] as const;
-export const inspectionItemResults = ['pending', 'pass', 'fail'] as const;
-export const reviewActions = ['start', 'approve', 'rework', 'fail'] as const;
+export const inspectionItemResults = [
+  'pending',
+  ...inspectionItemDecisionResults,
+] as const;
 export const errorCodes = [
   'UNAUTHENTICATED',
   'FORBIDDEN',
@@ -66,7 +76,6 @@ export const errorCodes = [
 
 export const inspectionStatusSchema = z.enum(inspectionStatuses);
 export const inspectionItemResultSchema = z.enum(inspectionItemResults);
-export const reviewActionSchema = z.enum(reviewActions);
 export const errorCodeSchema = z.enum(errorCodes);
 
 export const templateSchema = z.object({
@@ -92,7 +101,7 @@ export const inspectionSchema = z.object({
   id: uuid,
   siteId: uuid,
   templateId: uuid,
-  inspectorId: uuid,
+  inspectorId: uuid.nullable(),
   status: inspectionStatusSchema,
   score: z.number().int().min(0).max(100).nullable(),
   submittedAt: timestamp.nullable(),
@@ -120,6 +129,41 @@ export const evidenceSchema = z.object({
   mime: z.string().min(1),
   size: z.number().int().nonnegative(),
   createdAt: timestamp,
+});
+
+export const taskItemUploadResponseSchema = inspectionItemSchema.extend({
+  selfAssessment: inspectionItemSelfAssessmentSchema,
+  uploadedById: uuid,
+  uploadedByName: z.string().min(1),
+  uploadedAt: timestamp,
+  evidence: z.array(evidenceSchema),
+});
+
+export const taskReviewItemSchema = inspectionItemSchema.extend({
+  selfAssessment: inspectionItemSelfAssessmentSchema.nullable(),
+  firstSelfAssessment: inspectionItemSelfAssessmentSchema.nullable(),
+  firstResult: inspectionItemDecisionResultSchema.nullable(),
+  uploadedById: uuid.nullable(),
+  uploadedByName: z.string().nullable(),
+  uploadedAt: timestamp.nullable(),
+  incomplete: z.boolean(),
+  evidence: z.array(evidenceSchema),
+});
+
+export const taskReviewSchema = inspectionTaskSchema.extend({
+  inspectionId: uuid.nullable(),
+  inspectionStatus: inspectionStatusSchema.nullable(),
+  score: z.number().int().min(0).max(100).nullable(),
+  submittedAt: timestamp.nullable(),
+  decidedAt: timestamp.nullable(),
+  site: siteSchema,
+  templateName: z.string().min(1),
+  items: z.array(taskReviewItemSchema),
+});
+
+export const taskReviewQueueResponseSchema = z.array(taskReviewSchema);
+export const taskItemDecisionRequestSchema = z.object({
+  result: inspectionItemDecisionResultSchema,
 });
 
 const reviewBaseSchema = z.object({
@@ -319,10 +363,6 @@ export const quickSetupTemplateResponseSchema = z.object({
   standard: aiStandardSchema,
 });
 
-export const createInspectionRequestSchema = z.object({
-  templateId: uuid,
-});
-
 export const inspectionDetailSchema = inspectionSchema.extend({
   site: siteSchema,
   items: z.array(
@@ -333,51 +373,10 @@ export const inspectionDetailSchema = inspectionSchema.extend({
   reviews: z.array(reviewSchema),
 });
 
-export const updateInspectionItemRequestSchema = z.object({
-  result: inspectionItemResultSchema,
-  note: z.string().nullable().optional(),
-});
-
 export const signedEvidenceResponseSchema = z.object({
   url: z.string().url(),
   expiresAt: timestamp,
 });
-
-export const submitInspectionResponseSchema = inspectionSchema;
-
-export const updateInspectionItemResponseSchema = inspectionItemSchema.extend({
-  evidence: z.array(evidenceSchema),
-});
-
-export const reviewQueueResponseSchema = z.array(inspectionDetailSchema);
-
-export const reviewRequestSchema = z
-  .object({
-    action: reviewActionSchema,
-    comment: z.string().nullable().optional(),
-    reworkItemIds: z.array(uuid).optional(),
-  })
-  .superRefine((value, context) => {
-    if (
-      value.action === 'rework' &&
-      (!value.reworkItemIds || value.reworkItemIds.length === 0)
-    ) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['reworkItemIds'],
-        message: '打回时必须指定至少一个巡检项。',
-      });
-    }
-    if (value.action !== 'rework' && value.reworkItemIds) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['reworkItemIds'],
-        message: '只有打回时可以指定巡检项。',
-      });
-    }
-  });
-
-export const reviewResponseSchema = inspectionDetailSchema;
 
 export const dashboardSiteScoreSchema = z.object({
   site: siteSchema,
@@ -424,6 +423,8 @@ export const databaseConstraints = {
     'schedule_days(org_id, schedule_id, weekday)',
     'schedule_tasks(org_id, schedule_id, weekday, position)',
     'site_schedules(org_id, site_id)',
+    'inspection_tasks(org_id, site_id, task_date, template_id, starts_at, due_at, occurrence)',
+    'inspections(task_id) WHERE task_id IS NOT NULL',
   ],
   indexes: [
     'email_verifications(expires_at)',
@@ -434,6 +435,8 @@ export const databaseConstraints = {
     'chat_messages(inspection_id, seq)',
     'site_schedules(org_id, schedule_id)',
     'site_schedule_skips(org_id, site_id, starts_on, ends_on)',
+    'inspection_tasks(status, due_at)',
+    'inspection_item_decisions(inspection_item_id, created_at)',
   ],
   checks: [
     "email_verifications.purpose IN ('registration', 'password_recovery')",
@@ -451,7 +454,17 @@ export const databaseConstraints = {
     'inspection_items.position > 0',
     'inspection_items.min_photo_count BETWEEN 0 AND 10',
     'char_length(inspection_items.acceptance_criteria) <= 500',
-    "inspection_items.result IN ('pending', 'pass', 'fail')",
+    "inspection_items.result IN ('pending', 'pass', 'rework', 'fail')",
+    "inspection_tasks.status IN ('not_started', 'in_progress', 'submitted', 'overdue')",
+    'inspection_tasks.position >= 0',
+    'inspection_tasks.occurrence >= 0',
+    'inspection_tasks.starts_at < due_at',
+    "inspection_items.self_assessment IS NULL OR self_assessment IN ('pass', 'fail')",
+    "inspection_items.first_self_assessment IS NULL OR first_self_assessment IN ('pass', 'fail')",
+    "inspection_items.first_result IS NULL OR first_result IN ('pass', 'rework', 'fail')",
+    'inspection_items.uploaded_by_id and uploaded_at are both NULL or both NOT NULL',
+    "inspection_item_decisions.previous_result IS NULL OR previous_result IN ('pass', 'rework', 'fail')",
+    "inspection_item_decisions.new_result IN ('pass', 'rework', 'fail')",
     'evidence.size >= 0',
     "reviews.action IN ('start', 'approve', 'rework', 'fail')",
     'reviews.rework_item_ids is required only for rework reviews',
@@ -604,14 +617,6 @@ export const apiRoutes = {
     responseSchema: todayResponseSchema,
     successStatus: 200,
   },
-  createInspection: {
-    method: 'POST',
-    path: '/api/inspections',
-    roles: ['store_manager'],
-    requestSchema: createInspectionRequestSchema,
-    responseSchema: inspectionSchema,
-    successStatus: 201,
-  },
   getInspection: {
     method: 'GET',
     path: '/api/inspections/:id',
@@ -620,20 +625,36 @@ export const apiRoutes = {
     responseSchema: inspectionDetailSchema,
     successStatus: 200,
   },
-  updateInspectionItem: {
-    method: 'PATCH',
-    path: '/api/inspections/:id/items/:itemId',
+  uploadTaskItem: {
+    method: 'POST',
+    path: '/api/tasks/:taskId/items/:position/uploads',
     roles: ['store_manager'],
-    requestSchema: updateInspectionItemRequestSchema,
-    responseSchema: updateInspectionItemResponseSchema,
+    requestSchema: taskItemUploadMetadataSchema,
+    responseSchema: taskItemUploadResponseSchema,
+    successStatus: 201,
+  },
+  reviewTaskQueue: {
+    method: 'GET',
+    path: '/api/review/tasks',
+    roles: ['admin'],
+    requestSchema: null,
+    responseSchema: taskReviewQueueResponseSchema,
     successStatus: 200,
   },
-  addEvidence: {
+  getTaskReview: {
+    method: 'GET',
+    path: '/api/tasks/:taskId/review',
+    roles: ['admin'],
+    requestSchema: null,
+    responseSchema: taskReviewSchema,
+    successStatus: 200,
+  },
+  decideTaskItem: {
     method: 'POST',
-    path: '/api/inspections/:id/items/:itemId/evidence',
-    roles: ['store_manager'],
-    requestSchema: evidenceUploadRequestSchema,
-    responseSchema: evidenceSchema,
+    path: '/api/tasks/:taskId/items/:itemId/decision',
+    roles: ['admin'],
+    requestSchema: taskItemDecisionRequestSchema,
+    responseSchema: taskReviewSchema,
     successStatus: 201,
   },
   getEvidence: {
@@ -643,30 +664,6 @@ export const apiRoutes = {
     requestSchema: null,
     responseSchema: signedEvidenceResponseSchema,
     successStatus: 200,
-  },
-  submitInspection: {
-    method: 'POST',
-    path: '/api/inspections/:id/submit',
-    roles: ['store_manager'],
-    requestSchema: null,
-    responseSchema: submitInspectionResponseSchema,
-    successStatus: 201,
-  },
-  reviewQueue: {
-    method: 'GET',
-    path: '/api/review/queue',
-    roles: ['admin'],
-    requestSchema: null,
-    responseSchema: reviewQueueResponseSchema,
-    successStatus: 200,
-  },
-  reviewInspection: {
-    method: 'POST',
-    path: '/api/inspections/:id/review',
-    roles: ['admin'],
-    requestSchema: reviewRequestSchema,
-    responseSchema: reviewResponseSchema,
-    successStatus: 201,
   },
   dashboardSites: {
     method: 'GET',
@@ -701,7 +698,7 @@ export const apiRoutes = {
   createInspectionMessage: {
     method: 'POST',
     path: '/api/inspections/:id/messages',
-    roles: userRoles,
+    roles: ['store_manager'],
     requestSchema: chatMessageRequestSchema,
     responseSchema: chatMessageSchema,
     successStatus: 201,
@@ -887,7 +884,6 @@ export function apiRoutePath(route: ApiRouteDefinition) {
 
 export type InspectionStatus = z.infer<typeof inspectionStatusSchema>;
 export type InspectionItemResult = z.infer<typeof inspectionItemResultSchema>;
-export type ReviewAction = z.infer<typeof reviewActionSchema>;
 export type ErrorCode = z.infer<typeof errorCodeSchema>;
 export type Template = z.infer<typeof templateSchema>;
 export type TemplateItem = z.infer<typeof templateItemSchema>;
@@ -910,25 +906,22 @@ export type QuickSetupTemplateResponse = z.infer<
 export type Inspection = z.infer<typeof inspectionSchema>;
 export type InspectionItem = z.infer<typeof inspectionItemSchema>;
 export type Evidence = z.infer<typeof evidenceSchema>;
+export type TaskItemUploadResponse = z.infer<
+  typeof taskItemUploadResponseSchema
+>;
+export type TaskReviewItem = z.infer<typeof taskReviewItemSchema>;
+export type TaskReview = z.infer<typeof taskReviewSchema>;
+export type TaskItemDecisionRequest = z.infer<
+  typeof taskItemDecisionRequestSchema
+>;
 export type Review = z.infer<typeof reviewSchema>;
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
 export type TodayResponse = z.infer<typeof todayResponseSchema>;
-export type CreateInspectionRequest = z.infer<
-  typeof createInspectionRequestSchema
->;
 export type InspectionDetail = z.infer<typeof inspectionDetailSchema>;
-export type UpdateInspectionItemRequest = z.infer<
-  typeof updateInspectionItemRequestSchema
->;
 export type SignedEvidenceResponse = z.infer<
   typeof signedEvidenceResponseSchema
 >;
-export type UpdateInspectionItemResponse = z.infer<
-  typeof updateInspectionItemResponseSchema
->;
-export type ReviewRequest = z.infer<typeof reviewRequestSchema>;
-export type ReviewResponse = z.infer<typeof reviewResponseSchema>;
 export type DashboardSitesResponse = z.infer<
   typeof dashboardSitesResponseSchema
 >;

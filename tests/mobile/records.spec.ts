@@ -6,6 +6,7 @@ const email = 'inspector@northbean.example';
 const password = 'northbean-demo';
 const apiBase = `http://127.0.0.1:${3100 + Number(process.env.FW_SLOT) * 10}/api`;
 const createdInspectionIds: string[] = [];
+const createdTaskIds: string[] = [];
 let colleagueId: string | undefined;
 let colleagueInspectionId: string | undefined;
 
@@ -81,24 +82,76 @@ async function createTestRecords(page: Page) {
   expect(todayResponse.status()).toBe(200);
   const today = (await todayResponse.json()) as {
     site: { id: string };
-    templates: Array<{ id: string }>;
+    templates: Array<{
+      id: string;
+      items: Array<{
+        position: number;
+        title: string;
+        minPhotoCount: number;
+        acceptanceCriteria: string;
+        critical: boolean;
+      }>;
+    }>;
   };
-  const templateId = today.templates[0]?.id;
+  const template = today.templates[0];
+  const templateId = template?.id;
   expect(templateId).toBeTruthy();
-
-  for (let index = 0; index < 19; index += 1) {
-    const response = await page
-      .context()
-      .request.post(`${apiBase}/inspections`, {
-        data: { templateId },
-      });
-    expect(response.status()).toBe(201);
-    const inspection = (await response.json()) as { id: string };
-    createdInspectionIds.push(inspection.id);
-  }
+  expect(template?.items.length).toBeGreaterThan(0);
 
   const pool = createPool(slotDatabaseUrl());
   try {
+    const store = await pool.query<{ id: string; orgId: string }>(
+      `SELECT id, org_id AS "orgId" FROM floorwalk.sites WHERE id = $1`,
+      [today.site.id],
+    );
+    const currentUser = await pool.query<{ id: string }>(
+      'SELECT id FROM floorwalk.users WHERE login_name = $1',
+      [email],
+    );
+    const site = store.rows[0];
+    const inspectorId = currentUser.rows[0]?.id;
+    if (!site || !inspectorId || !template)
+      throw new Error('记录夹具缺少店长、门店或模板。');
+    const now = new Date();
+    const startsAt = new Date(now.getTime() - 60 * 60 * 1000);
+    const dueAt = new Date(now.getTime() + 60 * 60 * 1000);
+    const createInspection = async (ownerId: string, occurrence: number) => {
+      const task = await pool.query<{ id: string }>(
+        `INSERT INTO floorwalk.inspection_tasks
+           (org_id, site_id, template_id, task_date, position, occurrence,
+            starts_at, due_at, status)
+         VALUES ($1, $2, $3, CURRENT_DATE, $4, $4, $5, $6, 'submitted')
+         RETURNING id`,
+        [site.orgId, today.site.id, templateId, occurrence, startsAt, dueAt],
+      );
+      const taskId = task.rows[0].id;
+      createdTaskIds.push(taskId);
+      const inspection = await pool.query<{ id: string }>(
+        `INSERT INTO floorwalk.inspections
+           (task_id, site_id, template_id, inspector_id, status, score,
+            submitted_at, decided_at)
+         VALUES ($1, $2, $3, $4, 'passed', 100, $5, $5) RETURNING id`,
+        [taskId, today.site.id, templateId, ownerId, now],
+      );
+      const inspectionId = inspection.rows[0].id;
+      createdInspectionIds.push(inspectionId);
+      await pool.query(
+        `INSERT INTO floorwalk.inspection_items
+           (inspection_id, position, title, min_photo_count, acceptance_criteria,
+            critical, result, self_assessment, first_self_assessment, first_result,
+            uploaded_by_id, uploaded_at, note)
+         SELECT $1, position, title, min_photo_count, acceptance_criteria,
+            critical, 'pass', 'pass', 'pass', 'pass', $2, $3,
+            CASE WHEN position = 1 THEN '同店店员填写的记录备注' ELSE NULL END
+         FROM floorwalk.template_items WHERE template_id = $4`,
+        [inspectionId, ownerId, now, templateId],
+      );
+      return inspectionId;
+    };
+
+    for (let index = 0; index < 19; index += 1)
+      await createInspection(inspectorId, index);
+
     const colleague = await pool.query<{ id: string }>(
       `INSERT INTO floorwalk.users (login_name, password_hash, display_name, role, site_id, org_id)
        SELECT $1, 'test-hash', '同店测试店长', 'store_manager', id, org_id
@@ -107,21 +160,7 @@ async function createTestRecords(page: Page) {
       [`records-${randomUUID()}@northbean.example`, today.site.id],
     );
     colleagueId = colleague.rows[0].id;
-    const record = await pool.query<{ id: string }>(
-      `INSERT INTO floorwalk.inspections
-         (site_id, template_id, inspector_id, status, score, submitted_at, decided_at)
-       VALUES ($1, $2, $3, 'passed', 100, now(), now()) RETURNING id`,
-      [today.site.id, templateId, colleagueId],
-    );
-    colleagueInspectionId = record.rows[0].id;
-    await pool.query(
-      `INSERT INTO floorwalk.inspection_items
-         (inspection_id, position, title, min_photo_count, acceptance_criteria, critical, result, note)
-       SELECT $1, position, title, min_photo_count, acceptance_criteria, critical, 'pass',
-              CASE WHEN position = 1 THEN '同店店员填写的记录备注' ELSE NULL END
-       FROM floorwalk.template_items WHERE template_id = $2`,
-      [colleagueInspectionId, templateId],
-    );
+    colleagueInspectionId = await createInspection(colleagueId, 19);
   } finally {
     await pool.end();
   }
@@ -136,6 +175,26 @@ test.afterEach(async () => {
     ];
     if (inspectionIds.length) {
       await pool.query(
+        `DELETE FROM floorwalk.inspection_item_decisions
+         WHERE inspection_item_id IN
+           (SELECT id FROM floorwalk.inspection_items WHERE inspection_id = ANY($1::uuid[]))`,
+        [inspectionIds],
+      );
+      await pool.query(
+        `DELETE FROM floorwalk.evidence
+         WHERE inspection_item_id IN
+           (SELECT id FROM floorwalk.inspection_items WHERE inspection_id = ANY($1::uuid[]))`,
+        [inspectionIds],
+      );
+      await pool.query(
+        'DELETE FROM floorwalk.inspection_participants WHERE inspection_id = ANY($1::uuid[])',
+        [inspectionIds],
+      );
+      await pool.query(
+        'DELETE FROM floorwalk.reviews WHERE inspection_id = ANY($1::uuid[])',
+        [inspectionIds],
+      );
+      await pool.query(
         'DELETE FROM floorwalk.inspection_items WHERE inspection_id = ANY($1::uuid[])',
         [inspectionIds],
       );
@@ -144,6 +203,11 @@ test.afterEach(async () => {
         [inspectionIds],
       );
     }
+    if (createdTaskIds.length)
+      await pool.query(
+        'DELETE FROM floorwalk.inspection_tasks WHERE id = ANY($1::uuid[])',
+        [createdTaskIds],
+      );
     if (colleagueId)
       await pool.query('DELETE FROM floorwalk.users WHERE id = $1', [
         colleagueId,
@@ -151,6 +215,7 @@ test.afterEach(async () => {
   } finally {
     await pool.end();
     createdInspectionIds.length = 0;
+    createdTaskIds.length = 0;
     colleagueId = undefined;
     colleagueInspectionId = undefined;
   }
@@ -319,16 +384,13 @@ test('记录详情只读显示检查项、照片和按时间排列的审核历�
       .request.get(`${apiBase}/inspections/${record.id}`);
     if (!response.ok()) continue;
     const detail = (await response.json()) as NonNullable<typeof expected>;
-    if (
-      detail.items.some((item) => item.evidence.length) &&
-      detail.reviews.length
-    ) {
+    if (detail.items.some((item) => item.evidence.length)) {
       expected = detail;
       break;
     }
   }
   expect(expected).not.toBeNull();
-  if (!expected) throw new Error('种子记录缺少照片或审核历史。');
+  if (!expected) throw new Error('种子记录缺少照片。');
 
   await page.getByRole('tab', { name: '记录', exact: true }).click();
   while (!(await page.getByTestId(`record-row-${expected.id}`).count())) {
@@ -346,7 +408,7 @@ test('记录详情只读显示检查项、照片和按时间排列的审核历�
     const row = page.getByTestId(`record-item-${item.position}`);
     await expect(row).toContainText(item.title);
     await expect(row).toContainText(
-      `结果：${item.result === 'pass' ? '合格' : item.result === 'fail' ? '不合格' : '未检查'}`,
+      `结果：${item.result === 'pass' ? '合格' : item.result === 'rework' ? '打回' : item.result === 'fail' ? '不合格' : '未检查'}`,
     );
     await expect(row).toContainText(`备注：${item.note || '—'}`);
     for (const evidence of item.evidence)
@@ -370,14 +432,8 @@ test('记录详情只读显示检查项、照片和按时间排列的审核历�
     }
   }
 
-  const reviews = page.locator('[data-testid^="review-"]');
-  await expect(reviews).toHaveCount(expected.reviews.length);
-  const renderedReviewIds = await reviews.evaluateAll((elements) =>
-    elements.map((element) => element.getAttribute('data-testid')?.slice(7)),
-  );
-  expect(renderedReviewIds).toEqual(
-    expected.reviews.map((review) => review.id),
-  );
+  await expect(page.getByText('暂无审核记录。')).toBeVisible();
+  await expect(page.locator('[data-testid^="review-"]')).toHaveCount(0);
   await expect(page.getByText('巡检聊天')).toBeVisible();
   await expect(page.getByLabel('聊天内容')).toBeVisible();
   await expect(page.getByRole('button', { name: '发送' })).toBeVisible();

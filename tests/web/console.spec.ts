@@ -4,187 +4,133 @@ import {
   type APIRequestContext,
   type Page,
 } from '@playwright/test';
+import type { TaskReview } from '@libs/shared';
 
 const configuredSlot = Number(process.env.FW_SLOT ?? 3);
 const apiPort = 3100 + configuredSlot * 10;
 const apiBase = `http://127.0.0.1:${apiPort}`;
 const demoPassword = 'northbean-demo';
 
-type LoginResponse = {
-  user: { role: 'inspector' | 'supervisor' | 'admin' };
-};
-
-async function apiLogin(
-  request: APIRequestContext,
-  email: string,
-): Promise<LoginResponse> {
+async function apiLogin(request: APIRequestContext, loginName: string) {
   const response = await request.post(`${apiBase}/api/auth/session`, {
-    data: { email, password: demoPassword },
+    data: { loginName, password: demoPassword },
   });
   expect(response.status()).toBe(201);
-  return (await response.json()) as LoginResponse;
+  return response;
 }
 
-async function login(page: Page, email: string, password = demoPassword) {
+async function login(page: Page, loginName: string, password = demoPassword) {
   await page.goto('/');
-  await page.getByLabel('邮箱').fill(email);
+  await page.getByLabel('登录名').fill(loginName);
   await page.getByLabel('密码').fill(password);
-  await page.getByRole('button', { name: '登录' }).click();
+  await page.getByRole('button', { name: '登录', exact: true }).click();
 }
 
-test('AC-01 登录、刷新保持会话、退出和三角色分流', async ({ page }) => {
+test('管理员进入审核队列，店长 Web 端只显示手机端提示', async ({ page }) => {
   await page.goto('/');
-  await page.getByLabel('邮箱').fill('supervisor@northbean.example');
+  await page.getByLabel('登录名').fill('inspector@northbean.example');
   await page.getByLabel('密码').fill('wrong-password');
-  await page.getByRole('button', { name: '登录' }).click();
-  await expect(page.getByText(/邮箱或密码错误/)).toBeVisible();
+  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await expect(page.getByText(/登录名或密码错误/)).toBeVisible();
 
-  await login(page, 'supervisor@northbean.example');
-  await expect(page.getByRole('heading', { name: /审核队列/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: '门店' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '模板' })).toBeVisible();
-  await page.getByRole('button', { name: '门店' }).click();
-  await expect(page.getByRole('heading', { name: '门店' })).toBeVisible();
-  await page.getByRole('button', { name: '模板' }).click();
-  await expect(page.getByRole('heading', { name: '模板' })).toBeVisible();
-  await page.getByRole('button', { name: '审核队列' }).click();
-  await page.reload();
-  await expect(page.getByRole('heading', { name: /审核队列/ })).toBeVisible();
+  await login(page, 'inspector+nb-002@northbean.example');
+  await expect(page.getByText('请使用手机端')).toBeVisible();
+  await expect(page.getByRole('button', { name: '审核队列' })).toHaveCount(0);
   await page.getByRole('button', { name: '退出登录' }).click();
-  await expect(page.getByLabel('邮箱')).toBeVisible();
+  await expect(page.getByLabel('登录名')).toBeVisible();
 
   await login(page, 'hq@northbean.example');
   await expect(page.getByRole('heading', { name: /总部看板/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: '门店' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '模板' })).toBeVisible();
   await page
     .getByLabel('控制台导航')
-    .getByRole('button', { name: '审核队列' })
+    .getByRole('button', { name: '审核队列', exact: true })
     .click();
-  await expect(page.getByRole('heading', { name: /审核队列/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '审核队列' })).toBeVisible();
   await expect(
-    page.getByRole('button', { name: '查看并审核' }).first(),
+    page.getByRole('button', { name: '查看任务' }).first(),
   ).toBeVisible();
-  await page.getByRole('button', { name: '退出登录' }).click();
-
-  await login(page, 'inspector@northbean.example');
-  await expect(page.getByText('请使用手机端')).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: /审核队列|总部看板/ }),
-  ).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '门店' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '模板' })).toHaveCount(0);
 });
 
-test('AC-02 审核队列与 API 返回保持一致', async ({ page, request }) => {
-  await apiLogin(request, 'supervisor@northbean.example');
-  const response = await request.get(`${apiBase}/api/review/queue`);
+test('审核队列与任务审核 API 返回保持一致', async ({ page, request }) => {
+  await apiLogin(request, 'hq@northbean.example');
+  const response = await request.get(`${apiBase}/api/review/tasks`);
   expect(response.ok()).toBeTruthy();
-  const queue = (await response.json()) as Array<{
-    site: { name: string };
-    score: number | null;
-    status: string;
-  }>;
+  const queue = (await response.json()) as TaskReview[];
   expect(queue.length).toBeGreaterThan(0);
 
-  await login(page, 'supervisor@northbean.example');
-  await expect(page.getByRole('heading', { name: /审核队列/ })).toBeVisible();
-  for (const entry of queue) {
-    const row = page.getByRole('button').filter({ hasText: entry.site.name });
-    await expect(row).toBeVisible();
-    if (entry.score !== null)
-      await expect(row).toContainText(String(entry.score));
+  await login(page, 'hq@northbean.example');
+  await page
+    .getByLabel('控制台导航')
+    .getByRole('button', { name: '审核队列', exact: true })
+    .click();
+  await expect(page.getByRole('heading', { name: '审核队列' })).toBeVisible();
+  for (const task of queue) {
+    const row = page
+      .getByRole('button')
+      .filter({ hasText: task.site.name })
+      .filter({ hasText: task.taskDate });
+    await expect(row.first()).toBeVisible();
+    if (task.score !== null)
+      await expect(row.first()).toContainText(String(task.score));
   }
 });
 
-test('AC-03 详情展示检查项、照片和按时间排列的审核历史', async ({
-  page,
-  request,
-}) => {
-  await apiLogin(request, 'supervisor@northbean.example');
-  const response = await request.get(`${apiBase}/api/review/queue`);
-  const queue = (await response.json()) as Array<{
-    id: string;
-    status: string;
-    site: { name: string };
-    items: Array<{ title: string; evidence: Array<{ id: string }> }>;
-    reviews: Array<{ createdAt: string }>;
-  }>;
-  const submitted =
-    queue.find((entry) => entry.status === 'submitted') ?? queue[0];
-  expect(submitted).toBeTruthy();
+test('审核详情展示逐项结论、照片、上传人和聊天', async ({ page, request }) => {
+  await apiLogin(request, 'hq@northbean.example');
+  const response = await request.get(`${apiBase}/api/review/tasks`);
+  const queue = (await response.json()) as TaskReview[];
+  const target = queue.find(
+    (task) =>
+      task.inspectionId && task.items.some((item) => item.evidence.length),
+  );
+  expect(target).toBeTruthy();
+  if (!target) return;
 
-  await login(page, 'supervisor@northbean.example');
-  const startRequests: string[] = [];
-  page.on('request', (sent) => {
-    if (
-      sent.method() === 'POST' &&
-      sent.url().includes(`/api/inspections/${submitted.id}/review`) &&
-      sent.postData()?.includes('"start"')
-    )
-      startRequests.push(sent.url());
-  });
-  await page.getByText(submitted.site.name, { exact: true }).click();
-  await expect(page.getByRole('heading', { name: '巡检聊天' })).toBeVisible();
-  // 打开 submitted 单只自动开始审核一次，开发模式的 StrictMode 双跑 effect 也不能报状态冲突
-  if (submitted.status === 'submitted') {
-    await expect.poll(() => startRequests.length).toBe(1);
-    await expect(page.getByText('当前状态不允许执行该审核操作')).toHaveCount(0);
+  await login(page, 'hq@northbean.example');
+  await page
+    .getByLabel('控制台导航')
+    .getByRole('button', { name: '审核队列', exact: true })
+    .click();
+  await page
+    .getByRole('button')
+    .filter({ hasText: target.site.name })
+    .filter({ hasText: target.taskDate })
+    .first()
+    .click();
+  await expect(
+    page.getByRole('heading', { name: target.site.name }),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: '检查项' })).toBeVisible();
+  for (const item of target.items) {
+    await expect(
+      page.getByText(item.title, { exact: false }).first(),
+    ).toBeVisible();
+    if (item.uploadedAt) {
+      await expect(
+        page
+          .getByText(new RegExp(`${item.uploadedByName ?? '系统'} · 上传于`))
+          .first(),
+      ).toBeVisible();
+    }
   }
-  await expect(page.getByRole('textbox', { name: '聊天内容' })).toBeVisible();
-  for (const item of submitted.items)
-    await expect(page.getByText(item.title, { exact: true })).toBeVisible();
-  if (submitted.items.some((item) => item.evidence.length > 0)) {
-    const images = page.locator('img');
-    await expect(images.first()).toBeVisible();
-    await expect
-      .poll(() =>
-        images.evaluateAll((elements) =>
+  await expect(page.getByRole('heading', { name: '巡检聊天' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '聊天内容' })).toHaveCount(0);
+  await expect(page.getByLabel('选择聊天图片')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '发送' })).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page
+        .locator('img')
+        .evaluateAll((elements) =>
           elements.some(
             (element) => (element as HTMLImageElement).naturalWidth > 0,
           ),
         ),
-      )
-      .toBe(true);
-  }
-  await expect(page.getByText(/审核历史/)).toBeVisible();
-  await expect(page.getByText(/开始审核/)).toBeVisible();
+    )
+    .toBe(true);
 });
 
-test('AC-04 主管操作和严重项失败时的通过禁用', async ({ page, request }) => {
-  await apiLogin(request, 'supervisor@northbean.example');
-  const response = await request.get(`${apiBase}/api/review/queue`);
-  const queue = (await response.json()) as Array<{
-    id: string;
-    status: string;
-    site: { name: string };
-    items: Array<{ id: string; critical: boolean; result: string }>;
-  }>;
-  const target =
-    queue.find((entry) => entry.status === 'submitted') ?? queue[0];
-  expect(target.items.length).toBeGreaterThan(0);
-  await login(page, 'supervisor@northbean.example');
-  await page.getByText(target.site.name, { exact: true }).click();
-  await expect(page.getByRole('button', { name: /通过/ })).toBeVisible();
-  if (target.items.some((item) => item.critical && item.result === 'fail'))
-    await expect(page.getByRole('button', { name: /通过/ })).toBeDisabled();
-  await page.getByRole('button', { name: /打回/ }).click();
-  await expect(page.getByText(/至少选择一个检查项/)).toBeVisible();
-  await page.getByRole('checkbox', { name: '选择为打回项' }).first().check();
-  const reviewResponse = page.waitForResponse(
-    (candidate) =>
-      candidate.url().includes(`/api/inspections/${target.id}/review`) &&
-      candidate.request().method() === 'POST' &&
-      candidate.request().postData()?.includes('rework'),
-  );
-  await page.getByRole('button', { name: '确认打回' }).click();
-  const result = await reviewResponse;
-  expect(result.ok()).toBeTruthy();
-  expect((await result.json()).status).toBe('rework');
-  await expect(page.getByText('已打回', { exact: true })).toBeVisible();
-});
-
-test('AC-05 总部看板与 API 返回一致，且没有审核按钮', async ({
+test('总部看板与 API 返回一致，且不显示条目判定按钮', async ({
   page,
   request,
 }) => {
@@ -222,62 +168,39 @@ test('AC-05 总部看板与 API 返回一致，且没有审核按钮', async ({
       await expect(row).toContainText(String(entry.latestScore));
   }
   await expect(
-    page.getByRole('button', { name: /通过|打回|判不合格/ }),
+    page.getByRole('button', { name: /通过|打回|不合格/ }),
   ).toHaveCount(0);
 });
 
-test('AC-06 主管看板只显示名下六家门店', async ({ page, request }) => {
-  await apiLogin(request, 'supervisor@northbean.example');
-  const response = await request.get(`${apiBase}/api/dashboard/sites`);
-  expect(response.ok()).toBeTruthy();
-  const sites = (await response.json()) as Array<{
-    site: { code: string; name: string };
-  }>;
-  expect(sites.map((entry) => entry.site.code)).toEqual([
-    'NB-001',
-    'NB-002',
-    'NB-003',
-    'NB-004',
-    'NB-005',
-    'NB-006',
-  ]);
-
-  await login(page, 'supervisor@northbean.example');
-  await page.getByRole('button', { name: '总部看板' }).click();
-  await expect(page.getByRole('heading', { name: '总部看板' })).toBeVisible();
-  await expect(page.getByRole('row')).toHaveCount(7);
-  await expect(page.getByText('NB-006', { exact: true })).toBeVisible();
-  await expect(page.getByText('NB-007', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('DEMO2-001', { exact: true })).toHaveCount(0);
-});
-
-test('AC-06 网络、403、409、422 显示中文提示；任意接口 401 回登录', async ({
-  page,
-}) => {
-  await login(page, 'supervisor@northbean.example');
-  await expect(page.getByRole('heading', { name: /审核队列/ })).toBeVisible();
+test('审核队列错误、断网与失效会话均有处理', async ({ page }) => {
+  await login(page, 'hq@northbean.example');
+  await page
+    .getByLabel('控制台导航')
+    .getByRole('button', { name: '审核队列', exact: true })
+    .click();
+  await expect(page.getByRole('heading', { name: '审核队列' })).toBeVisible();
   for (const [status, expected] of [
     [403, /无权|权限/],
     [409, /状态已变化/],
     [422, /内容不完整/],
   ] as const) {
-    await page.route('**/api/review/queue', async (route) => {
+    await page.route('**/api/review/tasks', async (route) => {
       await route.fulfill({
         status,
         contentType: 'application/json',
         body: '{}',
       });
     });
-    await page.reload();
+    await page.getByRole('button', { name: '刷新队列' }).click();
     await expect(page.getByText(expected)).toBeVisible();
-    await page.unroute('**/api/review/queue');
+    await page.unroute('**/api/review/tasks');
   }
-  await page.route('**/api/review/queue', (route) => route.abort());
-  await page.reload();
+  await page.route('**/api/review/tasks', (route) => route.abort());
+  await page.getByRole('button', { name: '刷新队列' }).click();
   await expect(page.getByText(/网络连接失败/)).toBeVisible();
-  await page.unroute('**/api/review/queue');
+  await page.unroute('**/api/review/tasks');
 
-  await page.route('**/api/review/queue', async (route) => {
+  await page.route('**/api/review/tasks', async (route) => {
     await route.fulfill({
       status: 401,
       contentType: 'application/json',
@@ -287,19 +210,17 @@ test('AC-06 网络、403、409、422 显示中文提示；任意接口 401 回�
       }),
     });
   });
-  await page.reload();
-  await expect(page.getByLabel('邮箱')).toBeVisible();
+  await page.getByRole('button', { name: '刷新队列' }).click();
+  await expect(page.getByLabel('登录名')).toBeVisible();
 });
 
-test('AC-10 会话 ID 不暴露给脚本，刷新保持登录，退出后失效', async ({
-  page,
-}) => {
+test('会话 ID 不暴露给脚本，刷新保持登录，退出后失效', async ({ page }) => {
   const loginResponsePromise = page.waitForResponse(
     (response) =>
       response.url().includes('/api/auth/session') &&
       response.request().method() === 'POST',
   );
-  await login(page, 'supervisor@northbean.example');
+  await login(page, 'hq@northbean.example');
   const loginResponse = await loginResponsePromise;
   expect(loginResponse.status()).toBe(201);
 
@@ -308,7 +229,7 @@ test('AC-10 会话 ID 不暴露给脚本，刷新保持登录，退出后失效'
   expect(typeof sessionId === 'string' && sessionId.length > 0).toBe(true);
   if (!sessionId) throw new Error('Login response did not set fw_session');
 
-  await expect(page.getByRole('heading', { name: /审核队列/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /总部看板/ })).toBeVisible();
   const storageContainsSessionId = await page.evaluate((id) => {
     const values = [localStorage, sessionStorage].flatMap((storage) =>
       Array.from({ length: storage.length }, (_, index) =>
@@ -318,17 +239,13 @@ test('AC-10 会话 ID 不暴露给脚本，刷新保持登录，退出后失效'
     return values.some((value) => value?.includes(id));
   }, sessionId);
   expect(storageContainsSessionId).toBe(false);
-
-  const documentContainsSessionCookie = await page.evaluate(() =>
-    document.cookie.includes('fw_session'),
-  );
-  expect(documentContainsSessionCookie).toBe(false);
+  expect(
+    await page.evaluate(() => document.cookie.includes('fw_session')),
+  ).toBe(false);
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: /审核队列/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /总部看板/ })).toBeVisible();
   await page.getByRole('button', { name: '退出登录' }).click();
-  await expect(page.getByLabel('邮箱')).toBeVisible();
-
-  const meResponse = await page.request.get(`${apiBase}/api/me`);
-  expect(meResponse.status()).toBe(401);
+  await expect(page.getByLabel('登录名')).toBeVisible();
+  expect((await page.request.get(`${apiBase}/api/me`)).status()).toBe(401);
 });

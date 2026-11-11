@@ -56,7 +56,9 @@ async function snapshot(pool: Pool, root: string | null): Promise<Snapshot> {
     rows.template_items = rows.template_items.filter((r) =>
       has('templates', r.template_id),
     );
-    rows.inspections = rows.inspections.filter((r) => has('sites', r.site_id));
+    rows.inspections = rows.inspections.filter(
+      (r) => has('sites', r.site_id) && !r.task_id,
+    );
     rows.inspection_items = rows.inspection_items.filter((r) =>
       has('inspections', r.inspection_id),
     );

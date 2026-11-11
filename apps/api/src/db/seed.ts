@@ -2,36 +2,13 @@ import argon2 from 'argon2';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { PoolClient } from 'pg';
 import { getStorageDriver } from '../storage/index.js';
-import type { StorageDriver } from '../storage/types.js';
 import { createPool, getDatabaseUrl } from './client.js';
+import { seedHistoricalInspection } from './seed-inspection.js';
+import { seedPhoto } from './seed-data.js';
+import { seedTemplate } from './seed-template.js';
 
 export const DEMO_PASSWORD = 'northbean-demo';
-const seedPhoto = Buffer.from(
-  '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9oADAMBAAIAAwAAABAf/9k=',
-  'base64',
-);
-const templateItems = [
-  ['门头灯箱', 0, false],
-  ['地面清洁', 0, false],
-  ['冷柜温度', 1, false],
-  ['食品效期', 1, false],
-  ['收银台整洁', 0, false],
-  ['物料陈列', 0, false],
-  ['员工着装', 0, false],
-  ['闭店记录', 0, false],
-] as const;
-const seedItems = templateItems.map(
-  ([title, minPhotoCount, critical], index) => ({
-    position: index + 1,
-    title,
-    min_photo_count: minPhotoCount,
-    acceptance_criteria: '',
-    critical,
-  }),
-);
-
 export async function seedDatabase(
   databaseUrl = getDatabaseUrl(),
   storagePath = process.env.STORAGE_DIR ?? path.join('apps', 'api', '.storage'),
@@ -59,7 +36,7 @@ export async function seedDatabase(
     );
     previousKeys = previousFiles.rows.map((row) => row.storage_key);
     await client.query(
-      'TRUNCATE TABLE floorwalk.chat_messages, floorwalk.sessions, floorwalk.reviews, floorwalk.evidence, floorwalk.inspection_participants, floorwalk.inspection_items, floorwalk.inspections, floorwalk.users, floorwalk.template_items, floorwalk.templates, floorwalk.ai_review_standards, floorwalk.sites, floorwalk.organizations RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE floorwalk.chat_messages, floorwalk.sessions, floorwalk.reviews, floorwalk.inspection_item_decisions, floorwalk.evidence, floorwalk.inspection_participants, floorwalk.inspection_items, floorwalk.inspections, floorwalk.inspection_tasks, floorwalk.users, floorwalk.template_items, floorwalk.templates, floorwalk.ai_review_standards, floorwalk.sites, floorwalk.organizations RESTART IDENTITY CASCADE',
     );
     const orgResult = await client.query<{ id: string }>(
       `INSERT INTO floorwalk.organizations (name) VALUES ('Northbean') RETURNING id`,
@@ -77,7 +54,7 @@ export async function seedDatabase(
       sites.set(code, result.rows[0].id);
     }
 
-    const templateId = await insertTemplate(client, orgId);
+    const templateId = await seedTemplate(client, orgId);
 
     const passwordHash = await argon2.hash(DEMO_PASSWORD);
     const inspectors = new Map<string, string>();
@@ -106,8 +83,17 @@ export async function seedDatabase(
     );
 
     let sequence = 0;
-    const nextTime = () => {
-      const value = new Date(Date.UTC(2026, 0, 1, 0, sequence));
+    const todayUtc = new Date();
+    todayUtc.setUTCHours(0, 0, 0, 0);
+    const nextTime = (today = false) => {
+      const dayOffset = today ? 6 : sequence % 7;
+      const minuteOffset = sequence * 3;
+      const value = new Date(
+        todayUtc.getTime() -
+          (6 - dayOffset) * 24 * 60 * 60 * 1000 +
+          9 * 60 * 60 * 1000 +
+          minuteOffset * 60 * 1000,
+      );
       sequence += 1;
       return value;
     };
@@ -117,7 +103,7 @@ export async function seedDatabase(
       const siteId = sites.get(code);
       const inspectorId = inspectors.get(code);
       if (!siteId || !inspectorId) throw new Error(`门店 ${code} 创建失败。`);
-      await insertInspection(client, storage, writtenKeys, {
+      await seedHistoricalInspection(client, storage, writtenKeys, {
         orgId,
         siteId,
         templateId,
@@ -126,7 +112,6 @@ export async function seedDatabase(
         createdAt: nextTime(),
         failPosition: index === 1 ? 8 : index === 12 ? 3 : null,
         reviewerId: adminResult.rows[0].id,
-        reviewAction: index === 12 ? 'fail' : 'approve',
       });
     }
 
@@ -135,30 +120,23 @@ export async function seedDatabase(
       { code: 'NB-012', status: 'failed' as const },
       { code: 'NB-002', status: 'rework' as const },
       { code: 'NB-003', status: 'rework' as const },
-      { code: 'NB-004', status: 'submitted' as const },
-      { code: 'NB-005', status: 'submitted' as const },
+      { code: 'NB-004', status: 'passed' as const },
+      { code: 'NB-005', status: 'passed' as const },
     ];
     for (const extra of extras) {
       const siteId = sites.get(extra.code);
       const inspectorId = inspectors.get(extra.code);
       if (!siteId || !inspectorId)
         throw new Error(`门店 ${extra.code} 创建失败。`);
-      await insertInspection(client, storage, writtenKeys, {
+      await seedHistoricalInspection(client, storage, writtenKeys, {
         orgId,
         siteId,
         templateId,
         inspectorId,
         status: extra.status,
-        createdAt: nextTime(),
-        failPosition: extra.status === 'submitted' ? null : 3,
-        reviewerId:
-          extra.status === 'submitted' ? null : adminResult.rows[0].id,
-        reviewAction:
-          extra.status === 'failed'
-            ? 'fail'
-            : extra.status === 'rework'
-              ? 'rework'
-              : null,
+        createdAt: nextTime(extra.status === 'rework'),
+        failPosition: extra.status === 'rework' ? 3 : null,
+        reviewerId: adminResult.rows[0].id,
       });
     }
 
@@ -223,12 +201,12 @@ export async function seedDatabase(
       );
       secondOrgUsers.set(role, result.rows[0].id);
     }
-    const secondTemplateId = await insertTemplate(client, secondOrgId);
+    const secondTemplateId = await seedTemplate(client, secondOrgId);
     const secondInspectorId = secondOrgUsers.get('store_manager');
     const secondReviewerId = secondOrgUsers.get('admin');
     if (!secondInspectorId || !secondReviewerId)
       throw new Error('演示二号账号创建失败。');
-    await insertInspection(client, storage, writtenKeys, {
+    await seedHistoricalInspection(client, storage, writtenKeys, {
       orgId: secondOrgId,
       siteId: secondSiteId,
       templateId: secondTemplateId,
@@ -237,7 +215,6 @@ export async function seedDatabase(
       createdAt: nextTime(),
       failPosition: null,
       reviewerId: secondReviewerId,
-      reviewAction: 'approve',
     });
 
     await client.query('COMMIT');
@@ -250,132 +227,6 @@ export async function seedDatabase(
     await pool.end();
   }
   await Promise.all(previousKeys.map((key) => storage.delete(key)));
-}
-
-async function insertTemplate(client: PoolClient, orgId: string) {
-  const result = await client.query<{ id: string }>(
-    `INSERT INTO floorwalk.templates (org_id, name, ai_enabled)
-     VALUES ($1, '开店检查', false) RETURNING id`,
-    [orgId],
-  );
-  const id = result.rows[0].id;
-  for (const item of seedItems) {
-    await client.query(
-      `INSERT INTO floorwalk.template_items (template_id, position, title, min_photo_count, acceptance_criteria, critical)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        id,
-        item.position,
-        item.title,
-        item.min_photo_count,
-        item.acceptance_criteria,
-        item.critical,
-      ],
-    );
-  }
-  return id;
-}
-
-async function insertInspection(
-  client: PoolClient,
-  storage: StorageDriver,
-  writtenKeys: string[],
-  input: {
-    orgId: string;
-    siteId: string;
-    templateId: string;
-    inspectorId: string;
-    status: 'failed' | 'rework' | 'submitted' | 'passed';
-    createdAt: Date;
-    failPosition: number | null;
-    reviewerId: string | null;
-    reviewAction: 'approve' | 'fail' | 'rework' | null;
-  },
-) {
-  const submittedAt = new Date(input.createdAt.getTime() + 60 * 60 * 1000);
-  const decidedAt =
-    input.status === 'submitted'
-      ? null
-      : new Date(input.createdAt.getTime() + 2 * 60 * 60 * 1000);
-  const inspectionResult = await client.query<{ id: string }>(
-    `INSERT INTO floorwalk.inspections
-      (site_id, template_id, inspector_id, status, score, submitted_at, decided_at, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-    [
-      input.siteId,
-      input.templateId,
-      input.inspectorId,
-      input.status,
-      null,
-      submittedAt,
-      decidedAt,
-      input.createdAt,
-    ],
-  );
-  const inspectionId = inspectionResult.rows[0].id;
-  await client.query(
-    'INSERT INTO floorwalk.inspection_participants (inspection_id, user_id) VALUES ($1, $2)',
-    [inspectionId, input.inspectorId],
-  );
-  const reworkItemIds: string[] = [];
-  let passedItems = 0;
-  for (const item of seedItems) {
-    const result = input.failPosition === item.position ? 'fail' : 'pass';
-    if (result === 'pass') passedItems += 1;
-    const inserted = await client.query<{ id: string }>(
-      `INSERT INTO floorwalk.inspection_items
-        (inspection_id, position, title, min_photo_count, acceptance_criteria, critical, result, note, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-      [
-        inspectionId,
-        item.position,
-        item.title,
-        item.min_photo_count,
-        item.acceptance_criteria,
-        item.critical,
-        result,
-        item.min_photo_count === 0 ? '现场已检查' : null,
-        input.createdAt,
-      ],
-    );
-    if (input.status === 'rework' && result === 'fail')
-      reworkItemIds.push(inserted.rows[0].id);
-    if (item.min_photo_count > 0) {
-      const storageKey = `org/${input.orgId}/seed/${inspectionId}/${inserted.rows[0].id}.jpg`;
-      writtenKeys.push(storageKey);
-      await storage.put(storageKey, seedPhoto, 'image/jpeg');
-      await client.query(
-        `INSERT INTO floorwalk.evidence
-          (inspection_item_id, storage_key, mime, size, created_at)
-         VALUES ($1, $2, 'image/jpeg', $3, $4)`,
-        [
-          inserted.rows[0].id,
-          storageKey,
-          seedPhoto.byteLength,
-          input.createdAt,
-        ],
-      );
-    }
-  }
-  const score = Math.floor((passedItems / seedItems.length) * 100 + 0.5);
-  await client.query(
-    'UPDATE floorwalk.inspections SET score = $1 WHERE id = $2',
-    [score, inspectionId],
-  );
-  if (input.reviewAction && input.reviewerId) {
-    await client.query(
-      `INSERT INTO floorwalk.reviews
-        (inspection_id, reviewer_id, action, rework_item_ids, created_at)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [
-        inspectionId,
-        input.reviewerId,
-        input.reviewAction,
-        input.reviewAction === 'rework' ? reworkItemIds : null,
-        decidedAt ?? input.createdAt,
-      ],
-    );
-  }
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

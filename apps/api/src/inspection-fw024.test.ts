@@ -16,10 +16,12 @@ describe('store transfer inspection access (FW-024 AC-05)', () => {
   let manager: string;
   let colleague: string;
   let managerId: string;
+  let colleagueId: string;
   let oldSite: string;
   let newSite: string;
   let templateId: string;
-  const created: string[] = [];
+  const createdTaskIds: string[] = [];
+  const createdInspectionIds: string[] = [];
 
   async function login(loginName: string, orgId?: string) {
     const response = await request(app.getHttpServer())
@@ -46,6 +48,11 @@ describe('store transfer inspection access (FW-024 AC-05)', () => {
         "SELECT id FROM floorwalk.users WHERE login_name = 'manager2@northbean.example'",
       )
     ).rows[0].id;
+    colleagueId = (
+      await pool.query(
+        "SELECT id FROM floorwalk.users WHERE login_name = 'inspector@northbean.example'",
+      )
+    ).rows[0].id;
     templateId = (
       await pool.query(
         'SELECT id FROM floorwalk.templates WHERE org_id = $1 ORDER BY created_at LIMIT 1',
@@ -70,20 +77,39 @@ describe('store transfer inspection access (FW-024 AC-05)', () => {
         [oldSite, managerId],
       );
       await pool.query(
-        'DELETE FROM floorwalk.chat_messages WHERE inspection_id = ANY($1::uuid[])',
-        [created],
+        `DELETE FROM floorwalk.sessions WHERE user_id IN
+         (SELECT id FROM floorwalk.users WHERE login_name = ANY($1::text[]))`,
+        [['hq@northbean.example', 'manager2@northbean.example']],
       );
       await pool.query(
-        'DELETE FROM floorwalk.evidence WHERE inspection_item_id IN (SELECT id FROM floorwalk.inspection_items WHERE inspection_id = ANY($1::uuid[]))',
-        [created],
+        'DELETE FROM floorwalk.chat_messages WHERE inspection_id = ANY($1::uuid[])',
+        [createdInspectionIds],
+      );
+      await pool.query(
+        `DELETE FROM floorwalk.inspection_item_decisions WHERE inspection_item_id IN
+         (SELECT id FROM floorwalk.inspection_items WHERE inspection_id = ANY($1::uuid[]))`,
+        [createdInspectionIds],
+      );
+      await pool.query(
+        `DELETE FROM floorwalk.evidence WHERE inspection_item_id IN
+         (SELECT id FROM floorwalk.inspection_items WHERE inspection_id = ANY($1::uuid[]))`,
+        [createdInspectionIds],
+      );
+      await pool.query(
+        'DELETE FROM floorwalk.reviews WHERE inspection_id = ANY($1::uuid[])',
+        [createdInspectionIds],
       );
       await pool.query(
         'DELETE FROM floorwalk.inspection_items WHERE inspection_id = ANY($1::uuid[])',
-        [created],
+        [createdInspectionIds],
       );
       await pool.query(
         'DELETE FROM floorwalk.inspections WHERE id = ANY($1::uuid[])',
-        [created],
+        [createdInspectionIds],
+      );
+      await pool.query(
+        'DELETE FROM floorwalk.inspection_tasks WHERE id = ANY($1::uuid[])',
+        [createdTaskIds],
       );
     } finally {
       await pool.end();
@@ -91,19 +117,53 @@ describe('store transfer inspection access (FW-024 AC-05)', () => {
     }
   });
 
-  it('retains only participated old-site records and uses the new site for today and creation', async () => {
-    async function create(cookie: string) {
-      const response = await request(app.getHttpServer())
-        .post('/api/inspections')
-        .set('Cookie', cookie)
-        .send({ templateId })
-        .expect(201);
-      created.push(response.body.id);
-      return response.body.id as string;
+  it('retains only participated old-site records and uses the new site for today', async () => {
+    async function create(assignedInspectorId: string, participated: boolean) {
+      const task = await pool.query<{ id: string }>(
+        `INSERT INTO floorwalk.inspection_tasks
+           (org_id, site_id, template_id, task_date, position, occurrence,
+            starts_at, due_at, status)
+         SELECT site.org_id, site.id, $2, CURRENT_DATE, 900 + $3, 0,
+           now() - (4 + $3) * interval '1 hour',
+           now() - (3 + $3) * interval '1 hour', 'submitted'
+         FROM floorwalk.sites site WHERE site.id = $1
+         RETURNING id`,
+        [oldSite, templateId, createdTaskIds.length],
+      );
+      const taskId = task.rows[0].id;
+      createdTaskIds.push(taskId);
+      const inspection = await pool.query<{ id: string }>(
+        `INSERT INTO floorwalk.inspections
+           (task_id, site_id, template_id, inspector_id, status, score,
+            submitted_at, decided_at)
+         VALUES ($1, $2, $3, $4, 'passed', 100, now(), now())
+         RETURNING id`,
+        [taskId, oldSite, templateId, assignedInspectorId],
+      );
+      const inspectionId = inspection.rows[0].id;
+      createdInspectionIds.push(inspectionId);
+      await pool.query(
+        `INSERT INTO floorwalk.inspection_items
+           (inspection_id, position, title, critical, min_photo_count,
+            acceptance_criteria, result, self_assessment, first_self_assessment,
+            first_result, uploaded_by_id, uploaded_at, note)
+         SELECT $1, position, title, critical, min_photo_count,
+           acceptance_criteria, 'pass', 'pass', 'pass', 'pass', $2, now(),
+           '现场已检查'
+         FROM floorwalk.template_items WHERE template_id = $3`,
+        [inspectionId, assignedInspectorId, templateId],
+      );
+      if (participated)
+        await pool.query(
+          `INSERT INTO floorwalk.inspection_participants (inspection_id, user_id)
+           VALUES ($1, $2)`,
+          [inspectionId, managerId],
+        );
+      return inspectionId;
     }
-    const own = await create(manager);
-    const worked = await create(colleague);
-    const untouched = await create(colleague);
+    const own = await create(managerId, true);
+    const worked = await create(colleagueId, true);
+    const untouched = await create(colleagueId, false);
     const detail = await request(app.getHttpServer())
       .get(`/api/inspections/${worked}`)
       .set('Cookie', manager)
@@ -132,11 +192,6 @@ describe('store transfer inspection access (FW-024 AC-05)', () => {
       untouchedDetail.body.items[0].id,
     );
     await request(app.getHttpServer())
-      .patch(`/api/inspections/${worked}/items/${itemId}`)
-      .set('Cookie', manager)
-      .send({ result: 'pass' })
-      .expect(200);
-    await request(app.getHttpServer())
       .patch(`/api/admin/users/${managerId}`)
       .set('Cookie', admin)
       .send({ siteId: newSite })
@@ -146,21 +201,12 @@ describe('store transfer inspection access (FW-024 AC-05)', () => {
       .set('Cookie', manager)
       .expect(200);
     expect(today.body.site.id).toBe(newSite);
-    const newInspection = await create(manager);
-    expect(
-      (
-        await pool.query(
-          'SELECT site_id FROM floorwalk.inspections WHERE id = $1',
-          [newInspection],
-        )
-      ).rows[0].site_id,
-    ).toBe(newSite);
     const records = await request(app.getHttpServer())
       .get('/api/inspector/inspections?limit=50')
       .set('Cookie', manager)
       .expect(200);
     const ids = records.body.items.map((item: { id: string }) => item.id);
-    expect(ids).toEqual(expect.arrayContaining([own, worked, newInspection]));
+    expect(ids).toEqual(expect.arrayContaining([own, worked]));
     expect(ids).not.toContain(untouched);
     for (const id of [own, worked])
       await request(app.getHttpServer())
@@ -170,11 +216,6 @@ describe('store transfer inspection access (FW-024 AC-05)', () => {
     await request(app.getHttpServer())
       .get(`/api/inspections/${untouched}`)
       .set('Cookie', manager)
-      .expect(404);
-    await request(app.getHttpServer())
-      .patch(`/api/inspections/${worked}/items/${itemId}`)
-      .set('Cookie', manager)
-      .send({ result: 'fail' })
       .expect(404);
     await request(app.getHttpServer())
       .get(`/api/inspections/${worked}/messages`)

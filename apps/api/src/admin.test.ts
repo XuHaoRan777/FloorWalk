@@ -26,6 +26,7 @@ describe('admin API', () => {
   const testCodePrefix = `FW013-${randomUUID()}`;
   const createdTemplateIds: string[] = [];
   const createdInspectionIds: string[] = [];
+  const createdTaskIds: string[] = [];
   const createdEvidenceKeys: string[] = [];
 
   beforeAll(async () => {
@@ -87,6 +88,11 @@ describe('admin API', () => {
           [createdInspectionIds],
         );
       }
+      if (createdTaskIds.length)
+        await pool.query(
+          'DELETE FROM floorwalk.inspection_tasks WHERE id = ANY($1::uuid[])',
+          [createdTaskIds],
+        );
       if (createdTemplateIds.length) {
         await pool.query(
           'DELETE FROM floorwalk.template_items WHERE template_id = ANY($1::uuid[])',
@@ -225,6 +231,25 @@ describe('admin API', () => {
   });
 
   it('selects any tenant template, enforces photos and notes, and keeps snapshots unchanged', async () => {
+    const createTask = async (templateId: string) => {
+      const pool = createPool();
+      try {
+        const result = await pool.query<{ id: string }>(
+          `INSERT INTO floorwalk.inspection_tasks
+             (org_id, site_id, template_id, task_date, position, occurrence,
+              starts_at, due_at, status)
+           SELECT manager.org_id, manager.site_id, $1, CURRENT_DATE, 99, $2,
+             now() - interval '2 hours', now() + interval '2 hours', 'in_progress'
+           FROM floorwalk.users manager
+           WHERE manager.login_name = 'manager2@northbean.example'
+           RETURNING id`,
+          [templateId, Math.floor(Math.random() * 1_000_000_000)],
+        );
+        return result.rows[0].id;
+      } finally {
+        await pool.end();
+      }
+    };
     const created = await request(app.getHttpServer())
       .post('/api/admin/templates')
       .set('Cookie', hqCookie)
@@ -260,98 +285,59 @@ describe('admin API', () => {
     );
     const foreignPool = createPool();
     try {
-      const foreignTemplateId = (
+      const foreignTaskId = (
         await foreignPool.query(
-          "SELECT t.id FROM floorwalk.templates t JOIN floorwalk.organizations o ON o.id = t.org_id WHERE o.name = '演示二号'",
+          "SELECT task.id FROM floorwalk.inspection_tasks task JOIN floorwalk.organizations o ON o.id = task.org_id WHERE o.name = '演示二号' ORDER BY task.created_at DESC LIMIT 1",
         )
       ).rows[0].id;
-      expect(available.some((value) => value.id === foreignTemplateId)).toBe(
-        false,
-      );
       await request(app.getHttpServer())
-        .post('/api/inspections')
+        .post(`/api/tasks/${foreignTaskId}/items/1/uploads`)
         .set('Cookie', inspectorCookie)
-        .send({ templateId: foreignTemplateId })
+        .field('selfAssessment', 'pass')
+        .field('note', '现场已检查')
         .expect(404);
     } finally {
       await foreignPool.end();
     }
 
-    const createdInspection = await request(app.getHttpServer())
-      .post('/api/inspections')
-      .set('Cookie', inspectorCookie)
-      .send({ templateId: template.id })
-      .expect(201);
-    createdInspectionIds.push(createdInspection.body.id);
-    const initialItems = await request(app.getHttpServer())
-      .get(`/api/inspections/${createdInspection.body.id}`)
-      .set('Cookie', inspectorCookie)
-      .expect(200);
-    for (const item of initialItems.body.items)
-      await request(app.getHttpServer())
-        .patch(`/api/inspections/${createdInspection.body.id}/items/${item.id}`)
-        .set('Cookie', inspectorCookie)
-        .send({ result: 'pass', note: '   ' })
-        .expect(200);
-    const photoItem = initialItems.body.items[1];
+    const taskId = await createTask(template.id);
+    createdTaskIds.push(taskId);
     const photo = await sharp({
       create: { width: 2, height: 2, channels: 3, background: '#ffffff' },
     })
       .jpeg()
       .toBuffer();
-    const upload = async () => {
-      const response = await request(app.getHttpServer())
-        .post(
-          `/api/inspections/${createdInspection.body.id}/items/${photoItem.id}/evidence`,
-        )
+    const upload = (position: number, photoCount: number, note?: string) => {
+      let uploadRequest = request(app.getHttpServer())
+        .post(`/api/tasks/${taskId}/items/${position}/uploads`)
         .set('Cookie', inspectorCookie)
-        .attach('file', photo, {
-          filename: 'fw026.jpg',
+        .field('selfAssessment', 'pass');
+      if (note !== undefined) uploadRequest = uploadRequest.field('note', note);
+      for (let index = 0; index < photoCount; index += 1)
+        uploadRequest = uploadRequest.attach('files', photo, {
+          filename: `fw026-${position}-${index}.jpg`,
           contentType: 'image/jpeg',
-        })
-        .expect(201);
-      createdEvidenceKeys.push(response.body.storageKey);
+        });
+      return uploadRequest;
     };
-    await upload();
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${createdInspection.body.id}/submit`)
-      .set('Cookie', inspectorCookie)
-      .expect(422);
-    await request(app.getHttpServer())
-      .patch(
-        `/api/inspections/${createdInspection.body.id}/items/${initialItems.body.items[0].id}`,
-      )
-      .set('Cookie', inspectorCookie)
-      .send({ result: 'pass', note: '现场已检查' })
-      .expect(200);
-    // A valid note still cannot compensate for one missing photo.
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${createdInspection.body.id}/submit`)
-      .set('Cookie', inspectorCookie)
-      .expect(422);
-    await upload();
-    await request(app.getHttpServer())
-      .patch(
-        `/api/inspections/${createdInspection.body.id}/items/${initialItems.body.items[0].id}`,
-      )
-      .set('Cookie', inspectorCookie)
-      .send({ result: 'pass', note: '' })
-      .expect(200);
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${createdInspection.body.id}/submit`)
-      .set('Cookie', inspectorCookie)
-      .expect(422);
-    await request(app.getHttpServer())
-      .patch(
-        `/api/inspections/${createdInspection.body.id}/items/${initialItems.body.items[0].id}`,
-      )
-      .set('Cookie', inspectorCookie)
-      .send({ result: 'pass', note: '现场已检查' })
-      .expect(200);
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${createdInspection.body.id}/submit`)
-      .set('Cookie', inspectorCookie)
-      .expect(201);
+    const uploadedPhotoItem = await upload(2, 2).expect(201);
+    createdInspectionIds.push(uploadedPhotoItem.body.inspectionId);
+    for (const evidence of uploadedPhotoItem.body.evidence)
+      createdEvidenceKeys.push(evidence.storageKey);
+    await upload(2, 1).expect(422);
+    await upload(1, 0, '   ').expect(422);
+    const uploadedNoteItem = await upload(1, 0, '现场已检查').expect(201);
+    expect(uploadedNoteItem.body.inspectionId).toBe(
+      uploadedPhotoItem.body.inspectionId,
+    );
+    expect(
+      (
+        await request(app.getHttpServer())
+          .get(`/api/tasks/${taskId}/review`)
+          .set('Cookie', hqCookie)
+          .expect(200)
+      ).body.status,
+    ).toBe('submitted');
 
     const readInspectionSnapshot = async (inspectionId: string) => {
       const pool = createPool();
@@ -369,7 +355,9 @@ describe('admin API', () => {
         await pool.end();
       }
     };
-    const before = await readInspectionSnapshot(createdInspection.body.id);
+    const before = await readInspectionSnapshot(
+      uploadedPhotoItem.body.inspectionId,
+    );
     expect(before).toEqual([
       expect.objectContaining({
         min_photo_count: 0,
@@ -414,19 +402,22 @@ describe('admin API', () => {
       })
       .expect(200);
     expect(templateResponseSchema.parse(updated.body).items).toHaveLength(3);
-    expect(await readInspectionSnapshot(createdInspection.body.id)).toEqual(
-      before,
-    );
+    expect(
+      await readInspectionSnapshot(uploadedPhotoItem.body.inspectionId),
+    ).toEqual(before);
 
-    const nextInspection = await request(app.getHttpServer())
-      .post('/api/inspections')
+    const nextTaskId = await createTask(template.id);
+    createdTaskIds.push(nextTaskId);
+    const nextUpload = await request(app.getHttpServer())
+      .post(`/api/tasks/${nextTaskId}/items/1/uploads`)
       .set('Cookie', inspectorCookie)
-      .send({ templateId: template.id })
+      .field('selfAssessment', 'pass')
+      .field('note', '现场已检查')
       .expect(201);
-    createdInspectionIds.push(nextInspection.body.id);
+    createdInspectionIds.push(nextUpload.body.inspectionId);
     const copiedItems = await request(app.getHttpServer())
-      .get(`/api/inspections/${nextInspection.body.id}`)
-      .set('Cookie', inspectorCookie)
+      .get(`/api/tasks/${nextTaskId}/review`)
+      .set('Cookie', hqCookie)
       .expect(200);
     expect(
       copiedItems.body.items.map((item: { title: string }) => item.title),
@@ -630,38 +621,77 @@ describe('admin API', () => {
       .expect(404);
   });
 
-  it('waits for an in-flight deactivation before deciding whether creation is allowed', async () => {
+  it('waits for an in-flight deactivation before allowing a task to start', async () => {
     const pool = createPool();
     const client = await pool.connect();
     let pending: Promise<request.Response> | undefined;
+    let taskId: string | undefined;
+    let siteId: string | undefined;
     try {
       const site = await client.query<{ id: string }>(
-        "SELECT id FROM floorwalk.sites WHERE code = 'NB-001'",
+        `SELECT site.id FROM floorwalk.sites site
+         JOIN floorwalk.users manager ON manager.site_id = site.id
+         WHERE manager.login_name = 'manager2@northbean.example'`,
+      );
+      siteId = site.rows[0].id;
+      const task = await pool.query<{ id: string }>(
+        `INSERT INTO floorwalk.inspection_tasks
+           (org_id, site_id, template_id, task_date, position, occurrence,
+            starts_at, due_at, status)
+         SELECT manager.org_id, manager.site_id, $1, CURRENT_DATE, 99, $2,
+           now() - interval '2 hours', now() + interval '2 hours', 'in_progress'
+         FROM floorwalk.users manager
+         WHERE manager.login_name = 'manager2@northbean.example'
+         RETURNING id`,
+        [initialTemplateId, Math.floor(Math.random() * 1_000_000_000)],
+      );
+      taskId = task.rows[0].id;
+      createdTaskIds.push(taskId);
+      const item = await pool.query<{
+        position: number;
+        minPhotoCount: number;
+      }>(
+        `SELECT position, min_photo_count AS "minPhotoCount"
+         FROM floorwalk.template_items WHERE template_id = $1
+         ORDER BY position LIMIT 1`,
+        [initialTemplateId],
       );
       await client.query('BEGIN');
       await client.query(
         'UPDATE floorwalk.sites SET deactivated_at = now() WHERE id = $1',
-        [site.rows[0].id],
+        [siteId],
       );
       const blocker = await client.query<{ pid: number }>(
         'SELECT pg_backend_pid() AS pid',
       );
-      pending = request(app.getHttpServer())
-        .post('/api/inspections')
+      let uploadRequest = request(app.getHttpServer())
+        .post(`/api/tasks/${taskId}/items/${item.rows[0].position}/uploads`)
         .set('Cookie', inspectorCookie)
-        .send({ templateId: initialTemplateId })
-        .then((response) => {
-          if (response.status === 201)
-            createdInspectionIds.push(response.body.id);
-          return response;
-        });
+        .field('selfAssessment', 'pass');
+      if (item.rows[0].minPhotoCount === 0)
+        uploadRequest = uploadRequest.field('note', '现场已检查');
+      else
+        for (let index = 0; index < item.rows[0].minPhotoCount; index += 1)
+          uploadRequest = uploadRequest.attach(
+            'files',
+            Buffer.from('deactivation-test'),
+            {
+              filename: `deactivation-${index}.jpg`,
+              contentType: 'image/jpeg',
+            },
+          );
+      pending = uploadRequest.then((response) => {
+        if (response.status === 201)
+          createdInspectionIds.push(response.body.inspectionId);
+        return response;
+      });
       await expect
         .poll(async () => {
           const waiting = await pool.query<{ count: string }>(
             `SELECT count(*)::text AS count FROM pg_stat_activity
            WHERE datname = current_database()
              AND $1 = ANY(pg_blocking_pids(pid))
-             AND query LIKE '%FROM floorwalk.sites%FOR UPDATE%'`,
+             AND query LIKE '%FROM floorwalk.sites%FOR SHARE%'`,
             [blocker.rows[0].pid],
           );
           return Number(waiting.rows[0].count);
@@ -673,56 +703,48 @@ describe('admin API', () => {
       await client.query('ROLLBACK');
       await pending;
       await client.query(
-        "UPDATE floorwalk.sites SET deactivated_at = NULL WHERE code = 'NB-001'",
+        'UPDATE floorwalk.sites SET deactivated_at = NULL WHERE id = $1',
+        [siteId],
       );
       client.release();
       await pool.end();
     }
   });
 
-  it('blocks new inspections at a deactivated site while records and submitted reviews remain available', async () => {
+  it('keeps historical records and task reviews available after site deactivation', async () => {
     const todayBefore = await request(app.getHttpServer())
       .get('/api/inspector/today')
       .set('Cookie', inspectorCookie)
       .expect(200);
     const initialToday = todayResponseSchema.parse(todayBefore.body);
-    const template = await request(app.getHttpServer())
-      .post('/api/admin/templates')
-      .set('Cookie', hqCookie)
-      .send({
-        name: `${testCodePrefix} 停用测试模板`,
-        aiEnabled: false,
-        items: [
-          {
-            title: '停用测试检查项',
-            minPhotoCount: 0,
-            acceptanceCriteria: '',
-            critical: false,
-          },
-        ],
-      })
-      .expect(201);
-    createdTemplateIds.push(template.body.id);
-    const created = await request(app.getHttpServer())
-      .post('/api/inspections')
-      .set('Cookie', inspectorCookie)
-      .send({ templateId: template.body.id })
-      .expect(201);
-    createdInspectionIds.push(created.body.id);
-    const detail = await request(app.getHttpServer())
-      .get(`/api/inspections/${created.body.id}`)
+    const pool = createPool();
+    let inspectionId: string;
+    let taskId: string;
+    try {
+      const latest = await pool.query<{
+        inspectionId: string;
+        taskId: string;
+      }>(
+        `SELECT inspection.id AS "inspectionId", task.id AS "taskId"
+         FROM floorwalk.inspections inspection
+         JOIN floorwalk.inspection_tasks task ON task.id = inspection.task_id
+         WHERE inspection.site_id = $1
+         ORDER BY inspection.created_at DESC LIMIT 1`,
+        [initialToday.site.id],
+      );
+      inspectionId = latest.rows[0].inspectionId;
+      taskId = latest.rows[0].taskId;
+    } finally {
+      await pool.end();
+    }
+    const before = await request(app.getHttpServer())
+      .get(`/api/inspections/${inspectionId}`)
       .set('Cookie', inspectorCookie)
       .expect(200);
-    for (const item of detail.body.items)
-      await request(app.getHttpServer())
-        .patch(`/api/inspections/${created.body.id}/items/${item.id}`)
-        .set('Cookie', inspectorCookie)
-        .send({ result: 'pass', note: '现场已检查' })
-        .expect(200);
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${created.body.id}/submit`)
-      .set('Cookie', inspectorCookie)
-      .expect(201);
+    const taskReviewBefore = await request(app.getHttpServer())
+      .get(`/api/tasks/${taskId}/review`)
+      .set('Cookie', hqCookie)
+      .expect(200);
 
     try {
       await request(app.getHttpServer())
@@ -735,12 +757,6 @@ describe('admin API', () => {
         .set('Cookie', inspectorCookie)
         .expect(200);
       expect(todayResponseSchema.parse(stopped.body).site.active).toBe(false);
-      await request(app.getHttpServer())
-        .post('/api/inspections')
-        .set('Cookie', inspectorCookie)
-        .send({ templateId: template.body.id })
-        .expect(409);
-
       const records = await request(app.getHttpServer())
         .get('/api/inspector/inspections?limit=10')
         .set('Cookie', inspectorCookie)
@@ -748,25 +764,20 @@ describe('admin API', () => {
       expect(
         inspectorRecordsResponseSchema
           .parse(records.body)
-          .items.some((item) => item.id === created.body.id),
+          .items.some((item) => item.id === inspectionId),
       ).toBe(true);
       const history = await request(app.getHttpServer())
-        .get(`/api/inspections/${created.body.id}`)
+        .get(`/api/inspections/${inspectionId}`)
         .set('Cookie', inspectorCookie)
         .expect(200);
-      expect(history.body.status).toBe('submitted');
-
-      await request(app.getHttpServer())
-        .post(`/api/inspections/${created.body.id}/review`)
-        .set('Cookie', hqCookie)
-        .send({ action: 'start' })
-        .expect(201);
       const reviewed = await request(app.getHttpServer())
-        .post(`/api/inspections/${created.body.id}/review`)
+        .get(`/api/tasks/${taskId}/review`)
         .set('Cookie', hqCookie)
-        .send({ action: 'approve' })
-        .expect(201);
-      expect(reviewed.body.status).toBe('passed');
+        .expect(200);
+      expect(history.body.status).toBe(before.body.status);
+      expect(reviewed.body.inspectionId).toBe(
+        taskReviewBefore.body.inspectionId,
+      );
     } finally {
       await request(app.getHttpServer())
         .patch(`/api/admin/sites/${initialToday.site.id}`)

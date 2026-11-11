@@ -71,6 +71,27 @@
       "when": 1794336414296,
       "tag": "0009_fw027_schedules",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794363996731,
+      "tag": "0010_fw028_task_state_machine",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794364683546,
+      "tag": "0011_fw028_task_occurrence",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794368303195,
+      "tag": "0012_fw028_nullable_inspector",
+      "breakpoints": true
     }
   ]
 }

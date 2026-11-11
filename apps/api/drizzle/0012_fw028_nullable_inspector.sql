@@ -1,0 +1,1 @@
+ALTER TABLE "floorwalk"."inspections" ALTER COLUMN "inspector_id" DROP NOT NULL;

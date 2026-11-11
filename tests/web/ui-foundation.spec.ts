@@ -44,11 +44,9 @@ async function keyboardAudit(page: Page, screen: string) {
   );
 }
 
-async function login(page: Page, role: 'supervisor' | 'admin') {
+async function login(page: Page) {
   await page.goto('/');
-  await page
-    .getByLabel('邮箱')
-    .fill(`${role === 'admin' ? 'hq' : role}@northbean.example`);
+  await page.getByLabel('登录名').fill('hq@northbean.example');
   await page.getByLabel('密码').fill('northbean-demo');
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -90,19 +88,21 @@ async function capture(page: Page, screen: string) {
 test('FW-016 AC-05 登录后五屏三宽截图', async ({ page }) => {
   await mkdir(evidence, { recursive: true });
   await page.goto('/');
-  await expect(page.getByLabel('邮箱')).toBeVisible();
+  await expect(page.getByLabel('登录名')).toBeVisible();
   await keyboardAudit(page, 'login');
-  await login(page, 'supervisor');
+  await login(page);
+  await page
+    .getByLabel('控制台导航')
+    .getByRole('button', { name: '审核队列', exact: true })
+    .click();
   await expect(page.getByRole('heading', { name: '审核队列' })).toBeVisible();
   await expect(page.getByText('正在加载审核队列…')).toHaveCount(0);
   await capture(page, 'queue');
-  await page
-    .getByRole('button')
-    .filter({ hasText: '查看并审核' })
-    .first()
-    .click();
-  await expect(page.getByRole('heading', { name: '审核决定' })).toBeVisible();
-  await expect(page.getByText('正在处理审核…')).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: '查看任务' }).first(),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '刷新队列' }).click();
+  await expect(page.getByText('正在更新任务…')).toHaveCount(0);
   await expect(page.getByText('正在加载聊天…')).toHaveCount(0);
   await expect
     .poll(() =>
@@ -113,8 +113,8 @@ test('FW-016 AC-05 登录后五屏三宽截图', async ({ page }) => {
         ),
     )
     .toBe(true);
-  await capture(page, 'review');
-  await keyboardAudit(page, 'review');
+  await capture(page, 'review-queue');
+  await keyboardAudit(page, 'review-queue');
   await page.getByRole('button', { name: '门店', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: '门店', exact: true }),
@@ -128,7 +128,7 @@ test('FW-016 AC-05 登录后五屏三宽截图', async ({ page }) => {
   await expect(page.getByText('正在加载模板…')).toHaveCount(0);
   await capture(page, 'templates');
   await page.getByRole('button', { name: '退出登录' }).click();
-  await login(page, 'admin');
+  await login(page);
   await expect(page.getByRole('heading', { name: '总部看板' })).toBeVisible();
   await expect(page.getByText('正在加载门店数据…')).toHaveCount(0);
   await capture(page, 'dashboard');

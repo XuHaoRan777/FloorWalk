@@ -1,7 +1,5 @@
-import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import type { TodayResponse } from '@libs/shared';
-import { api, ApiError, userFacingError } from '../../lib/api';
 import { ErrorBanner } from './error-banner';
 import { PrimaryButton } from './primary-button';
 import { classes, styles } from './styles';
@@ -10,39 +8,11 @@ export function TodayScreen({
   today,
   todayError,
   onRefresh,
-  onOpenInspection,
-  onUnauthorized,
 }: {
   today: TodayResponse | null;
   todayError: string | null;
   onRefresh: () => void;
-  onOpenInspection: (id: string) => void;
-  onUnauthorized: () => void;
 }) {
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
-    null,
-  );
-  const selectedTemplate =
-    today?.templates.find((template) => template.id === selectedTemplateId) ??
-    today?.templates[0];
-
-  async function startInspection() {
-    if (!today || !selectedTemplate) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const created = await api.createInspection(selectedTemplate.id);
-      onOpenInspection(created.id);
-    } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 401) onUnauthorized();
-      else setError(userFacingError(cause));
-    } finally {
-      setLoading(false);
-    }
-  }
-
   if (!today) {
     return (
       <View className={classes.background} style={styles.centered}>
@@ -50,7 +20,7 @@ export function TodayScreen({
           <>
             <ErrorBanner message={todayError} />
             <PrimaryButton onPress={onRefresh} variant="secondary">
-              重新加载今日任务
+              重新加载
             </PrimaryButton>
           </>
         ) : (
@@ -58,7 +28,6 @@ export function TodayScreen({
             正在加载今日任务…
           </Text>
         )}
-        <ErrorBanner message={error} />
       </View>
     );
   }
@@ -71,7 +40,7 @@ export function TodayScreen({
       <View style={styles.headerRow}>
         <View>
           <Text className={classes.eyebrow} style={styles.eyebrow}>
-            今日待巡
+            今日任务
           </Text>
           <Text
             accessibilityRole="header"
@@ -96,97 +65,12 @@ export function TodayScreen({
           </Text>
         </Pressable>
       </View>
-      <View className={classes.card} style={styles.card}>
-        <Text className={classes.eyebrow} style={styles.cardEyebrow}>
-          检查模板
+      <View className={classes.empty} style={styles.empty}>
+        <Text className={classes.muted} style={styles.muted}>
+          今日任务暂不可用
         </Text>
-        {today.templates.length > 1 &&
-          today.templates.map((template) => (
-            <Pressable
-              accessibilityRole="radio"
-              accessibilityState={{
-                checked: selectedTemplate?.id === template.id,
-                disabled: loading,
-              }}
-              disabled={loading}
-              key={template.id}
-              onPress={() => setSelectedTemplateId(template.id)}
-              style={({ pressed }) => [
-                styles.touchTarget,
-                pressed && styles.pressedRow,
-              ]}
-              testID={`template-option-${template.id}`}
-            >
-              <Text className={classes.link} style={styles.link}>
-                {selectedTemplate?.id === template.id ? '● ' : '○ '}
-                {template.name}
-              </Text>
-            </Pressable>
-          ))}
-        {selectedTemplate ? (
-          <>
-            <Text className={classes.foreground} style={styles.cardTitle}>
-              {selectedTemplate.name}
-            </Text>
-            <Text className={classes.muted} style={styles.muted}>
-              {selectedTemplate.items.length} 个检查项 ·{' '}
-              {today.submittedToday ? '今天已提交' : '今天尚未提交'}
-            </Text>
-          </>
-        ) : (
-          <Text className={classes.muted} style={styles.muted}>
-            暂无检查模板，请联系管理员配置。
-          </Text>
-        )}
-        {today.site.active && selectedTemplate ? (
-          <PrimaryButton
-            disabled={loading}
-            onPress={() => void startInspection()}
-            testID="start-inspection"
-          >
-            {loading ? '准备中…' : '开始巡检'}
-          </PrimaryButton>
-        ) : !today.site.active ? (
-          <View className={classes.warning} style={styles.warning}>
-            <Text className={classes.warningTitle} style={styles.warningTitle}>
-              门店已停用
-            </Text>
-            <Text className={classes.muted} style={styles.muted}>
-              当前门店停用期间不能新建巡检。
-            </Text>
-          </View>
-        ) : null}
       </View>
       <ErrorBanner message={todayError} />
-      <ErrorBanner message={error} />
-      <Text className={classes.foreground} style={styles.sectionTitle}>
-        被打回的巡检
-      </Text>
-      {today.reworkInspections.length === 0 ? (
-        <View className={classes.empty} style={styles.empty}>
-          <Text className={classes.muted} style={styles.muted}>
-            当前没有待补交的巡检。
-          </Text>
-        </View>
-      ) : (
-        today.reworkInspections.map((inspection) => (
-          <Pressable
-            accessibilityRole="button"
-            className={classes.card}
-            key={inspection.id}
-            onPress={() => onOpenInspection(inspection.id)}
-            style={({ pressed }) => [styles.card, pressed && styles.pressedRow]}
-          >
-            <Text className={classes.foreground} style={styles.cardTitle}>
-              巡检单 {inspection.id.slice(0, 8)}
-            </Text>
-            <Text className={classes.muted} style={styles.muted}>
-              状态：待补交
-              {inspection.score === null ? '' : ` · ${inspection.score} 分`}
-            </Text>
-          </Pressable>
-        ))
-      )}
     </ScrollView>
   );
 }

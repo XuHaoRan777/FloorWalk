@@ -21,6 +21,7 @@ const statusLabels: Record<InspectionDetail['status'], string> = {
 const resultLabels = {
   pending: '未检查',
   pass: '合格',
+  rework: '打回',
   fail: '不合格',
 } as const;
 

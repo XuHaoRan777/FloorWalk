@@ -1,6 +1,4 @@
 import {
-  Body,
-  ConflictException,
   Controller,
   ForbiddenException,
   Get,
@@ -8,33 +6,23 @@ import {
   NotFoundException,
   Param,
   ParseUUIDPipe,
-  Patch,
-  Post,
   Req,
-  UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
 import {
   apiRoutePath,
   apiRoutes,
-  calculateInspectionScore,
-  createInspectionRequestSchema,
-  inspectionSchema,
-  submitInspectionResponseSchema,
+  inspectionDetailSchema,
   todayResponseSchema,
-  updateInspectionItemRequestSchema,
-  updateInspectionItemResponseSchema,
-  validateInspectionSubmission,
 } from '@libs/shared';
-import { DATABASE_POOL } from './db/pool.provider.js';
 import type { Pool } from 'pg';
 import { AuthGuard } from './auth.js';
+import { DATABASE_POOL } from './db/pool.provider.js';
 import {
   type AuthedRequest,
   iso,
   getShanghaiDayBounds,
   assertRole,
-  assertInspectionAccess,
   getInspectionAccess,
   loadInspectionDetail,
 } from './inspection-queries.js';
@@ -53,19 +41,24 @@ export class InspectionController {
         message: '店员未绑定门店。',
       });
     const templates = await this.pool.query(
-      'SELECT id, name, ai_enabled AS "aiEnabled", ai_standard_id AS "aiStandardId", created_at AS "createdAt" FROM floorwalk.templates WHERE org_id = $1 ORDER BY created_at, id',
+      `SELECT id, name, ai_enabled AS "aiEnabled", ai_standard_id AS "aiStandardId",
+         created_at AS "createdAt"
+       FROM floorwalk.templates WHERE org_id = $1 ORDER BY created_at, id`,
       [request.user.orgId],
     );
     const items = await this.pool.query(
       `SELECT ti.id, ti.template_id AS "templateId", ti.position, ti.title,
          ti.min_photo_count AS "minPhotoCount", ti.acceptance_criteria AS "acceptanceCriteria",
          ti.critical, ti.created_at AS "createdAt"
-       FROM floorwalk.template_items ti JOIN floorwalk.templates t ON t.id = ti.template_id
+       FROM floorwalk.template_items ti
+       JOIN floorwalk.templates t ON t.id = ti.template_id
        WHERE t.org_id = $1 ORDER BY ti.template_id, ti.position`,
       [request.user.orgId],
     );
     const site = await this.pool.query(
-      'SELECT id, code, name, deactivated_at IS NULL AS active, created_at AS "createdAt" FROM floorwalk.sites WHERE id = $1 AND org_id = $2',
+      `SELECT id, code, name, deactivated_at IS NULL AS active,
+         created_at AS "createdAt"
+       FROM floorwalk.sites WHERE id = $1 AND org_id = $2`,
       [request.user.siteId, request.user.orgId],
     );
     if (!site.rows[0])
@@ -74,15 +67,20 @@ export class InspectionController {
         message: '门店不存在。',
       });
     const rework = await this.pool.query(
-      'SELECT id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt" FROM floorwalk.inspections WHERE site_id = $1 AND status = \'rework\' ORDER BY created_at',
+      `SELECT id, site_id AS "siteId", template_id AS "templateId",
+         inspector_id AS "inspectorId", status, score,
+         submitted_at AS "submittedAt", decided_at AS "decidedAt",
+         created_at AS "createdAt"
+       FROM floorwalk.inspections WHERE site_id = $1 AND status = 'rework'
+       ORDER BY created_at`,
       [request.user.siteId],
     );
     const dayBounds = getShanghaiDayBounds();
     const submittedToday = await this.pool.query<{ submittedToday: boolean }>(
       `SELECT EXISTS (
-           SELECT 1 FROM floorwalk.inspections
-           WHERE site_id = $1 AND submitted_at >= $2 AND submitted_at < $3
-         ) AS "submittedToday"`,
+         SELECT 1 FROM floorwalk.inspections
+         WHERE site_id = $1 AND submitted_at >= $2 AND submitted_at < $3
+       ) AS "submittedToday"`,
       [request.user.siteId, dayBounds.start, dayBounds.end],
     );
     return todayResponseSchema.parse({
@@ -108,260 +106,13 @@ export class InspectionController {
   }
 
   @UseGuards(AuthGuard)
-  @Post(apiRoutePath(apiRoutes.createInspection))
-  async createInspection(@Body() body: unknown, @Req() request: AuthedRequest) {
-    assertRole(request.user, ...apiRoutes.createInspection.roles);
-    if (!request.user.siteId)
-      throw new ForbiddenException({
-        code: 'FORBIDDEN',
-        message: '店员未绑定门店。',
-      });
-    const input = createInspectionRequestSchema.parse(body);
-    const pool = this.pool;
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      // Coordinate with template edits so the copied item set is one version.
-      const templateExists = await client.query(
-        'SELECT id FROM floorwalk.templates WHERE id = $1 AND org_id = $2 FOR SHARE',
-        [input.templateId, request.user.orgId],
-      );
-      if (!templateExists.rowCount)
-        throw new NotFoundException({
-          code: 'NOT_FOUND',
-          message: '检查模板不存在。',
-        });
-      const site = await client.query<{ deactivatedAt: Date | null }>(
-        'SELECT deactivated_at AS "deactivatedAt" FROM floorwalk.sites WHERE id = $1 AND org_id = $2 FOR UPDATE',
-        [request.user.siteId, request.user.orgId],
-      );
-      if (!site.rows[0])
-        throw new NotFoundException({
-          code: 'NOT_FOUND',
-          message: '门店不存在。',
-        });
-      if (site.rows[0].deactivatedAt)
-        throw new ConflictException({
-          code: 'INVALID_STATE',
-          message: '已停用门店不能新建巡检单。',
-        });
-      const inspection = await client.query(
-        `INSERT INTO floorwalk.inspections (site_id, template_id, inspector_id, status)
-         VALUES ($1, $2, $3, 'draft')
-         RETURNING id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt"`,
-        [request.user.siteId, input.templateId, request.user.id],
-      );
-      await client.query(
-        'INSERT INTO floorwalk.inspection_participants (inspection_id, user_id) VALUES ($1, $2)',
-        [inspection.rows[0].id, request.user.id],
-      );
-      const items = await client.query(
-        'SELECT position, title, min_photo_count, acceptance_criteria, critical FROM floorwalk.template_items WHERE template_id = $1 ORDER BY position',
-        [input.templateId],
-      );
-      for (const item of items.rows) {
-        await client.query(
-          `INSERT INTO floorwalk.inspection_items (inspection_id, position, title, min_photo_count, acceptance_criteria, critical)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [
-            inspection.rows[0].id,
-            item.position,
-            item.title,
-            item.min_photo_count,
-            item.acceptance_criteria,
-            item.critical,
-          ],
-        );
-      }
-      await client.query('COMMIT');
-      return inspectionSchema.parse({
-        ...inspection.rows[0],
-        submittedAt: iso(inspection.rows[0].submittedAt),
-        decidedAt: iso(inspection.rows[0].decidedAt),
-        createdAt: iso(inspection.rows[0].createdAt),
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  @UseGuards(AuthGuard)
   @Get(apiRoutePath(apiRoutes.getInspection))
   async getInspection(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Req() request: AuthedRequest,
   ) {
     const inspection = await getInspectionAccess(this.pool, id, request.user);
-    return await loadInspectionDetail(this.pool, inspection);
-  }
-
-  @UseGuards(AuthGuard)
-  @Patch(apiRoutePath(apiRoutes.updateInspectionItem))
-  async updateItem(
-    @Body() body: unknown,
-    @Param('id', new ParseUUIDPipe()) id: string,
-    @Param('itemId', new ParseUUIDPipe()) itemId: string,
-    @Req() request: AuthedRequest,
-  ) {
-    assertRole(request.user, ...apiRoutes.updateInspectionItem.roles);
-    const input = updateInspectionItemRequestSchema.parse(body);
-    const pool = this.pool;
-    const client = await pool.connect();
-    let committed = false;
-    try {
-      await client.query('BEGIN');
-      const inspectionResult = await client.query(
-        `SELECT i.id, i.site_id AS "siteId", i.inspector_id AS "inspectorId", i.status,
-            s.org_id AS "orgId"
-         FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
-         WHERE i.id = $1 FOR UPDATE OF i`,
-        [id],
-      );
-      const inspection = inspectionResult.rows[0];
-      if (!inspection)
-        throw new NotFoundException({
-          code: 'NOT_FOUND',
-          message: '巡检单不存在。',
-        });
-      assertInspectionAccess(inspection, request.user);
-      if (inspection.status !== 'draft' && inspection.status !== 'rework')
-        throw new ConflictException({
-          code: 'INVALID_STATE',
-          message: '只有草稿或打回状态的巡检单可以修改。',
-        });
-      const item = await client.query(
-        `UPDATE floorwalk.inspection_items
-         SET result = $1, note = $2
-         WHERE id = $3 AND inspection_id = $4
-         RETURNING id, inspection_id AS "inspectionId", position, title,
-           min_photo_count AS "minPhotoCount", acceptance_criteria AS "acceptanceCriteria", critical, result, note,
-           created_at AS "createdAt"`,
-        [input.result, input.note ?? null, itemId, inspection.id],
-      );
-      if (!item.rows[0])
-        throw new NotFoundException({
-          code: 'NOT_FOUND',
-          message: '检查项不存在。',
-        });
-      await client.query(
-        'INSERT INTO floorwalk.inspection_participants (inspection_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-        [id, request.user.id],
-      );
-      const evidence = await client.query(
-        `SELECT id, inspection_item_id AS "inspectionItemId", storage_key AS "storageKey",
-          mime, size, created_at AS "createdAt"
-         FROM floorwalk.evidence WHERE inspection_item_id = $1 ORDER BY created_at`,
-        [itemId],
-      );
-      const response = updateInspectionItemResponseSchema.parse({
-        ...item.rows[0],
-        createdAt: iso(item.rows[0].createdAt),
-        evidence: evidence.rows.map((row) => ({
-          ...row,
-          createdAt: iso(row.createdAt),
-        })),
-      });
-      await client.query('COMMIT');
-      committed = true;
-      return response;
-    } catch (error) {
-      if (!committed) await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  @UseGuards(AuthGuard)
-  @Post(apiRoutePath(apiRoutes.submitInspection))
-  async submit(
-    @Param('id', new ParseUUIDPipe()) id: string,
-    @Req() request: AuthedRequest,
-  ) {
-    assertRole(request.user, ...apiRoutes.submitInspection.roles);
-    const pool = this.pool;
-    const client = await pool.connect();
-    let committed = false;
-    try {
-      await client.query('BEGIN');
-      const inspectionResult = await client.query(
-        `SELECT i.id, i.site_id AS "siteId", i.template_id AS "templateId", i.inspector_id AS "inspectorId",
-            i.status, i.score, i.submitted_at AS "submittedAt", i.decided_at AS "decidedAt",
-            i.created_at AS "createdAt", s.org_id AS "orgId"
-         FROM floorwalk.inspections i JOIN floorwalk.sites s ON s.id = i.site_id
-         WHERE i.id = $1 FOR UPDATE OF i`,
-        [id],
-      );
-      const inspection = inspectionResult.rows[0];
-      if (!inspection)
-        throw new NotFoundException({
-          code: 'NOT_FOUND',
-          message: '巡检单不存在。',
-        });
-      assertInspectionAccess(inspection, request.user);
-      if (inspection.status !== 'draft' && inspection.status !== 'rework')
-        throw new ConflictException({
-          code: 'INVALID_STATE',
-          message: '只有草稿或打回状态的巡检单可以提交。',
-        });
-      const items = await client.query(
-        `SELECT id, inspection_id AS "inspectionId", position, title,
-           min_photo_count AS "minPhotoCount", acceptance_criteria AS "acceptanceCriteria", critical, result, note,
-           created_at AS "createdAt"
-         FROM floorwalk.inspection_items WHERE inspection_id = $1 ORDER BY position`,
-        [id],
-      );
-      const evidenceCounts = await client.query<{ id: string; count: string }>(
-        `SELECT ii.id, COUNT(e.id)::text AS count
-         FROM floorwalk.inspection_items ii
-         LEFT JOIN floorwalk.evidence e ON e.inspection_item_id = ii.id
-         WHERE ii.inspection_id = $1 GROUP BY ii.id`,
-        [id],
-      );
-      const evidenceCountByItemId = Object.fromEntries(
-        evidenceCounts.rows.map((row) => [row.id, Number(row.count)]),
-      );
-      try {
-        validateInspectionSubmission({
-          items: items.rows,
-          evidenceCountByItemId,
-        });
-      } catch (error) {
-        if (error instanceof Error && error.message === 'INCOMPLETE')
-          throw new UnprocessableEntityException({
-            code: 'INCOMPLETE',
-            message:
-              '所有检查项必须完成；不拍照的项须填写备注，其他项须满足最少照片张数。',
-          });
-        throw error;
-      }
-      const score = calculateInspectionScore(
-        items.rows.map((item) => item.result),
-      );
-      const submittedAt = new Date();
-      const persisted = await client.query(
-        `UPDATE floorwalk.inspections
-         SET status = 'submitted', score = $2, submitted_at = $3
-         WHERE id = $1
-         RETURNING id, site_id AS "siteId", template_id AS "templateId", inspector_id AS "inspectorId", status, score, submitted_at AS "submittedAt", decided_at AS "decidedAt", created_at AS "createdAt"`,
-        [id, score, submittedAt],
-      );
-      await client.query('COMMIT');
-      committed = true;
-      return submitInspectionResponseSchema.parse({
-        ...persisted.rows[0],
-        submittedAt: iso(persisted.rows[0].submittedAt),
-        decidedAt: iso(persisted.rows[0].decidedAt),
-        createdAt: iso(persisted.rows[0].createdAt),
-      });
-    } catch (error) {
-      if (!committed) await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    const detail = await loadInspectionDetail(this.pool, inspection);
+    return inspectionDetailSchema.parse(detail);
   }
 }

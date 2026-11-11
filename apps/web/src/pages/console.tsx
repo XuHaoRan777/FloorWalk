@@ -34,7 +34,7 @@ import {
   hasCheckedSession,
   readSession,
   unauthorizedEvent,
-  type InspectionDetail,
+  type TaskReview,
   type Session,
   UnauthorizedError,
   writeSession,
@@ -126,7 +126,7 @@ export function ConsolePage() {
   const [section, setSection] = useState<ConsoleSection>(() =>
     readSession()?.user.role === 'admin' ? 'dashboard' : 'queue',
   );
-  const [selected, setSelected] = useState<InspectionDetail | null>(null);
+  const [selected, setSelected] = useState<TaskReview | null>(null);
   useEffect(() => {
     if (session?.user.role === 'admin') setSection('dashboard');
   }, [session?.user.role]);
@@ -319,9 +319,9 @@ export function ConsolePage() {
               </div>
             ) : selected ? (
               <ReviewDetail
-                initialInspection={selected}
+                initialTask={selected}
                 canReview={isAdmin}
-                canSendChat={isAdmin}
+                canSendChat={false}
                 onBack={() => setSelected(null)}
               />
             ) : showDashboard ? (
@@ -329,8 +329,8 @@ export function ConsolePage() {
             ) : (
               <QueueView
                 canReview={isAdmin}
-                onSelect={(inspection) => {
-                  setSelected(inspection);
+                onSelect={(task) => {
+                  setSelected(task);
                   setError('');
                 }}
               />

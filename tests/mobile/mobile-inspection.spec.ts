@@ -1,28 +1,16 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 const loginName = 'manager2@northbean.example';
 const password = 'northbean-demo';
 const apiBase = `http://127.0.0.1:${3100 + Number(process.env.FW_SLOT) * 10}/api`;
 
-async function readToday(page: Page) {
-  return page.evaluate(async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/inspector/today`, {
-      credentials: 'include',
-    });
-    return response.json();
-  }, apiBase) as Promise<{
+async function readToday(page: import('@playwright/test').Page) {
+  const response = await page
+    .context()
+    .request.get(`${apiBase}/inspector/today`);
+  expect(response.status()).toBe(200);
+  return response.json() as Promise<{
     site: { name: string };
-    submittedToday: boolean;
-    templates: Array<{
-      id: string;
-      name: string;
-      items: Array<{
-        position: number;
-        title: string;
-        minPhotoCount: number;
-      }>;
-    }>;
-    reworkInspections: Array<{ id: string }>;
   }>;
 }
 
@@ -65,15 +53,12 @@ test('店长登录、重启保持登录、查看我的并退出', async ({ page 
   expect(documentContainsSessionCookie).toBe(false);
 
   const today = await readToday(page);
-  const template = today.templates[0];
-  expect(template).toBeDefined();
   await expect(
     page.getByRole('heading', { name: today.site.name }),
   ).toBeVisible();
-  await expect(page.getByText(template.name, { exact: true })).toBeVisible();
-  await expect(
-    page.getByText(today.submittedToday ? '今天已提交' : '今天尚未提交'),
-  ).toBeVisible();
+  await expect(page.getByText('今日任务暂不可用')).toBeVisible();
+  await expect(page.getByTestId('start-inspection')).toHaveCount(0);
+  await expect(page.getByTestId('submit-inspection')).toHaveCount(0);
 
   await page.reload();
   await expect(
@@ -123,108 +108,15 @@ test('连不上 API 时显示网络错误，并在控制台打印原始错误', 
   );
 });
 
-test('今日任务来自接口，照片不足或 0 张项备注空白时阻止提交', async ({
-  page,
-}) => {
+test('今日任务页不崩溃且隐藏旧建单和提交入口', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('登录名').fill(loginName);
-  await page.getByLabel('密码').fill(password);
-  await page.getByTestId('login-button').click();
-  await page.getByTestId('start-inspection').click();
-  await expect(page.getByRole('heading', { name: '巡检详情' })).toBeVisible();
-  const today = await readToday(page);
-  const template = today.templates[0];
-  expect(template).toBeDefined();
-
-  for (const [index, item] of template.items.entries()) {
-    const card = page.getByTestId(`inspection-item-${item.position}`);
-    await card.getByRole('button', { name: '合格', exact: true }).click();
-    await expect(page.getByText('当前结果：合格')).toHaveCount(index + 1);
-    if (item.minPhotoCount === 0) {
-      await expect(card.getByPlaceholder('填写现场备注（必填）')).toBeVisible();
-      await card.getByLabel(`${item.title}备注`).fill('   ');
-      await expect(card.getByRole('button', { name: /选择照片/ })).toHaveCount(
-        0,
-      );
-    } else {
-      await expect(
-        card.getByText(`最少 ${item.minPhotoCount} 张照片`, { exact: true }),
-      ).toBeVisible();
-    }
-  }
-  await page.getByTestId('submit-inspection').click();
-  const missingTitles = template.items.map((item) => item.title).join('、');
-  await expect(page.getByText(`请完成：${missingTitles}`)).toBeVisible();
-});
-
-test('按最少张数逐项选图，填写 0 张项备注并提交巡检', async ({ page }) => {
-  await page.goto('/');
-  await page.getByLabel('登录名').fill(loginName);
-  await page.getByLabel('密码').fill(password);
-  await page.getByTestId('login-button').click();
-  await page.getByTestId('start-inspection').click();
-  const today = await readToday(page);
-  const template = today.templates[0];
-  expect(template).toBeDefined();
-  const imageBytes = Buffer.from(
-    await page.evaluate(() => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
-      return canvas.toDataURL('image/jpeg').split(',')[1];
-    }),
-    'base64',
-  );
-  for (const [index, item] of template.items.entries()) {
-    const card = page.getByTestId(`inspection-item-${item.position}`);
-    await card.getByRole('button', { name: '合格', exact: true }).click();
-    await expect(page.getByText('当前结果：合格')).toHaveCount(index + 1);
-    if (item.minPhotoCount === 0) {
-      await card.getByLabel(`${item.title}备注`).fill('现场已检查，符合要求。');
-      continue;
-    }
-    for (let photoIndex = 0; photoIndex < item.minPhotoCount; photoIndex += 1) {
-      const chooserPromise = page.waitForEvent('filechooser');
-      await card
-        .getByRole('button', {
-          name: photoIndex === 0 ? '选择照片' : '继续选择照片',
-          exact: true,
-        })
-        .click();
-      const chooser = await chooserPromise;
-      await chooser.setFiles({
-        name: `inspection-${item.position}-${photoIndex + 1}.jpg`,
-        mimeType: 'image/jpeg',
-        buffer: imageBytes,
-      });
-      await expect(
-        card.getByText(
-          `已上传 ${photoIndex + 1} 张照片 · 最少 ${item.minPhotoCount} 张`,
-          { exact: true },
-        ),
-      ).toBeVisible();
-    }
-  }
-  await page.getByTestId('submit-inspection').click();
-  await expect(page.getByText(/已提交：submitted/)).toBeVisible();
-});
-
-test('NB-002 打回单显示主管意见并可重新提交', async ({ page }) => {
-  await page.goto('/');
-  await page.getByLabel('登录名').fill('inspector+nb-002@northbean.example');
   await page.getByLabel('密码').fill(password);
   await page.getByTestId('login-button').click();
   await expect(page.getByRole('tab', { name: '今日待巡' })).toBeVisible();
-  const today = await readToday(page);
-  await expect(page.getByText('Northbean Coffee 2')).toBeVisible();
-  await expect(page.getByText('状态：待补交')).toHaveCount(
-    today.reworkInspections.length,
-  );
-  await page.getByText('状态：待补交').click();
-  await expect(page.getByText('主管打回')).toBeVisible();
-  await expect(page.getByText('需要补充或修改')).toBeVisible();
-  await page.getByRole('button', { name: '提交巡检' }).click();
-  await expect(page.getByText(/已提交：/)).toBeVisible();
+  await expect(page.getByText('今日任务暂不可用')).toBeVisible();
+  await expect(page.getByTestId('start-inspection')).toHaveCount(0);
+  await expect(page.getByTestId('submit-inspection')).toHaveCount(0);
 });
 
 test('首次启动时删除旧的本地 token 并显示登录页', async ({ page }) => {
@@ -255,7 +147,7 @@ test('FW-008 AC-03 未登录直接访问受保护和未知地址回登录，且�
   }
 });
 
-test('FW-008 AC-03 Tabs 与详情切换会更新 URL，详情返回今日待巡', async ({
+test('FW-008 AC-03 Tabs 切换会更新 URL，今日页不暴露旧巡检入口', async ({
   page,
 }) => {
   await page.goto('/');
@@ -269,10 +161,7 @@ test('FW-008 AC-03 Tabs 与详情切换会更新 URL，详情返回今日待巡'
   await expect(page).toHaveURL('/profile');
   await page.getByLabel('今日待巡', { exact: true }).click();
   await expect(page).toHaveURL('/today');
-  await page.getByTestId('start-inspection').click();
-  await expect(page).toHaveURL(/\/inspection\/[0-9a-f-]+$/);
-  await expect(page.getByRole('tab')).toHaveCount(0);
-  await page.getByLabel('返回今日待巡').click();
-  await expect(page).toHaveURL('/today');
   await expect(page.getByRole('tab')).toHaveCount(3);
+  await expect(page.getByTestId('start-inspection')).toHaveCount(0);
+  await expect(page.getByTestId('submit-inspection')).toHaveCount(0);
 });

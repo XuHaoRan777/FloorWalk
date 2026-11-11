@@ -16,6 +16,10 @@ import { hashSessionId } from './auth.js';
 import { createPool } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import { HttpErrorFilter } from './http-exception.filter.js';
+import {
+  TASK_SCHEDULER_CLOCK,
+  TaskSchedulerService,
+} from './task-scheduler.js';
 
 type Fixture = {
   orgId: string;
@@ -118,13 +122,17 @@ describe('FW-027 schedule administration', () => {
     other = await fixture();
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(TASK_SCHEDULER_CLOCK)
+      .useValue({ now: () => new Date('2026-11-09T12:00:00.000Z') })
+      .compile();
     app = moduleRef.createNestApplication<NestExpressApplication>();
     app.useGlobalFilters(new HttpErrorFilter());
     await app.init();
   }, 60000);
 
   afterAll(async () => {
+    if (app) await app.close();
     if (pool && orgIds.length) {
       const client = await pool.connect();
       try {
@@ -132,6 +140,7 @@ describe('FW-027 schedule administration', () => {
         for (const table of [
           'site_schedules',
           'site_schedule_skips',
+          'inspection_tasks',
           'schedules',
           'templates',
           'users',
@@ -158,7 +167,6 @@ describe('FW-027 schedule administration', () => {
         client.release();
       }
     }
-    if (app) await app.close();
     if (pool) await pool.end();
   });
 
@@ -593,5 +601,112 @@ describe('FW-027 schedule administration', () => {
         )
       ).rows[0].count,
     ).toBe('1');
+  });
+
+  it('generates daily tasks idempotently and reconciles only unstarted tasks after plan changes', async () => {
+    const target = await fixture();
+    const server = app.getHttpServer();
+    const date = '2026-11-09';
+    const created = await request(server)
+      .post('/api/admin/schedules')
+      .set('Cookie', target.adminCookie)
+      .send(definition('今日任务', target.templateId))
+      .expect(201);
+    const scheduleId = created.body.id as string;
+
+    await request(server)
+      .put('/api/admin/site-schedules')
+      .set('Cookie', target.adminCookie)
+      .send({ siteIds: [target.siteIds[0]], scheduleId })
+      .expect(200);
+
+    const readTasks = async () =>
+      (
+        await pool.query<{
+          id: string;
+          templateId: string;
+          position: number;
+          occurrence: number;
+          startsAt: Date;
+          dueAt: Date;
+          status: string;
+        }>(
+          `SELECT id, template_id AS "templateId", position, occurrence,
+             starts_at AS "startsAt", due_at AS "dueAt", status
+           FROM floorwalk.inspection_tasks
+           WHERE site_id = $1 AND task_date = $2::date
+           ORDER BY position, occurrence`,
+          [target.siteIds[0], date],
+        )
+      ).rows;
+
+    const initial = await readTasks();
+    expect(initial).toHaveLength(3);
+    const initialIds = initial.map((task) => task.id);
+    await app.get(TaskSchedulerService).syncSiteDate(target.siteIds[0], date);
+    expect((await readTasks()).map((task) => task.id)).toEqual(initialIds);
+
+    const started = initial[0];
+    await pool.query(
+      `UPDATE floorwalk.inspection_tasks SET status = 'in_progress' WHERE id = $1`,
+      [started.id],
+    );
+    const changed = definition('今日任务已调整');
+    changed.days[0].tasks = [
+      { templateId: target.templateId, startsAt: '06:00', endsAt: '07:00' },
+      { templateId: target.templateId, startsAt: '10:00', endsAt: '11:00' },
+    ];
+    await request(server)
+      .put(`/api/admin/schedules/${scheduleId}`)
+      .set('Cookie', target.adminCookie)
+      .send(changed)
+      .expect(200);
+
+    let tasks = await readTasks();
+    expect(tasks).toHaveLength(3);
+    expect(tasks.find((task) => task.id === started.id)).toMatchObject({
+      status: 'in_progress',
+      startsAt: started.startsAt,
+      dueAt: started.dueAt,
+    });
+    expect(
+      tasks
+        .filter((task) => task.status === 'not_started')
+        .map((task) => [task.startsAt.toISOString(), task.dueAt.toISOString()]),
+    ).toEqual([
+      ['2026-11-08T22:00:00.000Z', '2026-11-08T23:00:00.000Z'],
+      ['2026-11-09T02:00:00.000Z', '2026-11-09T03:00:00.000Z'],
+    ]);
+
+    const skipped = await request(server)
+      .post('/api/admin/site-schedules/skips')
+      .set('Cookie', target.adminCookie)
+      .send({
+        siteIds: [target.siteIds[0]],
+        startsOn: date,
+        endsOn: date,
+      })
+      .expect(201);
+    const skipId = adminSiteSchedulesResponseSchema
+      .parse(skipped.body)
+      .find((site) => site.siteId === target.siteIds[0])!.skippedRanges[0].id;
+    tasks = await readTasks();
+    expect(tasks.map((task) => task.id)).toEqual([started.id]);
+
+    await request(server)
+      .delete(`/api/admin/site-schedules/skips/${skipId}`)
+      .set('Cookie', target.adminCookie)
+      .expect(204);
+    tasks = await readTasks();
+    expect(tasks).toHaveLength(3);
+    expect(tasks.some((task) => task.id === started.id)).toBe(true);
+
+    await request(server)
+      .put('/api/admin/site-schedules')
+      .set('Cookie', target.adminCookie)
+      .send({ siteIds: [target.siteIds[0]], scheduleId: null })
+      .expect(200);
+    tasks = await readTasks();
+    expect(tasks.map((task) => task.id)).toEqual([started.id]);
   });
 });

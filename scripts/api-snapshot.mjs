@@ -65,6 +65,7 @@ await new Promise((resolve, reject) => {
   probe.listen(apiPort, '127.0.0.1', () => probe.close(resolve));
 });
 await resetSlotResources();
+const database = createPool(databaseUrl.toString());
 const api = spawn(process.execPath, ['apps/api/dist/main.js'], {
   env,
   stdio: 'ignore',
@@ -127,21 +128,38 @@ async function call(
     headers: body && !multipart ? json(headers) : headers,
     body: body ? (multipart ? body : JSON.stringify(body)) : undefined,
   });
-  const result = response.status === 204 ? undefined : await response.json();
+  const responseText = response.status === 204 ? '' : await response.text();
+  let result;
+  try {
+    result = responseText ? JSON.parse(responseText) : undefined;
+  } catch {
+    result = responseText;
+  }
   if (response.status !== expected)
-    throw new Error(`${label}: 预期 ${expected}，得到 ${response.status}`);
+    throw new Error(
+      `${label}: 预期 ${expected}，得到 ${response.status}: ${JSON.stringify(result)}`,
+    );
   records.push({ label, status: response.status, body: result });
+  if (pathname === apiRoutes.createOrg.path && response.status === 201)
+    sessionCookies.set('createdOrg', readSessionCookie(response));
   if (method === 'DELETE' && pathname === apiRoutes.deleteSession.path)
     sessionCookies.delete(role);
   return result;
 }
-async function login(role) {
+async function login(role, orgId) {
+  const loginName =
+    role === 'admin'
+      ? 'hq@northbean.example'
+      : role === 'store_manager_nb002'
+        ? 'inspector+nb-002@northbean.example'
+        : 'inspector@northbean.example';
   const response = await fetch(`${baseUrl}${apiRoutes.createSession.path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      email: `${role === 'admin' ? 'hq' : role}@northbean.example`,
+      loginName,
       password: 'northbean-demo',
+      ...(orgId ? { orgId } : {}),
     }),
   });
   if (response.status !== apiRoutes.createSession.successStatus)
@@ -150,6 +168,7 @@ async function login(role) {
     );
   const result = await response.json();
   apiRoutes.createSession.responseSchema.parse(result);
+  if (!result.user) throw new Error(`login:${role}: 登录响应缺少组织选择。`);
   sessionCookies.set(role, readSessionCookie(response));
   records.push({
     label: `login:${role}`,
@@ -157,6 +176,13 @@ async function login(role) {
     body: result,
   });
   return result;
+}
+async function mailboxCode(email) {
+  const response = await fetch(
+    `${baseUrl}/api/testing/mailbox?recipient=${encodeURIComponent(email)}`,
+  );
+  if (!response.ok) throw new Error(`未读到 ${email} 的测试验证码。`);
+  return (await response.json()).code;
 }
 async function cleanupSessions() {
   let failed = false;
@@ -175,22 +201,51 @@ async function cleanupSessions() {
   sessionCookies.clear();
   if (failed) throw new Error('无法清理快照会话。');
 }
-const photo = () => {
+const photo = (item, selfAssessment = 'pass') => {
   const form = new FormData();
-  form.append(
-    'file',
-    new Blob(['snapshot-photo'], { type: 'image/jpeg' }),
-    'photo.jpg',
-  );
+  form.append('selfAssessment', selfAssessment);
+  if (!item.minPhotoCount) form.append('note', '快照检查已完成。');
+  for (let index = 0; index < item.minPhotoCount; index += 1)
+    form.append(
+      'files',
+      new Blob([`snapshot-photo-${item.position}-${index}`], {
+        type: 'image/jpeg',
+      }),
+      `photo-${item.position}-${index}.jpg`,
+    );
   return form;
 };
+
+function localDate(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+}
+
+function scheduleDefinition(name, templateId, taskDate = localDate()) {
+  const weekday = new Date(`${taskDate}T12:00:00+08:00`).getUTCDay() || 7;
+  return {
+    name,
+    days: Array.from({ length: 7 }, (_, index) => ({
+      weekday: index + 1,
+      enabled: true,
+      tasks:
+        index + 1 === weekday
+          ? [{ templateId, startsAt: '00:00', endsAt: '23:59' }]
+          : [],
+    })),
+  };
+}
 const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 function normalize(value) {
   if (Array.isArray(value)) return value.map(normalize);
   if (value && typeof value === 'object')
     return Object.fromEntries(
       Object.entries(value)
-        .filter(([key]) => !/^(id|token)$|Ids?$|At$/.test(key))
+        .filter(([key]) => !/^(id|token|resetToken)$|Ids?$|At$/.test(key))
         .map(([key, entry]) => [key, normalize(entry)]),
     );
   if (typeof value === 'string') {
@@ -217,12 +272,19 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   if (!ready) throw new Error('槽位 API 启动超时。');
-  for (const role of userRoles) await login(role);
-  const today = await call('setup:today', apiRoutes.today.path, 'inspector');
+  const adminLogin = await login('admin');
+  const orgId = adminLogin.user.org.id;
+  await login('store_manager', orgId);
+  await login('store_manager_nb002', orgId);
+  const today = await call(
+    'setup:today',
+    apiRoutes.today.path,
+    'store_manager',
+  );
   const sites = await call(
     'seed:sites',
     apiRoutes.listAdminSites.path,
-    'supervisor',
+    'admin',
   );
   const templates = await call(
     'seed:templates',
@@ -238,46 +300,54 @@ try {
     (_, index) => `NB-${String(index + 1).padStart(3, '0')}`,
   );
   if (
-    sites.length !== 13 ||
+    sites.length !== 12 ||
     JSON.stringify(northbeanCodes) !== JSON.stringify(expectedNorthbeanCodes) ||
-    sites.filter((site) => site.code === 'DEMO2-001').length !== 1 ||
     sites.some((site) => !site.active)
   )
-    throw new Error('种子应有 Northbean 的 12 家与演示二号的 1 家启用门店。');
+    throw new Error('Northbean 管理员应只看到 12 家启用门店。');
+  const template = today.templates.find((entry) => entry.name === '开店检查');
   if (
-    templates.filter((template) => template.isCurrent).length !== 1 ||
     !today.site.active ||
-    today.template.id !== templates.find((template) => template.isCurrent).id
+    !template ||
+    !templates.some((entry) => entry.id === template.id)
   )
-    throw new Error('种子当前模板或 today 字段不符合契约。');
-  await login('inspector+nb-002');
-  const seededRecords = await call(
-    'seed:records',
-    apiRoutes.listInspectorInspections.path,
-    'inspector+nb-002',
+    throw new Error('种子模板或 today 字段不符合契约。');
+  const site = sites.find((entry) => entry.code === 'NB-001');
+  if (!site || !template) throw new Error('缺少 NB-001 门店或开店检查模板。');
+
+  const seededInspectionResult = await database.query(
+    `SELECT inspection.id FROM floorwalk.inspections inspection
+     JOIN floorwalk.sites site ON site.id = inspection.site_id
+     JOIN floorwalk.chat_messages message ON message.inspection_id = inspection.id
+     WHERE site.org_id = $1 AND site.code = 'NB-002'
+     ORDER BY inspection.created_at DESC, inspection.id DESC LIMIT 1`,
+    [orgId],
   );
-  const seededRework = seededRecords.items.find(
-    (item) => item.status === 'rework',
-  );
-  if (!seededRework) throw new Error('种子 NB-002 缺打回单。');
+  const seededInspectionId = seededInspectionResult.rows[0]?.id;
+  if (!seededInspectionId) throw new Error('NB-002 缺少带聊天的种子巡检。');
   const seededChat = await call(
     'seed:chat',
-    `/api/inspections/${seededRework.id}/messages`,
-    'inspector+nb-002',
+    `/api/inspections/${seededInspectionId}/messages`,
+    'store_manager_nb002',
   );
   apiRoutes.listInspectionMessages.responseSchema.parse(seededChat);
   if (
     seededChat.messages.length !== 2 ||
     !seededChat.messages.some(
-      (message) => message.role === 'supervisor' && message.body,
+      (message) => message.role === 'admin' && message.body,
     ) ||
     !seededChat.messages.some(
-      (message) => message.role === 'inspector' && message.imageUrl,
+      (message) => message.role === 'store_manager' && message.imageUrl,
     )
   )
-    throw new Error('NB-002 种子聊天应为主管文字与店员图片。');
+    throw new Error('NB-002 种子聊天应包含管理员文字与店长图片。');
   const seedImage = seededChat.messages.find((message) => message.imageUrl);
-  const signed = new URL(seedImage.imageUrl);
+  const seedImageUrl = await call(
+    'seed:image-url',
+    apiRoutes.getMessageImageUrl.path.replace(':id', seedImage.id),
+    'store_manager_nb002',
+  );
+  const signed = new URL(seedImageUrl.url);
   const image = await fetch(`${baseUrl}${signed.pathname}${signed.search}`);
   const imageBytes = new Uint8Array(await image.arrayBuffer());
   if (
@@ -292,167 +362,380 @@ try {
     status: image.status,
     body: { mime: 'image/jpeg', bytes: imageBytes.length },
   });
-  let detail;
-  let evidence;
-  let inspection;
+
+  const taskDate = localDate();
+  const setupSchedule = await call(
+    'setup:schedule',
+    apiRoutes.createAdminSchedule.path,
+    'admin',
+    'POST',
+    scheduleDefinition('API 快照日程', template.id, taskDate),
+    apiRoutes.createAdminSchedule.successStatus,
+  );
+  await call(
+    'setup:assign-schedule',
+    apiRoutes.assignAdminSiteSchedule.path,
+    'admin',
+    'PUT',
+    { siteIds: [site.id], scheduleId: setupSchedule.id },
+    apiRoutes.assignAdminSiteSchedule.successStatus,
+  );
+  const taskStartsAt = new Date(`${taskDate}T00:00:00+08:00`);
+  const taskDueAt = new Date(`${taskDate}T23:59:00+08:00`);
+  const taskResult = await database.query(
+    `SELECT id FROM floorwalk.inspection_tasks
+     WHERE org_id = $1 AND site_id = $2 AND template_id = $3
+       AND task_date = $4::date AND starts_at = $5 AND due_at = $6
+     ORDER BY position, occurrence LIMIT 1`,
+    [orgId, site.id, template.id, taskDate, taskStartsAt, taskDueAt],
+  );
+  const taskId = taskResult.rows[0]?.id;
+  if (!taskId) throw new Error('当天日程未为 NB-001 生成巡检任务。');
+  await database.query(
+    `UPDATE floorwalk.inspection_tasks
+     SET starts_at = $2, due_at = $3 WHERE id = $1`,
+    [
+      taskId,
+      new Date(Date.now() - 60 * 60 * 1000),
+      new Date(Date.now() + 60 * 60 * 1000),
+    ],
+  );
+
+  const uploadItem =
+    template.items.find((item) => item.minPhotoCount > 0) ?? template.items[0];
+  if (!uploadItem) throw new Error('当天任务没有检查项。');
+  const upload = (label, item, assessment = 'pass') =>
+    call(
+      label,
+      apiRoutes.uploadTaskItem.path
+        .replace(':taskId', taskId)
+        .replace(':position', String(item.position)),
+      'store_manager',
+      'POST',
+      photo(item, assessment),
+      apiRoutes.uploadTaskItem.successStatus,
+    );
+  await upload('setup:first-upload', uploadItem);
+  let taskReview = await call(
+    'setup:task-review',
+    apiRoutes.getTaskReview.path.replace(':taskId', taskId),
+    'admin',
+  );
+  const inspectionId = taskReview.inspectionId;
+  const inspection = await database.query(
+    'SELECT id FROM floorwalk.inspections WHERE task_id = $1',
+    [taskId],
+  );
+  if (!inspectionId || inspection.rows[0]?.id !== inspectionId)
+    throw new Error('首传没有生成任务巡检关联。');
+  let evidence = taskReview.items
+    .flatMap((item) => item.evidence)
+    .find((item) => item);
+  const snapshotDecisionItem = taskReview.items.find(
+    (item) =>
+      item.id === uploadItem.id || item.position === uploadItem.position,
+  );
+  if (!snapshotDecisionItem || !evidence)
+    throw new Error('首传未返回用于路由快照的条目或照片。');
+  const reworkItem = taskReview.items.find(
+    (item) => item.id !== snapshotDecisionItem.id,
+  );
+  if (!reworkItem) throw new Error('任务至少需要两个检查项以覆盖改判流程。');
+
+  let snapshotUserId;
+  let matrixScheduleId;
+  let matrixTemplateId;
+  let matrixAiStandardId;
+  let scheduleSkipId;
   let chatMessage;
-  const protocolRouteBodies = {
-    createOrg: {
-      orgName: 'Snapshot organization',
-      adminName: 'Snapshot admin',
-      email: 'snapshot@example.test',
-      password: 'snapshot-password',
-    },
-    setSiteSupervisor: { userId: null },
-    listAdminUsers: undefined,
-    createAdminUser: {
-      email: 'snapshot@example.test',
-      displayName: 'Snapshot user',
-      role: 'inspector',
-      password: 'snapshot-password',
-    },
-    updateAdminUser: { displayName: 'Snapshot user' },
-    resetAdminUserPassword: { password: 'snapshot-password' },
-    changePassword: {
-      currentPassword: 'northbean-demo',
-      newPassword: 'snapshot-password',
-    },
+  const registrationEmail = 'snapshot-registration@example.test';
+  const recoveryEmail = 'admin@demo2.example';
+  let registrationCode;
+  let recoveryCode;
+  let recoveryToken;
+  let recoveryOrgId;
+  const registrationCodeBody = { email: registrationEmail };
+  const recoveryCodeBody = { email: recoveryEmail };
+  const makeChatPhoto = () => {
+    const form = new FormData();
+    form.append(
+      'file',
+      new Blob(['snapshot-chat-photo'], { type: 'image/jpeg' }),
+      'snapshot-chat.jpg',
+    );
+    return form;
   };
+  const scheduleBody = scheduleDefinition(
+    'API 快照矩阵日程',
+    template.id,
+    taskDate,
+  );
+  const updatedScheduleBody = {
+    ...scheduleBody,
+    name: 'API 快照矩阵日程已修改',
+  };
+  const templateBody = {
+    name: 'API 快照模板',
+    aiEnabled: false,
+    aiStandardId: null,
+    items: [
+      {
+        title: '快照条目',
+        minPhotoCount: 0,
+        acceptanceCriteria: '',
+        critical: false,
+      },
+    ],
+  };
+  function routeBody(key, role) {
+    switch (key) {
+      case 'requestRegistrationCode':
+        return registrationCodeBody;
+      case 'requestPasswordRecoveryCode':
+        return recoveryCodeBody;
+      case 'verifyPasswordRecoveryCode':
+        return { email: recoveryEmail, code: recoveryCode };
+      case 'resetPasswordRecovery':
+        return {
+          resetToken: recoveryToken,
+          orgId: recoveryOrgId,
+          password: 'snapshot-recovery-password',
+        };
+      case 'createOrg':
+        return {
+          orgName: 'Snapshot organization',
+          adminName: 'Snapshot admin',
+          email: registrationEmail,
+          verificationCode: registrationCode,
+          password: 'snapshot-org-password',
+        };
+      case 'changePassword':
+        return {
+          currentPassword:
+            role === 'admin' ? 'northbean-demo' : 'northbean-demo',
+          newPassword: 'snapshot-password',
+        };
+      case 'createAdminUser':
+        return {
+          loginName: 'api-snapshot-user@example.test',
+          displayName: 'API 快照用户',
+          role: 'store_manager',
+          siteId: site.id,
+          password: 'snapshot-user-password',
+        };
+      case 'updateAdminUser':
+        return { displayName: 'API 快照用户已修改' };
+      case 'resetAdminUserPassword':
+        return { password: 'snapshot-user-reset-password' };
+      case 'uploadTaskItem':
+        return photo(uploadItem);
+      case 'decideTaskItem':
+        return { result: 'pass' };
+      case 'createInspectionMessage':
+        return makeChatPhoto();
+      case 'createAdminSite':
+        return { code: 'SNAPSHOT', name: '快照门店' };
+      case 'updateAdminSite':
+        return { name: 'NB-001 快照名称' };
+      case 'createAdminSchedule':
+        return scheduleBody;
+      case 'updateAdminSchedule':
+        return updatedScheduleBody;
+      case 'assignAdminSiteSchedule':
+        return { siteIds: [site.id], scheduleId: setupSchedule.id };
+      case 'addAdminSiteScheduleSkips':
+        return {
+          siteIds: [site.id],
+          startsOn: taskDate,
+          endsOn: taskDate,
+          note: '快照临时跳过',
+        };
+      case 'createAdminTemplate':
+        return templateBody;
+      case 'updateAdminTemplate':
+        return {
+          ...templateBody,
+          name: 'API 快照模板已修改',
+          items: templateBody.items.map((item, index) => ({
+            ...item,
+            position: index + 1,
+          })),
+        };
+      case 'createAdminAiStandard':
+        return { name: 'API 快照标准', prompt: '检查条目是否符合现场标准。' };
+      case 'updateAdminAiStandard':
+        return {
+          name: 'API 快照标准已修改',
+          prompt: '检查条目及其现场证据是否符合标准。',
+        };
+      case 'quickSetupAdminTemplate':
+        return { kind: 'coffee' };
+      default:
+        return undefined;
+    }
+  }
+  function routePath(key, route) {
+    const idByRoute = {
+      getInspection: inspectionId,
+      getEvidence: evidence.id,
+      listInspectionMessages: inspectionId,
+      createInspectionMessage: inspectionId,
+      getMessageImageUrl: chatMessage?.id,
+      updateAdminUser: snapshotUserId,
+      resetAdminUserPassword: snapshotUserId,
+      updateAdminSite: site.id,
+      updateAdminSchedule: matrixScheduleId,
+      deleteAdminSchedule: matrixScheduleId,
+      deleteAdminSiteScheduleSkip: scheduleSkipId,
+      updateAdminTemplate: matrixTemplateId,
+      updateAdminAiStandard: matrixAiStandardId,
+      deleteAdminAiStandard: matrixAiStandardId,
+    };
+    return route.path
+      .replace(':id', idByRoute[key] ?? '')
+      .replace(':taskId', taskId)
+      .replace(':position', String(uploadItem.position))
+      .replace(':itemId', snapshotDecisionItem.id);
+  }
+
+  let routeCoverageCount = 0;
   for (const [key, route] of Object.entries(apiRoutes)) {
     if (key === 'createSession' || key === 'deleteSession') continue;
-    const protocolStub = Object.hasOwn(protocolRouteBodies, key);
-    if (protocolStub) {
-      await call(
+    if (route.roles.length === 0) {
+      const body = routeBody(key);
+      const result = await call(
         `${key}:anonymous`,
-        route.path.replace(':id', sites[0].id),
+        routePath(key, route),
         undefined,
         route.method,
-        protocolRouteBodies[key],
-        route.roles.length === 0 ? 501 : 401,
+        body,
+        route.successStatus,
       );
-    }
-    if (key === 'submitInspection') {
-      for (const item of detail.items) {
-        await call(
-          `prepare:${item.position}`,
-          `/api/inspections/${inspection.id}/items/${item.id}`,
-          'inspector',
-          'PATCH',
-          { result: item.title.includes('冷柜') ? 'fail' : 'pass' },
-        );
-        if (item.photoRequired)
-          await call(
-            `photo:${item.position}`,
-            `/api/inspections/${inspection.id}/items/${item.id}/evidence`,
-            'inspector',
-            'POST',
-            photo(),
-            201,
-          );
+      route.responseSchema.parse(result);
+      routeCoverageCount += 1;
+      if (key === 'requestRegistrationCode')
+        registrationCode = await mailboxCode(registrationEmail);
+      if (key === 'requestPasswordRecoveryCode')
+        recoveryCode = await mailboxCode(recoveryEmail);
+      if (key === 'verifyPasswordRecoveryCode') {
+        recoveryToken = result.resetToken;
+        recoveryOrgId = result.organizations[0]?.id;
       }
+      continue;
     }
     for (const role of userRoles) {
-      const pathname = route.path
-        .replace(
-          ':id',
-          protocolStub
-            ? sites[0].id
-            : key === 'getEvidence'
-              ? evidence.id
-              : key === 'getMessageImageUrl'
-                ? chatMessage.id
-                : key === 'updateAdminSite'
-                  ? sites[0].id
-                  : ['updateAdminTemplate', 'setCurrentAdminTemplate'].includes(
-                        key,
-                      )
-                    ? templates[0].id
-                    : (inspection?.id ?? ''),
-        )
-        .replace(':itemId', detail?.items[0].id ?? '');
-      const bodies = {
-        ...protocolRouteBodies,
-        createInspection: { templateId: today.template.id },
-        updateInspectionItem: { result: 'pass', note: 'snapshot-note' },
-        addEvidence: photo(),
-        reviewInspection: { action: 'start' },
-        createInspectionMessage: photo(),
-        createAdminSite: { code: 'SNAPSHOT', name: 'Snapshot site' },
-        updateAdminSite: { name: 'Snapshot renamed', active: false },
-        createAdminTemplate: {
-          name: 'Snapshot template',
-          items: [
-            { title: 'Snapshot item', photoRequired: false, critical: false },
-          ],
-        },
-        updateAdminTemplate: {
-          name: 'Snapshot template',
-          items: [
-            {
-              position: 1,
-              title: 'Snapshot item',
-              photoRequired: false,
-              critical: false,
-            },
-          ],
-        },
-      };
-      const allowed = route.roles.length === 0 || route.roles.includes(role);
+      const pathname = routePath(key, route);
+      const body = routeBody(key, role);
+      const allowed = route.roles.includes(role);
       const result = await call(
         `${key}:${role}`,
         pathname,
         role,
         route.method,
-        bodies[key],
-        allowed ? (protocolStub ? 501 : route.successStatus) : 403,
+        body,
+        allowed ? route.successStatus : 403,
       );
-      if (allowed && !protocolStub) {
+      routeCoverageCount += 1;
+      if (allowed) {
         route.responseSchema.parse(result);
-        if (key === 'createInspection') inspection = result;
-        if (key === 'getInspection' && !detail) detail = result;
-        if (key === 'addEvidence') evidence = result;
+        if (key === 'uploadTaskItem') {
+          taskReview = await call(
+            'matrix:task-review-after-upload',
+            apiRoutes.getTaskReview.path.replace(':taskId', taskId),
+            'admin',
+          );
+          evidence = taskReview.items
+            .flatMap((item) => item.evidence)
+            .find((item) => item);
+        }
+        if (key === 'createAdminUser') snapshotUserId = result.id;
+        if (key === 'createAdminSchedule') matrixScheduleId = result.id;
+        if (key === 'createAdminTemplate') matrixTemplateId = result.id;
+        if (key === 'createAdminAiStandard') matrixAiStandardId = result.id;
+        if (key === 'addAdminSiteScheduleSkips')
+          scheduleSkipId = result
+            .find((entry) => entry.siteId === site.id)
+            .skippedRanges.at(-1).id;
         if (key === 'createInspectionMessage') chatMessage = result;
       }
     }
   }
-  const detailPath = `/api/inspections/${inspection.id}`;
-  const review = (label, body) =>
-    call(label, `${detailPath}/review`, 'supervisor', 'POST', body, 201);
-  await review('demo:rework', {
-    action: 'rework',
-    reworkItemIds: [detail.items[0].id],
-    comment: 'snapshot-rework',
-  });
-  await call('demo:today-rework', apiRoutes.today.path, 'inspector');
-  for (const item of detail.items) {
-    await call(
-      `demo:pass:${item.position}`,
-      `${detailPath}/items/${item.id}`,
-      'inspector',
-      'PATCH',
-      { result: 'pass' },
-    );
+  if (!registrationCode || !recoveryCode || !recoveryToken || !recoveryOrgId)
+    throw new Error('公开邮箱验证码与找回路由没有完整执行。');
+
+  taskReview = await call(
+    'demo:task-review',
+    apiRoutes.getTaskReview.path.replace(':taskId', taskId),
+    'admin',
+  );
+  for (const item of taskReview.items) {
+    if (!item.uploadedAt) await upload(`demo:upload:${item.position}`, item);
+  }
+  taskReview = await call(
+    'demo:task-review-after-all-uploads',
+    apiRoutes.getTaskReview.path.replace(':taskId', taskId),
+    'admin',
+  );
+  const lastSnapshotItem = taskReview.items.find(
+    (item) => item.id === reworkItem.id,
+  );
+  for (const item of taskReview.items) {
+    if (item.id !== reworkItem.id && item.result !== 'pass')
+      taskReview = await call(
+        `demo:decision:${item.position}:pass`,
+        apiRoutes.decideTaskItem.path
+          .replace(':taskId', taskId)
+          .replace(':itemId', item.id),
+        'admin',
+        'POST',
+        { result: 'pass' },
+        apiRoutes.decideTaskItem.successStatus,
+      );
   }
   await call(
-    'demo:replacement',
-    `${detailPath}/items/${detail.items[0].id}/evidence`,
-    'inspector',
+    'demo:decision:rework',
+    apiRoutes.decideTaskItem.path
+      .replace(':taskId', taskId)
+      .replace(':itemId', lastSnapshotItem.id),
+    'admin',
     'POST',
-    photo(),
-    201,
+    { result: 'rework' },
+    apiRoutes.decideTaskItem.successStatus,
   );
-  const submitted = await call(
-    'demo:resubmit',
-    `${detailPath}/submit`,
-    'inspector',
+  await database.query(
+    'UPDATE floorwalk.inspection_tasks SET due_at = $2 WHERE id = $1',
+    [taskId, new Date(Date.now() - 1000)],
+  );
+  await upload('demo:rework-resubmit', lastSnapshotItem);
+  const failedAtLock = await call(
+    'demo:decision:lock-score',
+    apiRoutes.decideTaskItem.path
+      .replace(':taskId', taskId)
+      .replace(':itemId', lastSnapshotItem.id),
+    'admin',
     'POST',
-    undefined,
-    201,
+    { result: 'fail' },
+    apiRoutes.decideTaskItem.successStatus,
   );
-  if (submitted.score !== 100) throw new Error('演示链重新提交应为 100。');
-  await review('demo:start', { action: 'start' });
-  await review('demo:approve', { action: 'approve' });
-  await call('demo:final-detail', detailPath, 'inspector');
+  if (failedAtLock.score !== 88 || failedAtLock.inspectionStatus !== 'passed')
+    throw new Error('截止判定应锁定 88 分并给出通过结论。');
+  const rejudged = await call(
+    'demo:decision:rejudge',
+    apiRoutes.decideTaskItem.path
+      .replace(':taskId', taskId)
+      .replace(':itemId', lastSnapshotItem.id),
+    'admin',
+    'POST',
+    { result: 'pass' },
+    apiRoutes.decideTaskItem.successStatus,
+  );
+  if (rejudged.score !== 100 || rejudged.inspectionStatus !== 'passed')
+    throw new Error('逐条改判后应重算为 100 分并通过。');
+  await call(
+    'demo:final-detail',
+    apiRoutes.getInspection.path.replace(':id', inspectionId),
+    'store_manager',
+  );
   const dashboard = await call(
     'demo:dashboard',
     apiRoutes.dashboardSites.path,
@@ -471,16 +754,34 @@ try {
     );
     apiRoutes.deleteSession.responseSchema.parse(result);
   }
+  for (const role of ['store_manager_nb002', 'createdOrg']) {
+    const cookie = sessionCookies.get(role);
+    if (!cookie) continue;
+    const response = await fetch(`${baseUrl}${apiRoutes.deleteSession.path}`, {
+      method: 'DELETE',
+      headers: { cookie },
+    });
+    if (response.status !== apiRoutes.deleteSession.successStatus)
+      throw new Error(`无法清理 ${role} 快照会话。`);
+    sessionCookies.delete(role);
+  }
   await mkdir(path.dirname(path.resolve(output)), { recursive: true });
   await writeFile(output, `${JSON.stringify(normalize(records), null, 2)}\n`);
   console.log(
-    `快照完成：${records.length} 次请求；${Object.keys(apiRoutes).length} 个已接入路由 × 3 个角色；${output}`,
+    `快照完成：${records.length} 次请求；覆盖 ${routeCoverageCount} 次契约路由权限检查（${Object.keys(apiRoutes).length} 个路由）；${output}`,
   );
 } finally {
   try {
     await cleanupSessions();
   } finally {
-    stopApi();
-    await resetSlotResources(); // Remove all snapshot writes and uploaded files.
+    try {
+      stopApi();
+    } finally {
+      try {
+        await database.end();
+      } finally {
+        await resetSlotResources(); // Remove snapshot writes and uploaded files.
+      }
+    }
   }
 }

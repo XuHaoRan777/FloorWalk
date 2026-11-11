@@ -11,19 +11,20 @@ const password = 'northbean-demo';
 
 async function loginInspector(page: Page) {
   await page.goto('/');
-  await page.getByLabel('邮箱').fill('inspector@northbean.example');
+  await page.getByLabel('登录名').fill('inspector@northbean.example');
   await page.getByLabel('密码').fill(password);
   await page.getByTestId('login-button').click();
+  await page.getByRole('button', { name: 'Northbean', exact: true }).click();
 }
 
 async function loginSupervisor(request: APIRequestContext) {
   const response = await request.post(`${apiBase}/auth/session`, {
-    data: { email: 'supervisor@northbean.example', password },
+    data: { loginName: 'hq@northbean.example', password },
   });
   expect(response.status()).toBe(201);
 }
 
-test('AC-06 停用门店隐藏新建入口，今日提示可见且历史接口可用', async ({
+test('停用门店仍可查看历史，今日页不显示旧巡检入口', async ({
   page,
   request,
 }) => {
@@ -50,8 +51,12 @@ test('AC-06 停用门店隐藏新建入口，今日提示可见且历史接口�
     await expect(
       page.getByRole('heading', { name: 'Northbean Coffee 1' }),
     ).toBeVisible();
-    await expect(page.getByText('门店已停用', { exact: true })).toBeVisible();
+    await expect(page.getByText('今日任务暂不可用')).toBeVisible();
     await expect(page.getByTestId('start-inspection')).toHaveCount(0);
+    await expect(page.getByTestId('submit-inspection')).toHaveCount(0);
+    const today = await page.request.get(`${apiBase}/inspector/today`);
+    expect(today.ok()).toBeTruthy();
+    expect((await today.json()).site.active).toBe(false);
 
     const recordsResponse = await page.request.get(
       `${apiBase}/inspector/inspections?limit=10`,
@@ -80,8 +85,9 @@ test('AC-06 停用门店隐藏新建入口，今日提示可见且历史接口�
     expect(reactivated.ok()).toBeTruthy();
     await page.goto('/');
     await page.getByLabel('刷新今日任务').click();
-    await expect(page.getByTestId('start-inspection')).toBeVisible();
-    await expect(page.getByText('门店已停用', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('今日任务暂不可用')).toBeVisible();
+    await expect(page.getByTestId('start-inspection')).toHaveCount(0);
+    await expect(page.getByTestId('submit-inspection')).toHaveCount(0);
   } finally {
     const active = await request.patch(`${apiBase}/admin/sites/${site.id}`, {
       data: { active: true },

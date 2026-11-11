@@ -22,13 +22,18 @@ import {
   adminSiteSchedulesResponseSchema,
   assignScheduleRequestSchema,
   scheduleDefinitionSchema,
+  type AdminSiteSchedule,
   type AdminSchedule,
-  type ScheduleDefinition,
 } from '@libs/shared';
 import type { Pool, PoolClient } from 'pg';
 import { AuthGuard } from './auth.js';
 import { DATABASE_POOL } from './db/pool.provider.js';
 import { assertRole, type AuthedRequest } from './inspection-queries.js';
+import {
+  assertScheduleTemplates,
+  writeScheduleDays,
+} from './schedule-persistence.js';
+import { TaskSchedulerService } from './task-scheduler.js';
 
 type ScheduleRow = {
   id: string;
@@ -42,7 +47,11 @@ type ScheduleRow = {
 
 @Controller('api')
 export class SchedulesController {
-  constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(DATABASE_POOL) private readonly pool: Pool,
+    @Inject(TaskSchedulerService)
+    private readonly taskScheduler: TaskSchedulerService,
+  ) {}
 
   @UseGuards(AuthGuard)
   @Get(apiRoutePath(apiRoutes.listAdminSchedules))
@@ -59,14 +68,14 @@ export class SchedulesController {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      await this.assertTemplates(client, request.user.orgId, input);
+      await assertScheduleTemplates(client, request.user.orgId, input);
       const created = await client.query<{ id: string }>(
         `INSERT INTO floorwalk.schedules (org_id, name) VALUES ($1, $2)
          RETURNING id`,
         [request.user.orgId, input.name],
       );
       const id = created.rows[0].id;
-      await this.writeDays(client, request.user.orgId, id, input);
+      await writeScheduleDays(client, request.user.orgId, id, input);
       const [result] = await this.readSchedules(client, request.user.orgId, id);
       await client.query('COMMIT');
       return result;
@@ -89,6 +98,8 @@ export class SchedulesController {
     assertRole(request.user, ...apiRoutes.updateAdminSchedule.roles);
     const input = scheduleDefinitionSchema.parse(body);
     const client = await this.pool.connect();
+    let assignedSiteIds: string[];
+    let result: AdminSchedule;
     try {
       await client.query('BEGIN');
       const existing = await client.query(
@@ -96,7 +107,13 @@ export class SchedulesController {
         [id, request.user.orgId],
       );
       if (!existing.rowCount) throw scheduleNotFound();
-      await this.assertTemplates(client, request.user.orgId, input);
+      const assignments = await client.query<{ siteId: string }>(
+        `SELECT site_id AS "siteId" FROM floorwalk.site_schedules
+         WHERE org_id = $1 AND schedule_id = $2 ORDER BY site_id`,
+        [request.user.orgId, id],
+      );
+      assignedSiteIds = assignments.rows.map((row) => row.siteId);
+      await assertScheduleTemplates(client, request.user.orgId, input);
       await client.query(
         'UPDATE floorwalk.schedules SET name = $3 WHERE id = $1 AND org_id = $2',
         [id, request.user.orgId, input.name],
@@ -105,10 +122,15 @@ export class SchedulesController {
         'DELETE FROM floorwalk.schedule_days WHERE org_id = $1 AND schedule_id = $2',
         [request.user.orgId, id],
       );
-      await this.writeDays(client, request.user.orgId, id, input);
-      const [result] = await this.readSchedules(client, request.user.orgId, id);
+      await writeScheduleDays(client, request.user.orgId, id, input);
+      const schedules = await this.readSchedules(
+        client,
+        request.user.orgId,
+        id,
+      );
+      if (!schedules[0]) throw scheduleNotFound();
+      result = schedules[0];
       await client.query('COMMIT');
-      return result;
     } catch (error) {
       await client.query('ROLLBACK');
       if (hasPostgresCode(error, '23505')) throw scheduleNameConflict();
@@ -116,6 +138,8 @@ export class SchedulesController {
     } finally {
       client.release();
     }
+    await this.taskScheduler.syncSitesToday(assignedSiteIds);
+    return result;
   }
 
   @UseGuards(AuthGuard)
@@ -158,9 +182,11 @@ export class SchedulesController {
     assertRole(request.user, ...apiRoutes.assignAdminSiteSchedule.roles);
     const input = assignScheduleRequestSchema.parse(body);
     const client = await this.pool.connect();
+    let siteIds: string[];
+    let result: AdminSiteSchedule[];
     try {
       await client.query('BEGIN');
-      const siteIds = await this.assertSites(
+      siteIds = await this.assertSites(
         client,
         request.user.orgId,
         input.siteIds,
@@ -183,15 +209,16 @@ export class SchedulesController {
           [request.user.orgId, siteIds],
         );
       }
-      const result = await this.readSiteSchedules(client, request.user.orgId);
+      result = await this.readSiteSchedules(client, request.user.orgId);
       await client.query('COMMIT');
-      return result;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
     }
+    await this.taskScheduler.syncSitesToday(siteIds);
+    return result;
   }
 
   @UseGuards(AuthGuard)
@@ -203,9 +230,11 @@ export class SchedulesController {
     assertRole(request.user, ...apiRoutes.addAdminSiteScheduleSkips.roles);
     const input = addScheduleSkipsRequestSchema.parse(body);
     const client = await this.pool.connect();
+    let siteIds: string[];
+    let result: AdminSiteSchedule[];
     try {
       await client.query('BEGIN');
-      const siteIds = await this.assertSites(
+      siteIds = await this.assertSites(
         client,
         request.user.orgId,
         input.siteIds,
@@ -221,15 +250,16 @@ export class SchedulesController {
           input.note ?? null,
         ],
       );
-      const result = await this.readSiteSchedules(client, request.user.orgId);
+      result = await this.readSiteSchedules(client, request.user.orgId);
       await client.query('COMMIT');
-      return result;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
     }
+    await this.taskScheduler.syncSitesToday(siteIds);
+    return result;
   }
 
   @UseGuards(AuthGuard)
@@ -240,15 +270,29 @@ export class SchedulesController {
     @Req() request: AuthedRequest,
   ) {
     assertRole(request.user, ...apiRoutes.deleteAdminSiteScheduleSkip.roles);
-    const result = await this.pool.query(
-      'DELETE FROM floorwalk.site_schedule_skips WHERE id = $1 AND org_id = $2 RETURNING id',
-      [id, request.user.orgId],
-    );
-    if (!result.rowCount)
-      throw new NotFoundException({
-        code: 'NOT_FOUND',
-        message: '跳过日期区间不存在。',
-      });
+    const client = await this.pool.connect();
+    let siteId: string;
+    try {
+      await client.query('BEGIN');
+      const result = await client.query<{ siteId: string }>(
+        `DELETE FROM floorwalk.site_schedule_skips
+         WHERE id = $1 AND org_id = $2 RETURNING site_id AS "siteId"`,
+        [id, request.user.orgId],
+      );
+      if (!result.rows[0])
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '跳过日期区间不存在。',
+        });
+      siteId = result.rows[0].siteId;
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    await this.taskScheduler.syncSitesToday([siteId]);
   }
 
   private async assertSites(client: PoolClient, orgId: string, ids: string[]) {
@@ -322,53 +366,6 @@ export class SchedulesController {
         });
     }
     return adminSchedulesResponseSchema.parse([...schedules.values()]);
-  }
-
-  private async assertTemplates(
-    client: PoolClient,
-    orgId: string,
-    input: ScheduleDefinition,
-  ) {
-    const templateIds = [
-      ...new Set(
-        input.days.flatMap((day) => day.tasks.map((task) => task.templateId)),
-      ),
-    ];
-    if (!templateIds.length) return;
-    const result = await client.query(
-      'SELECT id FROM floorwalk.templates WHERE org_id = $1 AND id = ANY($2::uuid[]) FOR KEY SHARE',
-      [orgId, templateIds],
-    );
-    if (result.rowCount !== templateIds.length)
-      throw new NotFoundException({
-        code: 'NOT_FOUND',
-        message: '模板不存在。',
-      });
-  }
-
-  private async writeDays(
-    client: PoolClient,
-    orgId: string,
-    id: string,
-    input: ScheduleDefinition,
-  ) {
-    const days = JSON.stringify(input.days);
-    await client.query(
-      `INSERT INTO floorwalk.schedule_days (org_id, schedule_id, weekday, enabled)
-       SELECT $1, $2, weekday, enabled
-       FROM jsonb_to_recordset($3::jsonb) AS day(weekday integer, enabled boolean)`,
-      [orgId, id, days],
-    );
-    await client.query(
-      `INSERT INTO floorwalk.schedule_tasks
-         (org_id, schedule_id, weekday, position, template_id, starts_at, ends_at)
-       SELECT $1, $2, day.weekday, (task.position - 1)::integer,
-         (task.value->>'templateId')::uuid,
-         (task.value->>'startsAt')::time, (task.value->>'endsAt')::time
-       FROM jsonb_to_recordset($3::jsonb) AS day(weekday integer, tasks jsonb)
-       CROSS JOIN LATERAL jsonb_array_elements(day.tasks) WITH ORDINALITY AS task(value, position)`,
-      [orgId, id, days],
-    );
   }
 }
 

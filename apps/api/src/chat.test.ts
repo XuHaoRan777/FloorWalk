@@ -18,7 +18,6 @@ describe('inspection chat authorization', () => {
   let otherSiteInspectionId: string;
   let otherOrgInspectionId: string;
   let createdMessageId: string | undefined;
-  let adminMessageId: string | undefined;
 
   beforeAll(async () => {
     await runMigrations();
@@ -69,10 +68,6 @@ describe('inspection chat authorization', () => {
         await pool.query('DELETE FROM floorwalk.chat_messages WHERE id = $1', [
           createdMessageId,
         ]);
-      if (adminMessageId)
-        await pool.query('DELETE FROM floorwalk.chat_messages WHERE id = $1', [
-          adminMessageId,
-        ]);
       await pool.query('DELETE FROM floorwalk.sessions');
     } finally {
       await pool.end();
@@ -80,17 +75,19 @@ describe('inspection chat authorization', () => {
     }
   });
 
-  it('allows an admin to send within their organization and rejects other organizations', async () => {
-    const response = await request(app.getHttpServer())
+  it('rejects admin writes and keeps chat reads scoped to their organization', async () => {
+    await request(app.getHttpServer())
+      .get(`/api/inspections/${passedInspectionId}/messages`)
+      .set('Cookie', hqCookie)
+      .expect(200);
+    await request(app.getHttpServer())
       .post(`/api/inspections/${passedInspectionId}/messages`)
       .set('Cookie', hqCookie)
       .field('text', '管理员回复')
-      .expect(201);
-    adminMessageId = response.body.id as string;
+      .expect(403);
     await request(app.getHttpServer())
-      .post(`/api/inspections/${otherOrgInspectionId}/messages`)
+      .get(`/api/inspections/${otherOrgInspectionId}/messages`)
       .set('Cookie', hqCookie)
-      .field('text', '跨商家')
       .expect(404);
 
     await request(app.getHttpServer())

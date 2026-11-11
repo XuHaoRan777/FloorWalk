@@ -28,11 +28,8 @@ test('FW-024 AC-08 管理员创建店长并完成首次改密', async ({ page })
     await page.getByLabel('昵称', { exact: true }).fill('FW-024 e2e 店长');
     await page.getByLabel('登录名（手机号或邮箱）').fill(email);
     await page
-      .getByLabel('门店', { exact: true })
-      .selectOption(
-        { label: 'NB-001 · Northbean Coffee 1' },
-        { timeout: 30000 },
-      );
+      .getByRole('combobox', { name: '门店', exact: true })
+      .selectOption({ label: 'NB-001 · Northbean Coffee 1' });
     await page.getByLabel('初始密码').fill(initialPassword);
     await page.getByRole('button', { name: '创建店长' }).click();
     await expect(

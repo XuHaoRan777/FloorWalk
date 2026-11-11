@@ -12,6 +12,7 @@ import { createPool } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import { seedDatabase } from './db/seed.js';
 import { clearFakeMailbox } from './email/fake.js';
+import { TaskSchedulerService } from './task-scheduler.js';
 import {
   apiRoutes,
   adminSitesResponseSchema,
@@ -19,20 +20,17 @@ import {
   chatMessageSchema,
   chatMessagesResponseSchema,
   dashboardSitesResponseSchema,
-  evidenceSchema,
   inspectionDetailSchema,
-  inspectionSchema,
   inspectorRecordsResponseSchema,
   loginResponseSchema,
-  reviewQueueResponseSchema,
-  reviewResponseSchema,
   siteResponseSchema,
   signedEvidenceResponseSchema,
   chatImageUrlResponseSchema,
-  submitInspectionResponseSchema,
+  taskItemUploadResponseSchema,
+  taskReviewQueueResponseSchema,
+  taskReviewSchema,
   todayResponseSchema,
   templateResponseSchema,
-  updateInspectionItemResponseSchema,
   userSchema,
   errorResponseSchema,
   userRoles,
@@ -74,6 +72,7 @@ describe('inspection contract API', () => {
   let inspectorCookie: string;
   let hqCookie: string;
   let inspectionId: string;
+  let inspectionTaskId: string;
   let northbeanSiteId: string;
   let otherSiteInspectionId: string;
   let seedEvidenceId: string;
@@ -84,8 +83,8 @@ describe('inspection contract API', () => {
   let demo2InspectorCookie: string;
   let demo2AdminCookie: string;
   let createdInspectionId: string | undefined;
-  let createdEvidenceId: string | undefined;
-  let createdEvidenceStorageKey: string | undefined;
+  let createdTaskId: string | undefined;
+  const createdEvidenceStorageKeys: string[] = [];
   const createdChatMessageIds: string[] = [];
   const createdAdminSiteIds: string[] = [];
   const createdProtocolOrgIds: string[] = [];
@@ -150,7 +149,9 @@ describe('inspection contract API', () => {
       const chatInspection = await pool.query<{ id: string }>(
         `SELECT i.id FROM floorwalk.inspections i
          JOIN floorwalk.sites s ON s.id = i.site_id
-         WHERE s.code = 'NB-002' AND i.status = 'rework' ORDER BY i.created_at DESC LIMIT 1`,
+         JOIN floorwalk.chat_messages message ON message.inspection_id = i.id
+         WHERE s.code = 'NB-002' AND message.storage_key IS NOT NULL
+         ORDER BY i.created_at DESC LIMIT 1`,
       );
       chatInspectionId = chatInspection.rows[0].id;
       const chatImage = await pool.query<{ id: string }>(
@@ -166,6 +167,12 @@ describe('inspection contract API', () => {
       otherSiteInspectionId = result.rows.find(
         (row) => row.code !== 'NB-001',
       )!.id;
+      inspectionTaskId = (
+        await pool.query<{ taskId: string }>(
+          'SELECT task_id AS "taskId" FROM floorwalk.inspections WHERE id = $1',
+          [inspectionId],
+        )
+      ).rows[0].taskId;
       const evidence = await pool.query<{ id: string }>(
         `SELECT e.id FROM floorwalk.evidence e
          JOIN floorwalk.inspection_items ii ON ii.id = e.inspection_item_id
@@ -182,28 +189,51 @@ describe('inspection contract API', () => {
   afterAll(async () => {
     const pool = createPool();
     try {
-      if (createdInspectionId) {
+      let inspectionToClean = createdInspectionId;
+      if (!inspectionToClean && createdTaskId) {
+        const inspection = await pool.query<{ id: string }>(
+          'SELECT id FROM floorwalk.inspections WHERE task_id = $1',
+          [createdTaskId],
+        );
+        inspectionToClean = inspection.rows[0]?.id;
+      }
+      if (inspectionToClean) {
         await pool.query(
           'DELETE FROM floorwalk.chat_messages WHERE inspection_id = $1',
-          [createdInspectionId],
+          [inspectionToClean],
+        );
+        await pool.query(
+          'DELETE FROM floorwalk.inspection_participants WHERE inspection_id = $1',
+          [inspectionToClean],
+        );
+        await pool.query(
+          `DELETE FROM floorwalk.inspection_item_decisions
+           WHERE inspection_item_id IN
+             (SELECT id FROM floorwalk.inspection_items WHERE inspection_id = $1)`,
+          [inspectionToClean],
         );
         await pool.query(
           `DELETE FROM floorwalk.evidence WHERE inspection_item_id IN
            (SELECT id FROM floorwalk.inspection_items WHERE inspection_id = $1)`,
-          [createdInspectionId],
+          [inspectionToClean],
         );
         await pool.query(
           'DELETE FROM floorwalk.inspection_items WHERE inspection_id = $1',
-          [createdInspectionId],
+          [inspectionToClean],
         );
         await pool.query(
           'DELETE FROM floorwalk.reviews WHERE inspection_id = $1',
-          [createdInspectionId],
+          [inspectionToClean],
         );
         await pool.query('DELETE FROM floorwalk.inspections WHERE id = $1', [
-          createdInspectionId,
+          inspectionToClean,
         ]);
       }
+      if (createdTaskId)
+        await pool.query(
+          'DELETE FROM floorwalk.inspection_tasks WHERE id = $1',
+          [createdTaskId],
+        );
       if (createdChatMessageIds.length)
         await pool.query(
           'DELETE FROM floorwalk.chat_messages WHERE id = ANY($1::uuid[])',
@@ -266,11 +296,11 @@ describe('inspection contract API', () => {
       } finally {
         orgCleanup.release();
       }
-      if (createdEvidenceStorageKey) {
+      for (const storageKey of createdEvidenceStorageKeys) {
         await rm(
           path.resolve(
             process.env.STORAGE_DIR ?? path.join('apps', 'api', '.storage'),
-            createdEvidenceStorageKey,
+            storageKey,
           ),
           { force: true },
         );
@@ -386,7 +416,7 @@ describe('inspection contract API', () => {
   });
 
   it('publishes the complete route table under /api', () => {
-    expect(Object.keys(apiRoutes)).toHaveLength(46);
+    expect(Object.keys(apiRoutes)).toHaveLength(44);
     for (const route of Object.values(apiRoutes)) {
       expect(route.path.startsWith('/api/')).toBe(true);
       expect(route.responseSchema).toBeDefined();
@@ -434,9 +464,10 @@ describe('inspection contract API', () => {
           expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
         );
       await request(app.getHttpServer())
-        .post('/api/inspections')
+        .post(`/api/tasks/${inspectionTaskId}/items/1/uploads`)
         .set('Cookie', inspectorCookie)
-        .send({ templateId })
+        .field('selfAssessment', 'pass')
+        .field('note', '现场已检查')
         .expect(404)
         .expect(({ body }) =>
           expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
@@ -474,14 +505,6 @@ describe('inspection contract API', () => {
       .get('/api/dashboard/sites')
       .set('Cookie', inspectorCookie)
       .expect(403);
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${inspectionId}/review`)
-      .set('Cookie', hqCookie)
-      .send({ action: 'approve' })
-      .expect(409)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('INVALID_STATE'),
-      );
     await request(app.getHttpServer()).get('/api/me').expect(401);
     const deniedByRoute = new Map<
       string,
@@ -492,6 +515,18 @@ describe('inspection contract API', () => {
         >
       >
     >([
+      [
+        'createInspectionMessage',
+        {
+          admin: async () => {
+            const response = await request(app.getHttpServer())
+              .post(`/api/inspections/${inspectionId}/messages`)
+              .set('Cookie', hqCookie)
+              .field('text', '管理员不可发送');
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
       [
         'today',
         {
@@ -504,81 +539,50 @@ describe('inspection contract API', () => {
         },
       ],
       [
-        'createInspection',
+        'uploadTaskItem',
         {
           admin: async () => {
             const response = await request(app.getHttpServer())
-              .post('/api/inspections')
+              .post(`/api/tasks/${inspectionTaskId}/items/1/uploads`)
               .set('Cookie', hqCookie)
-              .send({ templateId });
+              .field('selfAssessment', 'pass')
+              .field('note', '现场已检查');
             return { status: response.status, body: response.body };
           },
         },
       ],
       [
-        'updateInspectionItem',
-        {
-          admin: async () => {
-            const response = await request(app.getHttpServer())
-              .patch(
-                `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000`,
-              )
-              .set('Cookie', hqCookie)
-              .send({ result: 'pass', note: '现场已检查' });
-            return { status: response.status, body: response.body };
-          },
-        },
-      ],
-      [
-        'addEvidence',
-        {
-          admin: async () => {
-            const response = await request(app.getHttpServer())
-              .post(
-                `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000/evidence`,
-              )
-              .set('Cookie', hqCookie);
-            return { status: response.status, body: response.body };
-          },
-        },
-      ],
-      [
-        'submitInspection',
-        {
-          admin: async () => {
-            const response = await request(app.getHttpServer())
-              .post(`/api/inspections/${inspectionId}/submit`)
-              .set('Cookie', hqCookie);
-            return { status: response.status, body: response.body };
-          },
-        },
-      ],
-      [
-        'reviewQueue',
+        'reviewTaskQueue',
         {
           store_manager: async () => {
             const response = await request(app.getHttpServer())
-              .get('/api/review/queue')
+              .get('/api/review/tasks')
               .set('Cookie', inspectorCookie);
             return { status: response.status, body: response.body };
           },
         },
       ],
       [
-        'reviewInspection',
+        'getTaskReview',
         {
           store_manager: async () => {
             const response = await request(app.getHttpServer())
-              .post(`/api/inspections/${inspectionId}/review`)
-              .set('Cookie', inspectorCookie)
-              .send({ action: 'approve' });
+              .get(`/api/tasks/${inspectionTaskId}/review`)
+              .set('Cookie', inspectorCookie);
             return { status: response.status, body: response.body };
           },
-          admin: async () => {
+        },
+      ],
+      [
+        'decideTaskItem',
+        {
+          store_manager: async () => {
             const response = await request(app.getHttpServer())
-              .post(`/api/inspections/${inspectionId}/review`)
-              .set('Cookie', hqCookie)
-              .send({ action: 'approve' });
+              .post(
+                `/api/tasks/${inspectionTaskId}/items/00000000-0000-4000-8000-000000000000/decision`,
+              )
+              .set('Cookie', inspectorCookie)
+              .send({ result: 'pass' });
             return { status: response.status, body: response.body };
           },
         },
@@ -1040,12 +1044,12 @@ describe('inspection contract API', () => {
 
     for (const cookie of [demo2InspectorCookie]) {
       await request(app.getHttpServer())
-        .post(
-          `/api/inspections/${chatInspectionId}/items/00000000-0000-4000-8000-000000000000/evidence`,
-        )
+        .post(`/api/tasks/${inspectionTaskId}/items/1/uploads`)
         .set('Cookie', cookie)
+        .field('selfAssessment', 'pass')
+        .field('note', '跨商家不应上传')
         .attach(
-          'file',
+          'files',
           Buffer.from(
             '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAgCAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAgBAQABPyF//9oADAMBAAIAAwAAABAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAgBAQABPxB//9oADAMBAAIAAwAAABAf/9k=',
             'base64',
@@ -1069,47 +1073,32 @@ describe('inspection contract API', () => {
       .post(`/api/inspections/${chatInspectionId}/messages`)
       .set('Cookie', demo2AdminCookie)
       .field('text', '跨商家不能发言')
-      .expect(404)
+      .expect(403)
       .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+        expect(errorResponseSchema.parse(body).code).toBe('FORBIDDEN'),
       );
     await request(app.getHttpServer())
-      .post(`/api/inspections/${inspectionId}/review`)
+      .get(`/api/tasks/${inspectionTaskId}/review`)
       .set('Cookie', demo2AdminCookie)
-      .send({ action: 'start' })
       .expect(404)
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
       );
-    for (const cookie of [demo2AdminCookie]) {
-      await request(app.getHttpServer())
-        .get('/api/review/queue')
-        .set('Cookie', cookie)
-        .expect(200)
-        .expect(({ body }) => expect(body).toEqual([]));
-    }
+    const foreignQueue = await request(app.getHttpServer())
+      .get('/api/review/tasks')
+      .set('Cookie', demo2AdminCookie)
+      .expect(200);
+    expect(
+      taskReviewQueueResponseSchema
+        .parse(foreignQueue.body)
+        .some((task) => task.id === inspectionTaskId),
+    ).toBe(false);
 
     await request(app.getHttpServer())
-      .post('/api/inspections')
+      .post(`/api/tasks/${inspectionTaskId}/items/1/uploads`)
       .set('Cookie', demo2InspectorCookie)
-      .send({ templateId })
-      .expect(404)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
-      );
-    await request(app.getHttpServer())
-      .patch(
-        `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000`,
-      )
-      .set('Cookie', demo2InspectorCookie)
-      .send({ result: 'pass', note: '现场已检查' })
-      .expect(404)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
-      );
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${inspectionId}/submit`)
-      .set('Cookie', demo2InspectorCookie)
+      .field('selfAssessment', 'pass')
+      .field('note', '跨商家不应上传')
       .expect(404)
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
@@ -1128,6 +1117,7 @@ describe('inspection contract API', () => {
   it('lets admins review any site in their organization', async () => {
     const pool = createPool();
     let unassignedSiteId: string | undefined;
+    let unassignedTaskId: string | undefined;
     let unassignedInspectionId: string | undefined;
     try {
       const site = await pool.query<{ id: string }>(
@@ -1137,16 +1127,30 @@ describe('inspection contract API', () => {
          RETURNING id`,
       );
       unassignedSiteId = site.rows[0].id;
-      const inspection = await pool.query<{ id: string }>(
-        `INSERT INTO floorwalk.inspections
-           (site_id, template_id, inspector_id, status)
-         SELECT $1, $2, id, 'submitted' FROM floorwalk.users
-         WHERE login_name = 'inspector@northbean.example'
-           AND org_id = (SELECT org_id FROM floorwalk.sites WHERE id = $1)
-         RETURNING id`,
+      const task = await pool.query<{ id: string }>(
+        `INSERT INTO floorwalk.inspection_tasks
+           (org_id, site_id, template_id, task_date, position, occurrence,
+            starts_at, due_at, status)
+         SELECT site.org_id, site.id, $2, CURRENT_DATE, 0, 0,
+           now() - interval '2 hours', now() - interval '1 hour', 'overdue'
+         FROM floorwalk.sites site WHERE site.id = $1 RETURNING id`,
         [unassignedSiteId, templateId],
       );
+      unassignedTaskId = task.rows[0].id;
+      const inspection = await pool.query<{ id: string }>(
+        `INSERT INTO floorwalk.inspections
+           (task_id, site_id, template_id, inspector_id, status, score, decided_at)
+         VALUES ($1, $2, $3, NULL, 'failed', 0, now()) RETURNING id`,
+        [unassignedTaskId, unassignedSiteId, templateId],
+      );
       unassignedInspectionId = inspection.rows[0].id;
+      await pool.query(
+        `INSERT INTO floorwalk.inspection_items
+           (inspection_id, position, title, min_photo_count, acceptance_criteria,
+            critical, result, first_result, incomplete)
+         VALUES ($1, 1, '审核项', 0, '', false, 'fail', 'fail', true)`,
+        [unassignedInspectionId],
+      );
 
       const adminDashboard = await request(app.getHttpServer())
         .get('/api/dashboard/sites')
@@ -1164,35 +1168,51 @@ describe('inspection contract API', () => {
         adminDashboardSites.some((entry) => entry.site.id === unassignedSiteId),
       ).toBe(true);
       const adminQueue = await request(app.getHttpServer())
-        .get('/api/review/queue')
+        .get('/api/review/tasks')
         .set('Cookie', hqCookie)
         .expect(200);
       expect(
-        reviewQueueResponseSchema
+        taskReviewQueueResponseSchema
           .parse(adminQueue.body)
-          .some((entry) => entry.id === unassignedInspectionId),
+          .some((entry) => entry.id === unassignedTaskId),
       ).toBe(true);
-      await request(app.getHttpServer())
-        .post(`/api/inspections/${unassignedInspectionId}/review`)
+      const taskReview = await request(app.getHttpServer())
+        .get(`/api/tasks/${unassignedTaskId}/review`)
         .set('Cookie', hqCookie)
-        .send({ action: 'start' })
-        .expect(201);
-      const approved = await request(app.getHttpServer())
-        .post(`/api/inspections/${unassignedInspectionId}/review`)
+        .expect(200);
+      const reviewBody = taskReviewSchema.parse(taskReview.body);
+      expect(reviewBody.site.id).toBe(unassignedSiteId);
+      const decided = await request(app.getHttpServer())
+        .post(
+          `/api/tasks/${unassignedTaskId}/items/${reviewBody.items[0].id}/decision`,
+        )
         .set('Cookie', hqCookie)
-        .send({ action: 'approve' })
+        .send({ result: 'pass' })
         .expect(201);
-      expect(reviewResponseSchema.parse(approved.body).status).toBe('passed');
+      expect(taskReviewSchema.parse(decided.body).inspectionStatus).toBe(
+        'passed',
+      );
     } finally {
       if (unassignedInspectionId) {
         await pool.query(
-          'DELETE FROM floorwalk.reviews WHERE inspection_id = $1',
+          `DELETE FROM floorwalk.inspection_item_decisions
+           WHERE inspection_item_id IN
+             (SELECT id FROM floorwalk.inspection_items WHERE inspection_id = $1)`,
+          [unassignedInspectionId],
+        );
+        await pool.query(
+          'DELETE FROM floorwalk.inspection_items WHERE inspection_id = $1',
           [unassignedInspectionId],
         );
         await pool.query('DELETE FROM floorwalk.inspections WHERE id = $1', [
           unassignedInspectionId,
         ]);
       }
+      if (unassignedTaskId)
+        await pool.query(
+          'DELETE FROM floorwalk.inspection_tasks WHERE id = $1',
+          [unassignedTaskId],
+        );
       if (unassignedSiteId)
         await pool.query('DELETE FROM floorwalk.sites WHERE id = $1', [
           unassignedSiteId,
@@ -1290,12 +1310,11 @@ describe('inspection contract API', () => {
       .get(`/api/inspections/${chatInspectionId}/messages`)
       .set('Cookie', inspectorCookie)
       .expect(404);
-    const adminReply = await request(app.getHttpServer())
+    await request(app.getHttpServer())
       .post(`/api/inspections/${inspectionId}/messages`)
       .set('Cookie', hqCookie)
       .field('text', '管理员回复')
-      .expect(201);
-    createdChatMessageIds.push(chatMessageSchema.parse(adminReply.body).id);
+      .expect(403);
     await request(app.getHttpServer())
       .post(`/api/inspections/${chatInspectionId}/messages`)
       .set('Cookie', inspectorCookie)
@@ -1461,7 +1480,10 @@ describe('inspection contract API', () => {
   it('creates an independent database pool for each Nest application instance', async () => {
     const secondModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(TaskSchedulerService)
+      .useValue({})
+      .compile();
     const secondApp =
       secondModule.createNestApplication<NestExpressApplication>();
     await secondApp.init();
@@ -1508,7 +1530,6 @@ describe('inspection contract API', () => {
       .set('Cookie', inspectorCookie)
       .expect(200);
     const seededDetailBody = inspectionDetailSchema.parse(seededDetail.body);
-    expect(seededDetailBody.reviews.length).toBeGreaterThan(0);
     expect(seededDetailBody.reviews).toEqual(
       [...seededDetailBody.reviews].sort(
         (left, right) =>
@@ -1547,12 +1568,98 @@ describe('inspection contract API', () => {
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
       );
-    const created = await request(app.getHttpServer())
-      .post('/api/inspections')
+    const taskItems = todayBody.templates.find(
+      (template) => template.id === templateId,
+    )!.items;
+    const pool = createPool();
+    try {
+      const task = await pool.query<{ id: string }>(
+        `INSERT INTO floorwalk.inspection_tasks
+           (org_id, site_id, template_id, task_date, position, occurrence,
+            starts_at, due_at, status)
+         SELECT site.org_id, site.id, $2, CURRENT_DATE + 1, 999, 0,
+           now() - interval '2 hours', now() + interval '2 hours', 'not_started'
+         FROM floorwalk.sites site WHERE site.id = $1
+         RETURNING id`,
+        [northbeanSiteId, templateId],
+      );
+      createdTaskId = task.rows[0].id;
+    } finally {
+      await pool.end();
+    }
+
+    const photoItem = taskItems.find((item) => item.minPhotoCount > 0)!;
+    await request(app.getHttpServer())
+      .post(`/api/tasks/${createdTaskId}/items/${photoItem.position}/uploads`)
       .set('Cookie', inspectorCookie)
-      .send({ templateId })
-      .expect(201);
-    createdInspectionId = inspectionSchema.parse(created.body).id;
+      .field('selfAssessment', 'pass')
+      .attach('files', Buffer.from('invalid-mime'), {
+        filename: 'contract.gif',
+        contentType: 'image/gif',
+      })
+      .expect(400)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
+      );
+    await request(app.getHttpServer())
+      .post(`/api/tasks/${createdTaskId}/items/${photoItem.position}/uploads`)
+      .set('Cookie', inspectorCookie)
+      .field('selfAssessment', 'pass')
+      .attach('files', Buffer.alloc(10 * 1024 * 1024 + 1), {
+        filename: 'too-large.jpg',
+        contentType: 'image/jpeg',
+      })
+      .expect(400)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
+      );
+
+    const uploadTaskItem = async (item: (typeof taskItems)[number]) => {
+      let upload = request(app.getHttpServer())
+        .post(`/api/tasks/${createdTaskId}/items/${item.position}/uploads`)
+        .set('Cookie', inspectorCookie)
+        .field('selfAssessment', 'pass');
+      if (item.minPhotoCount === 0) upload = upload.field('note', '现场已检查');
+      for (let index = 0; index < item.minPhotoCount; index++)
+        upload = upload.attach('files', Buffer.from('contract-test'), {
+          filename: `${item.position}-${index}.jpg`,
+          contentType: 'image/jpeg',
+        });
+      const response = await upload.expect(201);
+      const body = taskItemUploadResponseSchema.parse(response.body);
+      createdInspectionId = body.inspectionId;
+      for (const evidence of body.evidence) {
+        createdEvidenceStorageKeys.push(evidence.storageKey);
+        primaryEvidenceId ??= evidence.id;
+      }
+      return response;
+    };
+
+    let primaryEvidenceId: string | undefined;
+    let taskUpload = await uploadTaskItem(taskItems[0]);
+    for (const item of taskItems.slice(1))
+      taskUpload = await uploadTaskItem(item);
+    expect(createdInspectionId).toBeDefined();
+    expect(primaryEvidenceId).toBeDefined();
+    const taskStatusPool = createPool();
+    let taskStatus: { status: string } | undefined;
+    try {
+      const result = await taskStatusPool.query<{ status: string }>(
+        'SELECT status FROM floorwalk.inspection_tasks WHERE id = $1',
+        [createdTaskId],
+      );
+      taskStatus = result.rows[0];
+    } finally {
+      await taskStatusPool.end();
+    }
+    expect(taskStatus?.status).toBe('submitted');
+
+    const detail = await request(app.getHttpServer())
+      .get(`/api/inspections/${createdInspectionId}`)
+      .set('Cookie', inspectorCookie)
+      .expect(200);
+    const detailBody = inspectionDetailSchema.parse(detail.body);
+    expect(detailBody.site.code).toBe('NB-001');
 
     const shanghaiParts = Object.fromEntries(
       new Intl.DateTimeFormat('en-US', {
@@ -1605,297 +1712,38 @@ describe('inspection contract API', () => {
       todayResponseSchema.parse(insideShanghaiDay.body).submittedToday,
     ).toBe(true);
 
-    const detail = await request(app.getHttpServer())
-      .get(`/api/inspections/${createdInspectionId}`)
-      .set('Cookie', inspectorCookie)
-      .expect(200);
-    const detailBody = inspectionDetailSchema.parse(detail.body);
-    expect(detailBody.site.code).toBe('NB-001');
-    expect(detailBody.reviews).toEqual(
-      [...detailBody.reviews].sort(
-        (left, right) =>
-          Date.parse(left.createdAt) - Date.parse(right.createdAt),
-      ),
-    );
-    const createdItemId = detail.body.items[0].id as string;
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${createdInspectionId}/submit`)
-      .set('Cookie', inspectorCookie)
-      .expect(422)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('INCOMPLETE'),
-      );
-    const updated = await request(app.getHttpServer())
-      .patch(`/api/inspections/${createdInspectionId}/items/${createdItemId}`)
-      .set('Cookie', inspectorCookie)
-      .send({ result: 'pass', note: '现场已检查' })
-      .expect(200);
-    updateInspectionItemResponseSchema.parse(updated.body);
-
-    const evidence = await request(app.getHttpServer())
-      .post(
-        `/api/inspections/${createdInspectionId}/items/${createdItemId}/evidence`,
-      )
-      .set('Cookie', inspectorCookie)
-      .attach('file', Buffer.from('contract-test'), {
-        filename: 'contract.jpg',
-        contentType: 'image/jpeg',
-      })
-      .expect(201);
-    const createdEvidence = evidenceSchema.parse(evidence.body);
-    createdEvidenceId = createdEvidence.id;
-    createdEvidenceStorageKey = createdEvidence.storageKey;
     const signed = await request(app.getHttpServer())
-      .get(`/api/evidence/${createdEvidenceId}`)
+      .get(`/api/evidence/${primaryEvidenceId!}`)
       .set('Cookie', inspectorCookie)
       .expect(200);
     signedEvidenceResponseSchema.parse(signed.body);
 
-    await request(app.getHttpServer())
-      .post(
-        `/api/inspections/${createdInspectionId}/items/${createdItemId}/evidence`,
-      )
-      .set('Cookie', inspectorCookie)
-      .attach('file', Buffer.from('invalid-mime'), {
-        filename: 'contract.gif',
-        contentType: 'image/gif',
-      })
-      .expect(400)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
-      );
-    await request(app.getHttpServer())
-      .post(
-        `/api/inspections/${createdInspectionId}/items/${createdItemId}/evidence`,
-      )
-      .set('Cookie', inspectorCookie)
-      .attach('file', Buffer.alloc(10 * 1024 * 1024 + 1), {
-        filename: 'too-large.jpg',
-        contentType: 'image/jpeg',
-      })
-      .expect(400)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
-      );
-
-    const skippedPhotoItem = detailBody.items.find(
-      (item) => item.minPhotoCount > 0 && item.id !== createdItemId,
-    );
-    for (const item of detailBody.items.slice(1)) {
-      await request(app.getHttpServer())
-        .patch(`/api/inspections/${createdInspectionId}/items/${item.id}`)
-        .set('Cookie', inspectorCookie)
-        .send({ result: 'pass', note: '现场已检查' })
-        .expect(200);
-      if (item.minPhotoCount > 0 && item.id !== skippedPhotoItem?.id)
-        await request(app.getHttpServer())
-          .post(
-            `/api/inspections/${createdInspectionId}/items/${item.id}/evidence`,
-          )
-          .set('Cookie', inspectorCookie)
-          .attach('file', Buffer.from('contract-test'), {
-            filename: `${item.id}.jpg`,
-            contentType: 'image/jpeg',
-          })
-          .expect(201);
-    }
-
-    expect(skippedPhotoItem).toBeDefined();
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${createdInspectionId}/submit`)
-      .set('Cookie', inspectorCookie)
-      .expect(422)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('INCOMPLETE'),
-      );
-    await request(app.getHttpServer())
-      .post(
-        `/api/inspections/${createdInspectionId}/items/${skippedPhotoItem!.id}/evidence`,
-      )
-      .set('Cookie', inspectorCookie)
-      .attach('file', Buffer.from('contract-test'), {
-        filename: `${skippedPhotoItem!.id}.jpg`,
-        contentType: 'image/jpeg',
-      })
-      .expect(201);
-
-    const submitted = await request(app.getHttpServer())
-      .post(`/api/inspections/${createdInspectionId}/submit`)
-      .set('Cookie', inspectorCookie)
-      .expect(201);
-    submitInspectionResponseSchema.parse(submitted.body);
-    const afterSubmitToday = await request(app.getHttpServer())
-      .get('/api/inspector/today')
-      .set('Cookie', inspectorCookie)
-      .expect(200);
-    expect(
-      todayResponseSchema.parse(afterSubmitToday.body).submittedToday,
-    ).toBe(true);
     const queue = await request(app.getHttpServer())
-      .get('/api/review/queue')
+      .get('/api/review/tasks')
       .set('Cookie', hqCookie)
       .expect(200);
-    const queueBody = reviewQueueResponseSchema.parse(queue.body);
-    expect(queueBody.every((entry) => entry.site.code)).toBe(true);
-    expect(queueBody.some((entry) => entry.id === createdInspectionId)).toBe(
-      true,
-    );
-    const reviewed = await request(app.getHttpServer())
-      .post(`/api/inspections/${createdInspectionId}/review`)
+    const queueBody = taskReviewQueueResponseSchema.parse(queue.body);
+    expect(queueBody.some((task) => task.id === createdTaskId)).toBe(true);
+    const taskReview = await request(app.getHttpServer())
+      .get(`/api/tasks/${createdTaskId}/review`)
       .set('Cookie', hqCookie)
-      .send({ action: 'start' })
-      .expect(201);
-    reviewResponseSchema.parse(reviewed.body);
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${createdInspectionId}/review`)
-      .set('Cookie', hqCookie)
-      .send({
-        action: 'rework',
-        reworkItemIds: ['00000000-0000-4000-8000-000000000000'],
-      })
-      .expect(400)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
-      );
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${createdInspectionId}/review`)
-      .set('Cookie', hqCookie)
-      .send({ action: 'approve' })
-      .expect(201);
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${createdInspectionId}/review`)
-      .set('Cookie', hqCookie)
-      .send({ action: 'approve' })
-      .expect(409)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('INVALID_STATE'),
-      );
-    await request(app.getHttpServer())
-      .patch(`/api/inspections/${createdInspectionId}/items/${createdItemId}`)
-      .set('Cookie', inspectorCookie)
-      .send({ result: 'fail' })
-      .expect(409)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('INVALID_STATE'),
-      );
-    await request(app.getHttpServer())
-      .post(
-        `/api/inspections/${createdInspectionId}/items/${createdItemId}/evidence`,
-      )
-      .set('Cookie', inspectorCookie)
-      .attach('file', Buffer.from('contract-test'), {
-        filename: 'blocked.jpg',
-        contentType: 'image/jpeg',
-      })
-      .expect(409)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('INVALID_STATE'),
-      );
-    const criticalCreated = await request(app.getHttpServer())
-      .post('/api/inspections')
-      .set('Cookie', inspectorCookie)
-      .send({ templateId })
-      .expect(201);
-    const criticalInspectionId = inspectionSchema.parse(
-      criticalCreated.body,
-    ).id;
-    const criticalDetail = await request(app.getHttpServer())
-      .get(`/api/inspections/${criticalInspectionId}`)
-      .set('Cookie', inspectorCookie)
       .expect(200);
-    const criticalItems = inspectionDetailSchema.parse(
-      criticalDetail.body,
-    ).items;
-    const criticalItemId = criticalItems[0].id;
-    const criticalPool = createPool();
-    try {
-      await criticalPool.query(
-        'UPDATE floorwalk.inspection_items SET critical = true WHERE id = $1',
-        [criticalItemId],
-      );
-    } finally {
-      await criticalPool.end();
-    }
-    const criticalStorageKeys: string[] = [];
-    for (const item of criticalItems) {
-      await request(app.getHttpServer())
-        .patch(`/api/inspections/${criticalInspectionId}/items/${item.id}`)
-        .set('Cookie', inspectorCookie)
-        .send({
-          result: item.id === criticalItemId ? 'fail' : 'pass',
-          note: '现场已检查',
-        })
-        .expect(200);
-      if (item.minPhotoCount > 0) {
-        const criticalEvidence = await request(app.getHttpServer())
-          .post(
-            `/api/inspections/${criticalInspectionId}/items/${item.id}/evidence`,
-          )
-          .set('Cookie', inspectorCookie)
-          .attach('file', Buffer.from('critical-test'), {
-            filename: `${item.id}.jpg`,
-            contentType: 'image/jpeg',
-          })
-          .expect(201);
-        criticalStorageKeys.push(
-          evidenceSchema.parse(criticalEvidence.body).storageKey,
-        );
-      }
-    }
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${criticalInspectionId}/submit`)
-      .set('Cookie', inspectorCookie)
-      .expect(201);
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${criticalInspectionId}/review`)
+    const taskReviewBody = taskReviewSchema.parse(taskReview.body);
+    expect(taskReviewBody.inspectionId).toBe(createdInspectionId);
+    const reviewedItem = taskReviewBody.items[0];
+    const decided = await request(app.getHttpServer())
+      .post(`/api/tasks/${createdTaskId}/items/${reviewedItem.id}/decision`)
       .set('Cookie', hqCookie)
-      .send({ action: 'start' })
+      .send({ result: 'pass' })
       .expect(201);
-    await request(app.getHttpServer())
-      .post(`/api/inspections/${criticalInspectionId}/review`)
-      .set('Cookie', hqCookie)
-      .send({ action: 'approve' })
-      .expect(422)
-      .expect(({ body }) =>
-        expect(errorResponseSchema.parse(body).code).toBe('CRITICAL_FAILED'),
-      );
-    const criticalCleanupPool = createPool();
-    try {
-      await criticalCleanupPool.query(
-        'DELETE FROM floorwalk.evidence WHERE inspection_item_id IN (SELECT id FROM floorwalk.inspection_items WHERE inspection_id = $1)',
-        [criticalInspectionId],
-      );
-      await criticalCleanupPool.query(
-        'DELETE FROM floorwalk.reviews WHERE inspection_id = $1',
-        [criticalInspectionId],
-      );
-      await criticalCleanupPool.query(
-        'DELETE FROM floorwalk.inspection_items WHERE inspection_id = $1',
-        [criticalInspectionId],
-      );
-      await criticalCleanupPool.query(
-        'DELETE FROM floorwalk.inspections WHERE id = $1',
-        [criticalInspectionId],
-      );
-    } finally {
-      await criticalCleanupPool.end();
-    }
-    for (const storageKey of criticalStorageKeys)
-      await rm(
-        path.resolve(
-          process.env.STORAGE_DIR ?? path.join('apps', 'api', '.storage'),
-          storageKey,
-        ),
-        { force: true },
-      );
+    taskReviewSchema.parse(decided.body);
+
     const dashboard = await request(app.getHttpServer())
       .get('/api/dashboard/sites')
       .set('Cookie', hqCookie)
       .expect(200);
     dashboardSitesResponseSchema.parse(dashboard.body);
-    expect(
-      todayBody.templates.find((template) => template.id === templateId)?.items,
-    ).toHaveLength(8);
+    expect(taskItems).toHaveLength(8);
 
     const deletedSession = await request(app.getHttpServer())
       .delete('/api/auth/session')
@@ -2131,14 +1979,12 @@ describe('inspection contract API', () => {
       resetPasswordRecovery: passwordRecoveryResetResponse,
       me,
       today,
-      createInspection: created,
       getInspection: detail,
-      updateInspectionItem: updated,
-      addEvidence: evidence,
+      uploadTaskItem: taskUpload,
       getEvidence: signed,
-      submitInspection: submitted,
-      reviewQueue: queue,
-      reviewInspection: reviewed,
+      reviewTaskQueue: queue,
+      getTaskReview: taskReview,
+      decideTaskItem: decided,
       dashboardSites: dashboard,
       listInspectionMessages: chatListResponse,
       createInspectionMessage: chatCreateResponse,
@@ -2222,6 +2068,37 @@ describe('inspection contract API', () => {
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
       );
+    await request(app.getHttpServer())
+      .post('/api/inspections')
+      .set('Cookie', inspectorCookie)
+      .send({ templateId })
+      .expect(404);
+    await request(app.getHttpServer())
+      .patch(
+        `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000`,
+      )
+      .set('Cookie', inspectorCookie)
+      .send({ result: 'pass' })
+      .expect(404);
+    await request(app.getHttpServer())
+      .post(
+        `/api/inspections/${inspectionId}/items/00000000-0000-4000-8000-000000000000/evidence`,
+      )
+      .set('Cookie', inspectorCookie)
+      .expect(404);
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${inspectionId}/submit`)
+      .set('Cookie', inspectorCookie)
+      .expect(404);
+    await request(app.getHttpServer())
+      .get('/api/review/queue')
+      .set('Cookie', hqCookie)
+      .expect(404);
+    await request(app.getHttpServer())
+      .post(`/api/inspections/${inspectionId}/review`)
+      .set('Cookie', hqCookie)
+      .send({ action: 'approve' })
+      .expect(404);
     await request(app.getHttpServer())
       .get('/api/me')
       .set('Origin', 'http://127.0.0.1:3019')

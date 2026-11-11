@@ -1,0 +1,4 @@
+ALTER TABLE "floorwalk"."inspection_tasks" DROP CONSTRAINT "inspection_tasks_org_site_date_position_unique";--> statement-breakpoint
+ALTER TABLE "floorwalk"."inspection_tasks" ADD COLUMN "occurrence" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "floorwalk"."inspection_tasks" ADD CONSTRAINT "inspection_tasks_org_site_date_window_occurrence_unique" UNIQUE("org_id","site_id","task_date","template_id","starts_at","due_at","occurrence");--> statement-breakpoint
+ALTER TABLE "floorwalk"."inspection_tasks" ADD CONSTRAINT "inspection_tasks_occurrence_check" CHECK ("floorwalk"."inspection_tasks"."occurrence" >= 0);
