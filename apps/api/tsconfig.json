@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "Node16",
     "moduleResolution": "Node16",
+    "rewriteRelativeImportExtensions": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "strict": true,

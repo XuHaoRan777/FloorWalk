@@ -4,6 +4,8 @@ import {
   ClipboardCheck,
   Store,
   ClipboardList,
+  CalendarDays,
+  CalendarRange,
   FileText,
   House,
   LayoutDashboard,
@@ -46,6 +48,8 @@ import { ReviewDetail } from '@/components/console/review-detail';
 import { SitesPage } from '@/components/console/sites-page';
 import { TemplatesPage } from '@/components/console/templates-page';
 import { AiStandardsPage } from '@/components/console/ai-standards-page';
+import { SchedulesPage } from '@/components/console/schedules-page';
+import { SiteSchedulesPage } from '@/components/console/site-schedules-page';
 import { UsersPage } from '@/components/console/users-page';
 
 function useConsoleSession() {
@@ -107,7 +111,14 @@ function useConsoleSession() {
 }
 
 type ConsoleSection =
-  'queue' | 'dashboard' | 'sites' | 'templates' | 'standards' | 'users';
+  | 'queue'
+  | 'dashboard'
+  | 'sites'
+  | 'templates'
+  | 'standards'
+  | 'schedules'
+  | 'site-schedules'
+  | 'users';
 
 export function ConsolePage() {
   const navigate = useNavigate();
@@ -217,6 +228,30 @@ export function ConsolePage() {
                   </SidebarMenuItem>
                   <SidebarMenuItem>
                     <SidebarMenuButton
+                      isActive={section === 'schedules'}
+                      onClick={() => {
+                        setSection('schedules');
+                        setSelected(null);
+                      }}
+                    >
+                      <CalendarDays aria-hidden="true" />
+                      <span>日程方案</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={section === 'site-schedules'}
+                      onClick={() => {
+                        setSection('site-schedules');
+                        setSelected(null);
+                      }}
+                    >
+                      <CalendarRange aria-hidden="true" />
+                      <span>门店日程安排</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
                       isActive={section === 'users'}
                       onClick={() => {
                         setSection('users');
@@ -265,6 +300,10 @@ export function ConsolePage() {
               <TemplatesPage />
             ) : canManage && section === 'standards' ? (
               <AiStandardsPage />
+            ) : canManage && section === 'schedules' ? (
+              <SchedulesPage />
+            ) : canManage && section === 'site-schedules' ? (
+              <SiteSchedulesPage />
             ) : canManage && section === 'users' ? (
               <UsersPage />
             ) : user.role === 'store_manager' ? (

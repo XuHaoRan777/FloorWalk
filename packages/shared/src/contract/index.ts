@@ -27,12 +27,21 @@ import {
   updateUserRequestSchema,
   userResponseSchema,
 } from './users.js';
+import {
+  addScheduleSkipsRequestSchema,
+  adminSchedulesResponseSchema,
+  adminSiteSchedulesResponseSchema,
+  assignScheduleRequestSchema,
+  scheduleDefinitionSchema,
+  scheduleResponseSchema,
+} from './schedules.js';
 
 export * from './identity.js';
 export * from './orgs.js';
 export * from './email.js';
 export * from './users.js';
 export * from './ai.js';
+export * from './schedules.js';
 
 export const inspectionStatuses = [
   'draft',
@@ -399,7 +408,9 @@ export const databaseConstraints = {
   unique: [
     'email_verifications(email, purpose) WHERE consumed_at IS NULL',
     'sites(org_id, code)',
+    'sites(org_id, id)',
     'templates(org_id, name)',
+    'templates(org_id, id)',
     'users(org_id, login_name)',
     "users.org_id WHERE role = 'admin'",
     'inspection_participants(inspection_id, user_id)',
@@ -408,6 +419,11 @@ export const databaseConstraints = {
     'template_items(template_id, position)',
     'sessions.token_hash',
     'chat_messages.seq',
+    'schedules(org_id, name)',
+    'schedules(org_id, id)',
+    'schedule_days(org_id, schedule_id, weekday)',
+    'schedule_tasks(org_id, schedule_id, weekday, position)',
+    'site_schedules(org_id, site_id)',
   ],
   indexes: [
     'email_verifications(expires_at)',
@@ -416,6 +432,8 @@ export const databaseConstraints = {
     'inspections(created_at)',
     'evidence(inspection_item_id)',
     'chat_messages(inspection_id, seq)',
+    'site_schedules(org_id, schedule_id)',
+    'site_schedule_skips(org_id, site_id, starts_on, ends_on)',
   ],
   checks: [
     "email_verifications.purpose IN ('registration', 'password_recovery')",
@@ -440,6 +458,10 @@ export const databaseConstraints = {
     'char_length(chat_messages.body) <= 1000',
     'chat_messages.body IS NOT NULL OR chat_messages.storage_key IS NOT NULL',
     'chat_messages.storage_key, mime, size are all NULL or all NOT NULL',
+    'schedules.name is not blank',
+    'schedule_days.weekday BETWEEN 1 AND 7',
+    'schedule_tasks.position >= 0',
+    'site_schedule_skips.starts_on <= ends_on',
   ],
 } as const;
 
@@ -710,6 +732,70 @@ export const apiRoutes = {
     requestSchema: null,
     responseSchema: adminSitesResponseSchema,
     successStatus: 200,
+  },
+  listAdminSchedules: {
+    method: 'GET',
+    path: '/api/admin/schedules',
+    roles: ['admin'],
+    requestSchema: null,
+    responseSchema: adminSchedulesResponseSchema,
+    successStatus: 200,
+  },
+  createAdminSchedule: {
+    method: 'POST',
+    path: '/api/admin/schedules',
+    roles: ['admin'],
+    requestSchema: scheduleDefinitionSchema,
+    responseSchema: scheduleResponseSchema,
+    successStatus: 201,
+  },
+  updateAdminSchedule: {
+    method: 'PUT',
+    path: '/api/admin/schedules/:id',
+    roles: ['admin'],
+    requestSchema: scheduleDefinitionSchema,
+    responseSchema: scheduleResponseSchema,
+    successStatus: 200,
+  },
+  deleteAdminSchedule: {
+    method: 'DELETE',
+    path: '/api/admin/schedules/:id',
+    roles: ['admin'],
+    requestSchema: null,
+    responseSchema: z.undefined(),
+    successStatus: 204,
+  },
+  listAdminSiteSchedules: {
+    method: 'GET',
+    path: '/api/admin/site-schedules',
+    roles: ['admin'],
+    requestSchema: null,
+    responseSchema: adminSiteSchedulesResponseSchema,
+    successStatus: 200,
+  },
+  assignAdminSiteSchedule: {
+    method: 'PUT',
+    path: '/api/admin/site-schedules',
+    roles: ['admin'],
+    requestSchema: assignScheduleRequestSchema,
+    responseSchema: adminSiteSchedulesResponseSchema,
+    successStatus: 200,
+  },
+  addAdminSiteScheduleSkips: {
+    method: 'POST',
+    path: '/api/admin/site-schedules/skips',
+    roles: ['admin'],
+    requestSchema: addScheduleSkipsRequestSchema,
+    responseSchema: adminSiteSchedulesResponseSchema,
+    successStatus: 201,
+  },
+  deleteAdminSiteScheduleSkip: {
+    method: 'DELETE',
+    path: '/api/admin/site-schedules/skips/:id',
+    roles: ['admin'],
+    requestSchema: null,
+    responseSchema: z.undefined(),
+    successStatus: 204,
   },
   createAdminSite: {
     method: 'POST',

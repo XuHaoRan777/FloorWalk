@@ -1,6 +1,9 @@
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool, type PoolConfig } from 'pg';
-import * as schema from './schema.js';
+import * as baseSchema from './schema.js';
+import * as schedulesSchema from './schedules.schema.js';
+
+const schema = { ...baseSchema, ...schedulesSchema };
 
 export type Database = NodePgDatabase<typeof schema>;
 

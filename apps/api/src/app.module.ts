@@ -9,6 +9,7 @@ import { DashboardController } from './dashboard.controller.js';
 import { AdminController } from './admin.controller.js';
 import { AiStandardsController } from './ai-standards.controller.js';
 import { TemplatesController } from './templates.controller.js';
+import { SchedulesController } from './schedules.controller.js';
 import { RecordsController } from './records.controller.js';
 import { ChatController } from './chat.controller.js';
 import { OrgsController } from './orgs.controller.js';
@@ -44,6 +45,7 @@ import {
     AdminController,
     AiStandardsController,
     TemplatesController,
+    SchedulesController,
     RecordsController,
     ChatController,
     StorageController,

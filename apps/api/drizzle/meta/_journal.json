@@ -64,6 +64,13 @@
       "when": 1794331595499,
       "tag": "0008_fw026_remove_legacy_template_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794336414296,
+      "tag": "0009_fw027_schedules",
+      "breakpoints": true
     }
   ]
 }

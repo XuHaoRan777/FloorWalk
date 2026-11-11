@@ -91,6 +91,7 @@ describe('inspection contract API', () => {
   const createdProtocolOrgIds: string[] = [];
   const createdProtocolEmails: string[] = [];
   const createdAdminTemplateIds: string[] = [];
+  const createdScheduleIds: string[] = [];
   const createdAiStandardIds: string[] = [];
   const createdChatStorageKeys: string[] = [];
 
@@ -211,6 +212,14 @@ describe('inspection contract API', () => {
       const cleanup = await pool.connect();
       try {
         await cleanup.query('BEGIN');
+        await cleanup.query(
+          'DELETE FROM floorwalk.site_schedules WHERE site_id = ANY($1::uuid[])',
+          [createdAdminSiteIds],
+        );
+        await cleanup.query(
+          'DELETE FROM floorwalk.schedules WHERE id = ANY($1::uuid[])',
+          [createdScheduleIds],
+        );
         await cleanup.query(
           'DELETE FROM floorwalk.template_items WHERE template_id = ANY($1::uuid[])',
           [createdAdminTemplateIds],
@@ -377,7 +386,7 @@ describe('inspection contract API', () => {
   });
 
   it('publishes the complete route table under /api', () => {
-    expect(Object.keys(apiRoutes)).toHaveLength(38);
+    expect(Object.keys(apiRoutes)).toHaveLength(46);
     for (const route of Object.values(apiRoutes)) {
       expect(route.path.startsWith('/api/')).toBe(true);
       expect(route.responseSchema).toBeDefined();
@@ -696,6 +705,14 @@ describe('inspection contract API', () => {
       'updateAdminAiStandard',
       'deleteAdminAiStandard',
       'quickSetupAdminTemplate',
+      'listAdminSchedules',
+      'createAdminSchedule',
+      'updateAdminSchedule',
+      'deleteAdminSchedule',
+      'listAdminSiteSchedules',
+      'assignAdminSiteSchedule',
+      'addAdminSiteScheduleSkips',
+      'deleteAdminSiteScheduleSkip',
     ] as const) {
       deniedByRoute.set(routeKey, {
         store_manager: async () => {
@@ -1957,6 +1974,79 @@ describe('inspection contract API', () => {
       .expect(200);
     createdAdminSiteIds.push(adminSiteCreateResponse.body.id);
     createdAdminTemplateIds.push(adminTemplateCreateResponse.body.id);
+    const scheduleDefinition = {
+      name: `FW-027 路由表日程 ${randomUUID()}`,
+      days: Array.from({ length: 7 }, (_, index) => ({
+        weekday: index + 1,
+        enabled: true,
+        tasks:
+          index === 0
+            ? [
+                {
+                  templateId: adminTemplateCreateResponse.body.id,
+                  startsAt: '23:30',
+                  endsAt: '01:15',
+                },
+              ]
+            : [],
+      })),
+    };
+    const adminScheduleCreateResponse = await request(app.getHttpServer())
+      .post('/api/admin/schedules')
+      .set('Cookie', hqCookie)
+      .send(scheduleDefinition)
+      .expect(201);
+    createdScheduleIds.push(adminScheduleCreateResponse.body.id);
+    const adminScheduleUpdateResponse = await request(app.getHttpServer())
+      .put(`/api/admin/schedules/${adminScheduleCreateResponse.body.id}`)
+      .set('Cookie', hqCookie)
+      .send({ ...scheduleDefinition, name: `${scheduleDefinition.name}更新` })
+      .expect(200);
+    const adminScheduleListResponse = await request(app.getHttpServer())
+      .get('/api/admin/schedules')
+      .set('Cookie', hqCookie)
+      .expect(200);
+    const siteIds = [adminSiteCreateResponse.body.id];
+    const adminSiteScheduleAssignResponse = await request(app.getHttpServer())
+      .put('/api/admin/site-schedules')
+      .set('Cookie', hqCookie)
+      .send({ siteIds, scheduleId: adminScheduleCreateResponse.body.id })
+      .expect(200);
+    const adminSiteScheduleListResponse = await request(app.getHttpServer())
+      .get('/api/admin/site-schedules')
+      .set('Cookie', hqCookie)
+      .expect(200);
+    const adminSiteScheduleSkipAddResponse = await request(app.getHttpServer())
+      .post('/api/admin/site-schedules/skips')
+      .set('Cookie', hqCookie)
+      .send({
+        siteIds,
+        startsOn: '2026-11-16',
+        endsOn: '2026-11-18',
+        note: '路由表区间',
+      })
+      .expect(201);
+    const skippedSite = apiRoutes.addAdminSiteScheduleSkips.responseSchema
+      .parse(adminSiteScheduleSkipAddResponse.body)
+      .find((site) => site.siteId === siteIds[0]);
+    expect(skippedSite?.skippedRanges).toHaveLength(1);
+    const adminSiteScheduleSkipDeleteResponse = await request(
+      app.getHttpServer(),
+    )
+      .delete(
+        `/api/admin/site-schedules/skips/${skippedSite!.skippedRanges[0].id}`,
+      )
+      .set('Cookie', hqCookie)
+      .expect(204);
+    await request(app.getHttpServer())
+      .put('/api/admin/site-schedules')
+      .set('Cookie', hqCookie)
+      .send({ siteIds, scheduleId: null })
+      .expect(200);
+    const adminScheduleDeleteResponse = await request(app.getHttpServer())
+      .delete(`/api/admin/schedules/${adminScheduleCreateResponse.body.id}`)
+      .set('Cookie', hqCookie)
+      .expect(204);
     const adminAiStandardCreateResponse = await request(app.getHttpServer())
       .post('/api/admin/ai-standards')
       .set('Cookie', hqCookie)
@@ -2065,6 +2155,14 @@ describe('inspection contract API', () => {
       updateAdminAiStandard: adminAiStandardUpdateResponse,
       deleteAdminAiStandard: adminAiStandardDeleteResponse,
       quickSetupAdminTemplate: quickSetupResponse,
+      listAdminSchedules: adminScheduleListResponse,
+      createAdminSchedule: adminScheduleCreateResponse,
+      updateAdminSchedule: adminScheduleUpdateResponse,
+      deleteAdminSchedule: adminScheduleDeleteResponse,
+      listAdminSiteSchedules: adminSiteScheduleListResponse,
+      assignAdminSiteSchedule: adminSiteScheduleAssignResponse,
+      addAdminSiteScheduleSkips: adminSiteScheduleSkipAddResponse,
+      deleteAdminSiteScheduleSkip: adminSiteScheduleSkipDeleteResponse,
     };
     for (const [routeKey, route] of Object.entries(apiRoutes)) {
       if (Object.hasOwn(protocolRouteBodies, routeKey)) {

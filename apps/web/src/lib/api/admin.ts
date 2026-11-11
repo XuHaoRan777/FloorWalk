@@ -1,12 +1,17 @@
 import type {
+  AddScheduleSkipsRequest,
   AdminAiStandardsResponse,
   AdminSitesResponse,
   AdminTemplatesResponse,
+  AdminSchedule,
+  AdminSiteSchedule,
+  AssignScheduleRequest,
   AiStandard,
   CreateAiStandardRequest,
   QuickSetupTemplateRequest,
   QuickSetupTemplateResponse,
   Site,
+  ScheduleDefinition,
   TemplateItem,
   UpdateAiStandardRequest,
 } from '@libs/shared';
@@ -77,3 +82,32 @@ export const updateAdminAiStandard = (
     method: 'PUT',
     body: JSON.stringify(input),
   });
+
+export const getAdminSchedules = () =>
+  request<AdminSchedule[]>('/admin/schedules');
+export const createAdminSchedule = (input: ScheduleDefinition) =>
+  request<AdminSchedule>('/admin/schedules', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+export const updateAdminSchedule = (id: string, input: ScheduleDefinition) =>
+  request<AdminSchedule>(`/admin/schedules/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+export const deleteAdminSchedule = (id: string) =>
+  request<void>(`/admin/schedules/${id}`, { method: 'DELETE' });
+export const getAdminSiteSchedules = () =>
+  request<AdminSiteSchedule[]>('/admin/site-schedules');
+export const assignAdminSiteSchedule = (input: AssignScheduleRequest) =>
+  request<AdminSiteSchedule[]>('/admin/site-schedules', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+export const addAdminSiteScheduleSkips = (input: AddScheduleSkipsRequest) =>
+  request<AdminSiteSchedule[]>('/admin/site-schedules/skips', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+export const deleteAdminSiteScheduleSkip = (id: string) =>
+  request<void>(`/admin/site-schedules/skips/${id}`, { method: 'DELETE' });

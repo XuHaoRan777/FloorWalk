@@ -54,7 +54,7 @@ test.afterAll(async () => {
 
 test('AC-04 门店列表、创建、改名、停用与重新启用匹配 API', async ({ page }) => {
   await login(page);
-  await page.getByRole('button', { name: '门店' }).click();
+  await page.getByRole('button', { name: '门店', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: '门店', exact: true }),
   ).toBeVisible();
@@ -399,7 +399,7 @@ test('AC-07 管理接口错误和网络错误显示中文提示，401 回登录�
 }) => {
   await login(page);
   await expect(page.getByRole('heading', { name: /总部看板/ })).toBeVisible();
-  await page.getByRole('button', { name: '门店' }).click();
+  await page.getByRole('button', { name: '门店', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: '门店', exact: true }),
   ).toBeVisible();

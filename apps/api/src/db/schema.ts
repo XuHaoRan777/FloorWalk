@@ -40,7 +40,10 @@ export const sites = floorwalk.table(
     deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
-  (table) => [unique('sites_org_code_unique').on(table.orgId, table.code)],
+  (table) => [
+    unique('sites_org_code_unique').on(table.orgId, table.code),
+    unique('sites_org_id_id_unique').on(table.orgId, table.id),
+  ],
 );
 
 export const users = floorwalk.table(
@@ -177,6 +180,7 @@ export const templates = floorwalk.table(
   },
   (table) => [
     unique('templates_org_name_unique').on(table.orgId, table.name),
+    unique('templates_org_id_id_unique').on(table.orgId, table.id),
     foreignKey({
       name: 'templates_org_ai_standard_fk',
       columns: [table.orgId, table.aiStandardId],
