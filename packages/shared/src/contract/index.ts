@@ -40,6 +40,7 @@ import {
   inspectionItemDecisionResults,
   inspectionItemSelfAssessmentSchema,
   inspectionTaskSchema,
+  inspectorTaskDetailSchema,
   inspectorTodayTaskSchema,
   taskItemUploadMetadataSchema,
 } from './tasks.js';
@@ -618,6 +619,14 @@ export const apiRoutes = {
     roles: ['store_manager'],
     requestSchema: null,
     responseSchema: todayResponseSchema,
+    successStatus: 200,
+  },
+  getInspectorTask: {
+    method: 'GET',
+    path: '/api/inspector/tasks/:taskId',
+    roles: ['store_manager'],
+    requestSchema: null,
+    responseSchema: inspectorTaskDetailSchema,
     successStatus: 200,
   },
   getInspection: {

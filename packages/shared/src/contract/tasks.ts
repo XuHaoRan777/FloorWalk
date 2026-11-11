@@ -26,6 +26,27 @@ export const inspectorTodayTaskSchema = inspectionTaskSchema.extend({
   templateName: z.string().min(1),
 });
 
+export const inspectorTaskItemSchema = z.object({
+  id: uuid,
+  position: z.number().int().positive(),
+  title: z.string().min(1),
+  minPhotoCount: z.number().int().min(0).max(10),
+  acceptanceCriteria: z.string().max(500),
+  result: z.enum(['pending', 'pass', 'rework', 'fail']),
+  uploadedByName: z.string().min(1).nullable(),
+  uploadedAt: timestamp.nullable(),
+});
+
+export const inspectorTaskDetailSchema = inspectionTaskSchema.extend({
+  templateName: z.string().min(1),
+  timezone: z.string().min(1),
+  inspectionId: uuid.nullable(),
+  inspectionStatus: z
+    .enum(['draft', 'submitted', 'in_review', 'rework', 'failed', 'passed'])
+    .nullable(),
+  items: z.array(inspectorTaskItemSchema),
+});
+
 export const inspectionItemDecisionResults = [
   'pass',
   'rework',
@@ -58,6 +79,7 @@ export const inspectionItemDecisionSchema = z.object({
 
 export type InspectionTask = z.infer<typeof inspectionTaskSchema>;
 export type InspectorTodayTask = z.infer<typeof inspectorTodayTaskSchema>;
+export type InspectorTaskDetail = z.infer<typeof inspectorTaskDetailSchema>;
 export type InspectionTaskStatus = z.infer<typeof inspectionTaskStatusSchema>;
 export type InspectionItemDecisionResult = z.infer<
   typeof inspectionItemDecisionResultSchema

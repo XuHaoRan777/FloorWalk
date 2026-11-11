@@ -205,6 +205,184 @@ test('今日任务显示模板、四种状态和商家时区的跨零点时间',
   await expect(page.getByText('状态：逾期')).toBeVisible();
 });
 
+test('任务详情显示检查项结论、操作时间和巡检聊天', async ({ page }) => {
+  const taskId = '00000000-0000-4000-8000-000000000301';
+  const siteId = '00000000-0000-4000-8000-000000000101';
+  const templateId = '00000000-0000-4000-8000-000000000102';
+  const inspectionId = '00000000-0000-4000-8000-000000000302';
+  const createdAt = '2026-11-09T00:00:00.000Z';
+  const detail = {
+    id: taskId,
+    siteId,
+    templateId,
+    taskDate: '2026-11-09',
+    position: 0,
+    startsAt: '2026-11-09T14:00:00.000Z',
+    dueAt: '2026-11-09T16:30:00.000Z',
+    status: 'in_progress',
+    createdAt,
+    templateName: '跨午夜任务',
+    timezone: 'Asia/Shanghai',
+    inspectionId,
+    inspectionStatus: 'rework',
+    items: [
+      {
+        id: '00000000-0000-4000-8000-000000000311',
+        position: 1,
+        title: '待审项目',
+        minPhotoCount: 1,
+        acceptanceCriteria: '照片需覆盖标签正面',
+        result: 'pending',
+        uploadedByName: '张店长',
+        uploadedAt: '2026-11-09T12:30:00.000Z',
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000312',
+        position: 2,
+        title: '通过项目',
+        minPhotoCount: 0,
+        acceptanceCriteria: '温度处于安全范围',
+        result: 'pass',
+        uploadedByName: '李店长',
+        uploadedAt: '2026-11-09T12:00:00.000Z',
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000313',
+        position: 3,
+        title: '打回项目',
+        minPhotoCount: 1,
+        acceptanceCriteria: '检查货架日期',
+        result: 'rework',
+        uploadedByName: '张店长',
+        uploadedAt: '2026-11-09T12:30:00.000Z',
+        decisionReason: '不应展示的审核理由',
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000314',
+        position: 4,
+        title: '不合格项目',
+        minPhotoCount: 0,
+        acceptanceCriteria: '不得有过期食品',
+        result: 'fail',
+        uploadedByName: null,
+        uploadedAt: null,
+      },
+    ],
+  };
+
+  await page.clock.install({ time: new Date('2026-11-09T12:30:00.000Z') });
+  await page.route('**/api/inspector/today', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        site: {
+          id: siteId,
+          code: 'TEST',
+          name: '示例门店',
+          active: true,
+          createdAt,
+        },
+        timezone: 'Asia/Shanghai',
+        tasks: [
+          {
+            id: taskId,
+            siteId,
+            templateId,
+            taskDate: '2026-11-09',
+            position: 0,
+            startsAt: detail.startsAt,
+            dueAt: detail.dueAt,
+            status: detail.status,
+            createdAt,
+            templateName: detail.templateName,
+          },
+        ],
+        templates: [],
+        submittedToday: false,
+        reworkInspections: [],
+      }),
+    }),
+  );
+  let detailAttempts = 0;
+  await page.route(`**/api/inspector/tasks/${taskId}`, (route) => {
+    detailAttempts++;
+    return detailAttempts === 1
+      ? route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 'UNAVAILABLE',
+            message: '任务详情暂时不可用。',
+          }),
+        })
+      : route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(detail),
+        });
+  });
+  await page.route(`**/api/inspections/${inspectionId}/messages**`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ messages: [], hasMoreBefore: false }),
+    }),
+  );
+
+  await page.goto('/');
+  await page.getByLabel('登录名').fill(loginName);
+  await page.getByLabel('密码').fill(password);
+  await page.getByTestId('login-button').click();
+  await expect(page.getByTestId(`today-task-${taskId}`)).toBeVisible();
+  await page.getByTestId(`today-task-${taskId}`).click();
+  await expect(page).toHaveURL(`/inspection/${taskId}`);
+  await expect(page.getByText('任务详情暂时不可用。')).toBeVisible();
+  await page.getByRole('button', { name: '重新加载' }).click();
+  const taskDetailPage = page.getByTestId('task-detail-screen');
+  await expect(
+    taskDetailPage.getByRole('heading', { name: '跨午夜任务' }),
+  ).toBeVisible();
+
+  await expect(
+    taskDetailPage.getByText('22:00～次日 00:30', { exact: true }),
+  ).toBeVisible();
+  await expect(taskDetailPage.getByTestId('task-item-1')).toContainText(
+    '验收要点：照片需覆盖标签正面',
+  );
+  await expect(taskDetailPage.getByTestId('task-item-1')).toContainText(
+    '最少照片：1 张',
+  );
+  await expect(taskDetailPage.getByTestId('task-item-1')).toContainText(
+    '当前结论：待审',
+  );
+  await expect(taskDetailPage.getByTestId('task-item-1')).toContainText(
+    '最后提交：张店长',
+  );
+  await expect(taskDetailPage.getByTestId('task-item-1')).toContainText(
+    '上传于 20:30',
+  );
+  await expect(taskDetailPage.getByTestId('task-item-1')).toContainText(
+    '21:00 起可开始',
+  );
+  await expect(taskDetailPage.getByTestId('task-item-2')).toContainText(
+    '当前结论：通过',
+  );
+  await expect(taskDetailPage.getByTestId('task-item-3')).toContainText(
+    '当前结论：打回',
+  );
+  await expect(taskDetailPage.getByTestId('task-item-3')).not.toContainText(
+    '不应展示的审核理由',
+  );
+  await expect(taskDetailPage.getByTestId('task-item-4')).toContainText(
+    '当前结论：不合格',
+  );
+  await expect(
+    taskDetailPage.getByRole('heading', { name: '巡检聊天' }),
+  ).toBeVisible();
+  await expect(taskDetailPage.getByLabel('聊天内容')).toBeVisible();
+});
+
 test('首次启动时删除旧的本地 token 并显示登录页', async ({ page }) => {
   await page.addInitScript(() =>
     localStorage.setItem('floorwalk.auth.token', 'invalid-token'),

@@ -7,7 +7,7 @@ import {
   verifyPasswordRecoveryCode,
   resetPasswordRecovery,
 } from './api/auth';
-import { inspection, today } from './api/inspection';
+import { inspection, inspectorTask, today } from './api/inspection';
 import { chatMessages, sendChatMessage } from './api/chat';
 import { inspectorRecords } from './api/records';
 export { ApiError } from './api/errors';
@@ -22,6 +22,7 @@ export const api = {
   verifyPasswordRecoveryCode,
   resetPasswordRecovery,
   today,
+  inspectorTask,
   inspection,
   chatMessages,
   sendChatMessage,

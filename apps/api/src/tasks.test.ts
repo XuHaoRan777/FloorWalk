@@ -4,7 +4,7 @@ import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Pool } from 'pg';
 import request from 'supertest';
-import { todayResponseSchema } from '@libs/shared';
+import { inspectorTaskDetailSchema, todayResponseSchema } from '@libs/shared';
 import { AppModule } from './app.module.js';
 import { hashSessionId } from './auth.js';
 import { createPool } from './db/client.js';
@@ -275,6 +275,54 @@ describe('FW-028 task uploads', () => {
     ).toBe('FW-028 upload template');
   });
 
+  it('returns the task detail only to its assigned store managers', async () => {
+    const taskId = await createTask();
+    await request(app.getHttpServer())
+      .get(`/api/inspector/tasks/${taskId}`)
+      .expect(401);
+    await request(app.getHttpServer())
+      .get(`/api/inspector/tasks/${taskId}`)
+      .set('Cookie', adminCookie)
+      .expect(403);
+    await request(app.getHttpServer())
+      .get(`/api/inspector/tasks/${taskId}`)
+      .set('Cookie', otherManagerCookie)
+      .expect(404);
+
+    const response = await request(app.getHttpServer())
+      .get(`/api/inspector/tasks/${taskId}`)
+      .set('Cookie', managerCookie)
+      .expect(200);
+    const detail = inspectorTaskDetailSchema.parse(response.body);
+    expect(detail).toMatchObject({
+      id: taskId,
+      siteId,
+      templateId,
+      timezone: 'Asia/Shanghai',
+      templateName: 'FW-028 upload template',
+      inspectionId: null,
+      inspectionStatus: null,
+    });
+    expect(detail.items).toHaveLength(3);
+    expect(detail.items[0]).toMatchObject({
+      position: 1,
+      title: '照片项',
+      minPhotoCount: 1,
+      acceptanceCriteria: '至少一张照片',
+      result: 'pending',
+      uploadedByName: null,
+      uploadedAt: null,
+    });
+    expect(detail.items[1]).toMatchObject({
+      position: 2,
+      title: '备注项',
+      minPhotoCount: 0,
+      result: 'pending',
+      uploadedByName: null,
+      uploadedAt: null,
+    });
+  });
+
   it('serializes first uploads and replaces each item as one submission', async () => {
     now = new Date('2026-11-09T10:30:00.000Z');
     const taskId = await createTask();
@@ -341,6 +389,32 @@ describe('FW-028 task uploads', () => {
       uploadedById: secondManagerId,
       evidenceCount: '2',
     });
+    await pool.query(
+      `UPDATE floorwalk.template_items SET title = '已更改模板标题',
+         acceptance_criteria = '已更改模板要点'
+       WHERE template_id = $1 AND position = 1`,
+      [templateId],
+    );
+    const detail = await request(app.getHttpServer())
+      .get(`/api/inspector/tasks/${taskId}`)
+      .set('Cookie', managerCookie)
+      .expect(200);
+    expect(detail.body.items[0]).toMatchObject({
+      title: '照片项',
+      acceptanceCriteria: '至少一张照片',
+      result: 'pending',
+      uploadedByName: 'Second manager',
+      uploadedAt: '2026-11-09T10:30:00.000Z',
+    });
+    expect(detail.body.items[0]).not.toHaveProperty('note');
+    expect(detail.body.items[0]).not.toHaveProperty('evidence');
+    expect(detail.body.items[0]).not.toHaveProperty('selfAssessment');
+    await pool.query(
+      `UPDATE floorwalk.template_items SET title = '照片项',
+         acceptance_criteria = '至少一张照片'
+       WHERE template_id = $1 AND position = 1`,
+      [templateId],
+    );
     await upload(taskId, 2, managerCookie, 'pass', undefined, 0).expect(422);
     await upload(taskId, 1, otherManagerCookie).expect(403);
   });

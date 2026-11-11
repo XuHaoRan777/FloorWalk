@@ -48,10 +48,12 @@ export function TodayScreen({
   today,
   todayError,
   onRefresh,
+  onOpenTask,
 }: {
   today: TodayResponse | null;
   todayError: string | null;
   onRefresh: () => void;
+  onOpenTask: (taskId: string) => void;
 }) {
   if (!today) {
     return (
@@ -119,11 +121,15 @@ export function TodayScreen({
         </View>
       }
       renderItem={({ item }) => (
-        <View
+        <Pressable
+          accessibilityLabel={`查看 ${item.templateName} 任务详情`}
+          accessibilityRole="button"
           className={classes.card}
           key={item.id}
-          style={styles.card}
+          onPress={() => onOpenTask(item.id)}
+          style={({ pressed }) => [styles.card, pressed && styles.pressedRow]}
           testID={`today-task-${item.id}`}
+          accessibilityHint="打开任务检查项和时间状态"
         >
           <Text className={classes.foreground} style={styles.cardTitle}>
             {item.templateName}
@@ -134,7 +140,7 @@ export function TodayScreen({
           <Text className={classes.muted} style={styles.muted}>
             状态：{statusLabels[item.status]}
           </Text>
-        </View>
+        </Pressable>
       )}
     />
   );

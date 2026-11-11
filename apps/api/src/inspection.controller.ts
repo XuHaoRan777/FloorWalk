@@ -13,6 +13,7 @@ import {
   apiRoutePath,
   apiRoutes,
   inspectionDetailSchema,
+  inspectorTaskDetailSchema,
   todayResponseSchema,
 } from '@libs/shared';
 import type { Pool } from 'pg';
@@ -132,6 +133,89 @@ export class InspectionController {
         submittedAt: iso(item.submittedAt),
         decidedAt: iso(item.decidedAt),
         createdAt: iso(item.createdAt),
+      })),
+    });
+  }
+
+  @UseGuards(AuthGuard)
+  @Get(apiRoutePath(apiRoutes.getInspectorTask))
+  async getInspectorTask(
+    @Param('taskId', new ParseUUIDPipe()) taskId: string,
+    @Req() request: AuthedRequest,
+  ) {
+    assertRole(request.user, ...apiRoutes.getInspectorTask.roles);
+    if (!request.user.siteId)
+      throw new ForbiddenException({
+        code: 'FORBIDDEN',
+        message: '店长未绑定门店。',
+      });
+
+    const taskResult = await this.pool.query<{
+      id: string;
+      siteId: string;
+      templateId: string;
+      taskDate: string;
+      position: number;
+      startsAt: Date;
+      dueAt: Date;
+      status: 'not_started' | 'in_progress' | 'submitted' | 'overdue';
+      createdAt: Date;
+      timezone: string;
+      templateName: string;
+      inspectionId: string | null;
+      inspectionStatus: string | null;
+    }>(
+      `SELECT task.id, task.site_id AS "siteId",
+         task.template_id AS "templateId", task.task_date::text AS "taskDate",
+         task.position, task.starts_at AS "startsAt", task.due_at AS "dueAt",
+         task.status, task.created_at AS "createdAt", template.name AS "templateName",
+         organization.timezone,
+         inspection.id AS "inspectionId", inspection.status AS "inspectionStatus"
+       FROM floorwalk.inspection_tasks task
+       JOIN floorwalk.templates template ON template.id = task.template_id
+       JOIN floorwalk.organizations organization ON organization.id = task.org_id
+       LEFT JOIN floorwalk.inspections inspection ON inspection.task_id = task.id
+       WHERE task.id = $1 AND task.org_id = $2 AND task.site_id = $3`,
+      [taskId, request.user.orgId, request.user.siteId],
+    );
+    const task = taskResult.rows[0];
+    if (!task)
+      throw new NotFoundException({
+        code: 'NOT_FOUND',
+        message: '巡检任务不存在。',
+      });
+
+    const items = task.inspectionId
+      ? await this.pool.query(
+          `SELECT item.id, item.position, item.title,
+             item.min_photo_count AS "minPhotoCount",
+             item.acceptance_criteria AS "acceptanceCriteria", item.result,
+             manager.display_name AS "uploadedByName",
+             item.uploaded_at AS "uploadedAt"
+           FROM floorwalk.inspection_items item
+           LEFT JOIN floorwalk.users manager ON manager.id = item.uploaded_by_id
+           WHERE item.inspection_id = $1 ORDER BY item.position`,
+          [task.inspectionId],
+        )
+      : await this.pool.query(
+          `SELECT id, position, title,
+             min_photo_count AS "minPhotoCount",
+             acceptance_criteria AS "acceptanceCriteria",
+             'pending'::text AS result, NULL::text AS "uploadedByName",
+             NULL::timestamptz AS "uploadedAt"
+           FROM floorwalk.template_items WHERE template_id = $1
+           ORDER BY position`,
+          [task.templateId],
+        );
+
+    return inspectorTaskDetailSchema.parse({
+      ...task,
+      startsAt: iso(task.startsAt),
+      dueAt: iso(task.dueAt),
+      createdAt: iso(task.createdAt),
+      items: items.rows.map((item) => ({
+        ...item,
+        uploadedAt: iso(item.uploadedAt),
       })),
     });
   }

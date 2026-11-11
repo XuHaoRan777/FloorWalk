@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { InspectionScreen } from '../../../components/mobile/inspection-screen';
+import { TaskDetailScreen } from '../../../components/mobile/task-detail-screen';
 import { useSession } from '../../../components/mobile/session-provider';
 
 export default function InspectionPage() {
@@ -8,7 +8,7 @@ export default function InspectionPage() {
   const router = useRouter();
   if (!session) return null;
   return (
-    <InspectionScreen
+    <TaskDetailScreen
       key={id}
       id={id}
       onUnauthorized={expire}
