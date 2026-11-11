@@ -5,10 +5,10 @@
 ## 当前状态
 
 - 工作单元状态：`verified`
-- 归档状态：`active`
+- 归档状态：`archived`
 - 当前任务：无（T06 完成）
 - 阻塞：无
-- 下一步：交付给 FW-029；接力线尾统一归档
+- 下一步：已于 2026-11-12 Promote 并随接力线归档。
 
 Preflight：范围为 shared 契约、API 任务生成/上传/判定、版本化迁移、种子、Web 逐条审核与 API/Web e2e；无新增配置键或依赖。迁移测试只读统计开发库种子：12 sites、14 users、1 template、8 template_items、18 inspections、144 inspection_items、36 evidence、16 reviews、0 sessions、2 chat_messages；开发库不写入，迁移测试只写入并恢复 `floorwalk_e2e_1` 和对应槽位存储。本单元新增结构并保留已有历史巡检记录。
 

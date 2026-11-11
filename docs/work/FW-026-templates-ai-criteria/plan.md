@@ -5,10 +5,10 @@
 ## 当前状态
 
 - 工作单元状态：`verified`
-- 归档状态：`active`
+- 归档状态：`archived`
 - 当前任务：全部完成，等待线尾统一 Promote 与归档
 - 阻塞：无
-- 下一步：已交付多模板与新检查项、AI 标准库及三套快捷配置，相关机器门、Android 原生证据和独立审查/复核通过；本地提交后自动接力 FW-027，不推送
+- 下一步：已于 2026-11-12 Promote 并随接力线归档。
 
 涉及 `packages/shared`、`apps/api`、`apps/web`、`apps/mobile` 与对应测试；AC-01 的过渡期建单选模板落在 Mobile 今日页。
 环境：Node `24.19.0`、pnpm `11.21.0`；`local-pg18` 运行且发布 5433，项目进程为空、开发/e2e 端口无监听；未找到 `psql`/`pg_isready`，不能做只读行数统计。

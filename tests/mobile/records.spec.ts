@@ -12,6 +12,9 @@ let colleagueInspectionId: string | undefined;
 
 type RecordItem = {
   id: string;
+  taskDate: string | null;
+  templateName: string;
+  taskStatus: 'not_started' | 'in_progress' | 'submitted' | 'overdue' | null;
   status: 'draft' | 'submitted' | 'in_review' | 'rework' | 'failed' | 'passed';
   score: number | null;
   createdAt: string;
@@ -25,6 +28,16 @@ const statusLabels: Record<RecordItem['status'], string> = {
   rework: '待补交',
   failed: '未通过',
   passed: '已通过',
+};
+
+const taskStatusLabels: Record<
+  Exclude<RecordItem['taskStatus'], null>,
+  string
+> = {
+  not_started: '未开始',
+  in_progress: '进行中',
+  submitted: '已提交',
+  overdue: '逾期',
 };
 
 const formatDate = (value: string | null) =>
@@ -245,8 +258,19 @@ test('记录列表按 API 分页显示，支持加载更多和刷新回到第一
   const firstRecord = expectedRecords[0];
   const firstRow = page.getByTestId(`record-row-${firstRecord.id}`);
   await expect(
-    firstRow.getByText(`状态：${statusLabels[firstRecord.status]}`),
+    firstRow.getByText(
+      firstRecord.taskStatus
+        ? `任务状态：${taskStatusLabels[firstRecord.taskStatus]}`
+        : `巡检状态：${statusLabels[firstRecord.status]}`,
+    ),
   ).toBeVisible();
+  await expect(
+    firstRow.getByText(`任务：${firstRecord.templateName}`),
+  ).toBeVisible();
+  if (firstRecord.taskDate)
+    await expect(
+      firstRow.getByText(`任务日期：${firstRecord.taskDate}`),
+    ).toBeVisible();
   await expect(
     firstRow.getByText(
       `分数：${firstRecord.score === null ? '—' : `${firstRecord.score} 分`}`,

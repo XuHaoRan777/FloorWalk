@@ -552,6 +552,17 @@ describe('inspection contract API', () => {
         },
       ],
       [
+        'getInspectorTask',
+        {
+          admin: async () => {
+            const response = await request(app.getHttpServer())
+              .get(`/api/inspector/tasks/${inspectionTaskId}`)
+              .set('Cookie', hqCookie);
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
         'reviewTaskQueue',
         {
           store_manager: async () => {
@@ -1654,6 +1665,11 @@ describe('inspection contract API', () => {
     }
     expect(taskStatus?.status).toBe('submitted');
 
+    const inspectorTaskDetail = await request(app.getHttpServer())
+      .get(`/api/inspector/tasks/${createdTaskId}`)
+      .set('Cookie', inspectorCookie)
+      .expect(200);
+
     const detail = await request(app.getHttpServer())
       .get(`/api/inspections/${createdInspectionId}`)
       .set('Cookie', inspectorCookie)
@@ -1981,6 +1997,7 @@ describe('inspection contract API', () => {
       today,
       getInspection: detail,
       uploadTaskItem: taskUpload,
+      getInspectorTask: inspectorTaskDetail,
       getEvidence: signed,
       reviewTaskQueue: queue,
       getTaskReview: taskReview,

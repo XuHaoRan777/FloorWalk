@@ -6,18 +6,9 @@ import { ErrorBanner } from './error-banner';
 import { PrimaryButton } from './primary-button';
 import { classes, styles } from './styles';
 import { ChatPanel } from './chat-panel';
+import { TaskItemCard } from './task-item-card';
 
 const hour = 60 * 60 * 1000;
-
-const resultLabels: Record<
-  InspectorTaskDetail['items'][number]['result'],
-  string
-> = {
-  pending: '待审',
-  pass: '通过',
-  rework: '打回',
-  fail: '不合格',
-};
 
 function formatTime(value: string | number, timezone: string) {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -53,32 +44,45 @@ function operationWindow(
     detail.inspectionStatus === 'passed' ||
     detail.inspectionStatus === 'failed'
   )
-    return '判定已完成';
+    return { canOperate: false, label: '判定已完成' };
 
   const startsAt = Date.parse(detail.startsAt);
   const dueAt = Date.parse(detail.dueAt);
   if (now < startsAt - hour)
-    return `${formatTime(startsAt - hour, detail.timezone)} 起可开始`;
-  if (now <= dueAt) return `截止 ${formatTime(detail.dueAt, detail.timezone)}`;
+    return {
+      canOperate: false,
+      label: `${formatTime(startsAt - hour, detail.timezone)} 起可开始`,
+    };
+  if (now <= dueAt)
+    return {
+      canOperate: true,
+      label: `截止 ${formatTime(detail.dueAt, detail.timezone)}`,
+    };
 
   if (item.result === 'rework') {
     const reworkDeadline = dueAt + hour;
     if (now <= reworkDeadline)
-      return `重传截止 ${formatTime(reworkDeadline, detail.timezone)}`;
-    return '重传时间已截止';
+      return {
+        canOperate: true,
+        label: `重传截止 ${formatTime(reworkDeadline, detail.timezone)}`,
+      };
+    return { canOperate: false, label: '重传时间已截止' };
   }
-  if (!item.uploadedAt) return '已过截止时间，未上传项不可操作';
-  return '已过截止时间，不可操作';
+  if (!item.uploadedAt)
+    return { canOperate: false, label: '已过截止时间，未上传项不可操作' };
+  return { canOperate: false, label: '已过截止时间，不可操作' };
 }
 
 export function TaskDetailScreen({
   id,
   onBack,
   onUnauthorized,
+  onTaskUpdated,
 }: {
   id: string;
   onBack: () => void;
   onUnauthorized: () => void;
+  onTaskUpdated: () => Promise<void>;
 }) {
   const [detail, setDetail] = useState<InspectorTaskDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +101,10 @@ export function TaskDetailScreen({
       setLoading(false);
     }
   }, [id, onUnauthorized]);
+
+  const refreshAfterUpload = useCallback(async () => {
+    await Promise.all([load(), onTaskUpdated()]);
+  }, [load, onTaskUpdated]);
 
   useEffect(() => {
     void load();
@@ -170,42 +178,21 @@ export function TaskDetailScreen({
         </Text>
       )}
       <ErrorBanner message={error} />
-      {detail.items.map((item) => (
-        <View
-          key={item.id}
-          className={classes.card}
-          style={styles.card}
-          testID={`task-item-${item.position}`}
-        >
-          <Text className={classes.foreground} style={styles.cardTitle}>
-            {item.position}. {item.title}
-          </Text>
-          {item.acceptanceCriteria && (
-            <Text className={classes.muted} style={styles.muted}>
-              验收要点：{item.acceptanceCriteria}
-            </Text>
-          )}
-          <Text className={classes.muted} style={styles.muted}>
-            最少照片：{item.minPhotoCount} 张
-          </Text>
-          <Text className={classes.muted} style={styles.muted}>
-            当前结论：{resultLabels[item.result]}
-          </Text>
-          <Text className={classes.muted} style={styles.muted}>
-            {item.uploadedByName
-              ? `最后提交：${item.uploadedByName}`
-              : '尚未提交'}
-          </Text>
-          <Text className={classes.muted} style={styles.muted}>
-            {item.uploadedAt
-              ? `上传于 ${formatTime(item.uploadedAt, detail.timezone)}`
-              : '尚无上传时间'}
-          </Text>
-          <Text className={classes.muted} style={styles.muted}>
-            {operationWindow(detail, item, now)}
-          </Text>
-        </View>
-      ))}
+      {detail.items.map((item) => {
+        const operation = operationWindow(detail, item, now);
+        return (
+          <TaskItemCard
+            key={item.id}
+            taskId={detail.id}
+            item={item}
+            timezone={detail.timezone}
+            canOperate={operation.canOperate}
+            operationLabel={operation.label}
+            onUnauthorized={onUnauthorized}
+            onUploaded={refreshAfterUpload}
+          />
+        );
+      })}
       {detail.items.length === 0 && (
         <View className={classes.empty} style={styles.empty}>
           <Text className={classes.muted} style={styles.muted}>

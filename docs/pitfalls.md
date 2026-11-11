@@ -26,6 +26,16 @@
 
 ## 陷阱清单
 
+### 旧 Web 回归用例仍依赖邮箱登录与主管角色
+
+- 触发条件：运行 `pnpm exec playwright test --config=playwright.web.config.ts --workers=1`，而 `tests/web/chat.spec.ts`、`console.spec.ts`、`protocol.spec.ts`、`site-supervisors.spec.ts`、`ui-foundation.spec.ts` 尚未迁移到两层角色和登录名契约。
+- 现象：2026-11-11 全量 Web 回归为 11 passed、19 failed、1 skipped；其中 17 项停在旧 `email` 登录字段、「邮箱」标签或已删除的 `supervisor` 行为，与日程页面无关。
+- 根因：FW-024 删除主管角色并将认证字段统一为 `loginName`，这五份旧测试仍在使用旧契约。
+- 规避方式：迁移完成前，将这 17 项视为未更新的契约测试，不据此判定当前 Web 功能回归；不要通过放宽业务断言来消除失败。
+- 验证方式：FW-027 的 Web 全量回归记录了失败分布；其余新增 Web 行为由当前两层角色用例单独验证。
+- 失效条件：五份测试按现行登录与角色契约更新，完整 Web 回归通过。
+- 首次记录：`FW-027`
+
 ### StrictMode 重复执行自动开始审核的 effect
 
 - 触发条件：Web React 19.2.5 开发模式启用 StrictMode，在详情组件的 effect 内自动发送非幂等的开始审核请求。

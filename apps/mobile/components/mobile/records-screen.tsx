@@ -23,6 +23,16 @@ const statusLabels: Record<RecordItem['status'], string> = {
   passed: '已通过',
 };
 
+const taskStatusLabels: Record<
+  NonNullable<RecordItem['taskStatus']>,
+  string
+> = {
+  not_started: '未开始',
+  in_progress: '进行中',
+  submitted: '已提交',
+  overdue: '逾期',
+};
+
 const formatDate = (value: string | null) =>
   value
     ? new Date(value).toLocaleString('zh-CN', {
@@ -195,7 +205,7 @@ export function RecordsScreen({
             </Pressable>
           </View>
           <Text className={classes.muted} style={styles.muted}>
-            本店全部巡检单
+            本店任务与参与过的历史记录
           </Text>
           <ErrorBanner message={error} />
         </View>
@@ -216,12 +226,23 @@ export function RecordsScreen({
         >
           <View style={recordStyles.rowHeading}>
             <Text className={classes.foreground} style={styles.cardTitle}>
-              状态：{statusLabels[item.status]}
+              {item.taskStatus
+                ? `任务状态：${taskStatusLabels[item.taskStatus]}`
+                : `巡检状态：${statusLabels[item.status]}`}
             </Text>
             <Text className={classes.muted} style={styles.muted}>
               分数：{item.score === null ? '—' : `${item.score} 分`}
             </Text>
           </View>
+          <Text className={classes.muted} style={styles.muted}>
+            {item.taskStatus ? '任务：' : '模板：'}
+            {item.templateName}
+          </Text>
+          {item.taskDate && (
+            <Text className={classes.muted} style={styles.muted}>
+              任务日期：{item.taskDate}
+            </Text>
+          )}
           <Text className={classes.muted} style={styles.muted}>
             创建时间：{formatDate(item.createdAt)}
           </Text>

@@ -39,6 +39,7 @@ import {
   inspectionItemDecisionResultSchema,
   inspectionItemDecisionResults,
   inspectionItemSelfAssessmentSchema,
+  inspectionTaskStatusSchema,
   inspectionTaskSchema,
   inspectorTaskDetailSchema,
   inspectorTodayTaskSchema,
@@ -259,6 +260,12 @@ export const chatImageUrlResponseSchema = z.object({
 
 export const inspectorRecordSchema = z.object({
   id: uuid,
+  taskDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable(),
+  templateName: z.string().min(1),
+  taskStatus: inspectionTaskStatusSchema.nullable(),
   status: inspectionStatusSchema,
   score: z.number().int().min(0).max(100).nullable(),
   createdAt: timestamp,

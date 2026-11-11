@@ -121,7 +121,7 @@ test('今日任务页不崩溃且隐藏旧建单和提交入口', async ({ page 
   await page.getByLabel('密码').fill(password);
   await page.getByTestId('login-button').click();
   await expect(page.getByRole('tab', { name: '今日待巡' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '今日任务' })).toBeVisible();
+  await expect(page.getByText('今日任务', { exact: true })).toBeVisible();
   await expect(page.getByTestId('start-inspection')).toHaveCount(0);
   await expect(page.getByTestId('submit-inspection')).toHaveCount(0);
 });
@@ -381,6 +381,333 @@ test('任务详情显示检查项结论、操作时间和巡检聊天', async ({
     taskDetailPage.getByRole('heading', { name: '巡检聊天' }),
   ).toBeVisible();
   await expect(taskDetailPage.getByLabel('聊天内容')).toBeVisible();
+});
+
+test('截止后禁用未上传项，打回宽限到期禁用重传并显示服务端拒绝提示', async ({
+  page,
+}) => {
+  const taskId = '00000000-0000-4000-8000-000000000351';
+  const siteId = '00000000-0000-4000-8000-000000000101';
+  const templateId = '00000000-0000-4000-8000-000000000102';
+  const createdAt = '2026-11-09T00:00:00.000Z';
+  const dueAt = '2026-11-09T12:00:00.000Z';
+  const detail = {
+    id: taskId,
+    siteId,
+    templateId,
+    taskDate: '2026-11-09',
+    position: 0,
+    startsAt: '2026-11-09T10:00:00.000Z',
+    dueAt,
+    status: 'overdue',
+    createdAt,
+    templateName: '逾期巡检',
+    timezone: 'Asia/Shanghai',
+    inspectionId: null,
+    inspectionStatus: 'rework',
+    items: [
+      {
+        id: '00000000-0000-4000-8000-000000000352',
+        position: 1,
+        title: '尚未上传',
+        minPhotoCount: 1,
+        acceptanceCriteria: '必须上传现场照片',
+        result: 'pending',
+        uploadedByName: null,
+        uploadedAt: null,
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000353',
+        position: 2,
+        title: '打回后重传',
+        minPhotoCount: 1,
+        acceptanceCriteria: '照片覆盖检查区域',
+        result: 'rework',
+        uploadedByName: '李店长',
+        uploadedAt: '2026-11-09T11:00:00.000Z',
+      },
+    ],
+  };
+  const photoBytes = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/7ZsAAAAASUVORK5CYII=',
+    'base64',
+  );
+
+  await page.clock.install({ time: new Date('2026-11-09T12:30:00.000Z') });
+  await page.route('**/api/inspector/today', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        site: {
+          id: siteId,
+          code: 'TEST',
+          name: '示例门店',
+          active: true,
+          createdAt,
+        },
+        timezone: 'Asia/Shanghai',
+        tasks: [
+          {
+            id: taskId,
+            siteId,
+            templateId,
+            taskDate: '2026-11-09',
+            position: 0,
+            startsAt: detail.startsAt,
+            dueAt,
+            status: 'overdue',
+            createdAt,
+            templateName: detail.templateName,
+          },
+        ],
+        templates: [],
+        submittedToday: false,
+        reworkInspections: [],
+      }),
+    }),
+  );
+  await page.route(`**/api/inspector/tasks/${taskId}`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(detail),
+    }),
+  );
+  await page.route(`**/api/tasks/${taskId}/items/2/uploads`, (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 'INVALID_STATE',
+        message: '任务已经关闭。',
+      }),
+    }),
+  );
+
+  await page.goto('/');
+  await page.getByLabel('登录名').fill(loginName);
+  await page.getByLabel('密码').fill(password);
+  await page.getByTestId('login-button').click();
+  await page.getByTestId(`today-task-${taskId}`).click();
+
+  const unuploadedItem = page.getByTestId('task-item-1');
+  await expect(unuploadedItem).toContainText('已过截止时间，未上传项不可操作');
+  await expect(unuploadedItem.getByTestId('submit-item-1')).toBeDisabled();
+  await expect(
+    unuploadedItem.getByRole('button', { name: '打开相机拍摄第1项照片' }),
+  ).toBeDisabled();
+
+  const reworkItem = page.getByTestId('task-item-2');
+  const reworkSubmit = reworkItem.getByTestId('submit-item-2');
+  await expect(reworkItem).toContainText('重传截止 21:00');
+  await expect(reworkItem.getByTestId('capture-item-2')).toBeEnabled();
+  await reworkItem.getByRole('button', { name: '自评合格第2项' }).click();
+  const chooserPromise = page.waitForEvent('filechooser');
+  await reworkItem.getByTestId('capture-item-2').click();
+  await (
+    await chooserPromise
+  ).setFiles({
+    name: 'rework.png',
+    mimeType: 'image/png',
+    buffer: photoBytes,
+  });
+  await expect(reworkSubmit).toBeEnabled();
+  const uploadResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/tasks/${taskId}/items/2/uploads`) &&
+      response.request().method() === 'POST',
+  );
+  await reworkSubmit.click();
+  expect((await uploadResponse).status()).toBe(409);
+  await expect(
+    reworkItem.getByText('当前巡检状态不允许此操作。'),
+  ).toBeVisible();
+
+  await page.clock.fastForward(31 * 60_000);
+  await expect(reworkItem).toContainText('重传时间已截止');
+  await expect(reworkSubmit).toBeDisabled();
+  await expect(reworkItem.getByTestId('capture-item-2')).toBeDisabled();
+});
+
+test('逐项拍照上传、零照片备注门槛及提交后刷新', async ({ page }) => {
+  const taskId = '00000000-0000-4000-8000-000000000401';
+  const siteId = '00000000-0000-4000-8000-000000000101';
+  const templateId = '00000000-0000-4000-8000-000000000102';
+  const inspectionId = '00000000-0000-4000-8000-000000000402';
+  const createdAt = '2026-11-09T00:00:00.000Z';
+  const items = [
+    {
+      id: '00000000-0000-4000-8000-000000000411',
+      position: 1,
+      title: '冷柜温度',
+      minPhotoCount: 2,
+      acceptanceCriteria: '拍摄温度显示屏',
+      result: 'pending',
+      uploadedByName: null,
+      uploadedAt: null,
+    },
+    {
+      id: '00000000-0000-4000-8000-000000000412',
+      position: 2,
+      title: '地面清洁',
+      minPhotoCount: 0,
+      acceptanceCriteria: '确认地面无积水',
+      result: 'pending',
+      uploadedByName: null,
+      uploadedAt: null,
+    },
+  ];
+  const uploads = new Set<number>();
+  const uploadedAt = '2026-11-09T14:45:00.000Z';
+  const photoBytes = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/7ZsAAAAASUVORK5CYII=',
+    'base64',
+  );
+
+  await page.clock.install({ time: new Date('2026-11-09T14:30:00.000Z') });
+  await page.route('**/api/inspector/today', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        site: {
+          id: siteId,
+          code: 'TEST',
+          name: '示例门店',
+          active: true,
+          createdAt,
+        },
+        timezone: 'Asia/Shanghai',
+        tasks: [
+          {
+            id: taskId,
+            siteId,
+            templateId,
+            taskDate: '2026-11-09',
+            position: 0,
+            startsAt: '2026-11-09T14:00:00.000Z',
+            dueAt: '2026-11-09T16:30:00.000Z',
+            status: uploads.size === items.length ? 'submitted' : 'in_progress',
+            createdAt,
+            templateName: '现场巡检',
+          },
+        ],
+        templates: [],
+        submittedToday: false,
+        reworkInspections: [],
+      }),
+    }),
+  );
+  await page.route(`**/api/inspector/tasks/${taskId}`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: taskId,
+        siteId,
+        templateId,
+        taskDate: '2026-11-09',
+        position: 0,
+        startsAt: '2026-11-09T14:00:00.000Z',
+        dueAt: '2026-11-09T16:30:00.000Z',
+        status: uploads.size === items.length ? 'submitted' : 'in_progress',
+        createdAt,
+        templateName: '现场巡检',
+        timezone: 'Asia/Shanghai',
+        inspectionId: uploads.size > 0 ? inspectionId : null,
+        inspectionStatus: uploads.size > 0 ? 'draft' : null,
+        items: items.map((item) => ({
+          ...item,
+          ...(uploads.has(item.position)
+            ? { uploadedByName: '李店长', uploadedAt }
+            : {}),
+        })),
+      }),
+    }),
+  );
+  for (const position of [1, 2]) {
+    await page.route(
+      `**/api/tasks/${taskId}/items/${position}/uploads`,
+      async (route) => {
+        uploads.add(position);
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: '{}',
+        });
+      },
+    );
+  }
+  await page.route(`**/api/inspections/${inspectionId}/messages**`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ messages: [], hasMoreBefore: false }),
+    }),
+  );
+
+  await page.goto('/');
+  await page.getByLabel('登录名').fill(loginName);
+  await page.getByLabel('密码').fill(password);
+  await page.getByTestId('login-button').click();
+  await page.getByTestId(`today-task-${taskId}`).click();
+
+  const photoItem = page.getByTestId('task-item-1');
+  const photoSubmit = photoItem.getByTestId('submit-item-1');
+  await expect(photoSubmit).toBeDisabled();
+  await expect(photoItem).toContainText('还差 2 张照片');
+  await expect(photoItem.getByRole('button', { name: /相册/ })).toHaveCount(0);
+  await photoItem.getByRole('button', { name: '自评合格第1项' }).click();
+  for (let count = 1; count <= 2; count++) {
+    const chooserPromise = page.waitForEvent('filechooser');
+    await photoItem
+      .getByRole('button', { name: '打开相机拍摄第1项照片' })
+      .click();
+    const chooser = await chooserPromise;
+    expect(await (await chooser.element()).getAttribute('capture')).toBe(
+      'environment',
+    );
+    await chooser.setFiles({
+      name: `temperature-${count}.png`,
+      mimeType: 'image/png',
+      buffer: photoBytes,
+    });
+    if (count === 1) {
+      await expect(photoItem).toContainText('还差 1 张照片');
+      await expect(photoSubmit).toBeDisabled();
+    }
+  }
+  await expect(photoSubmit).toBeEnabled();
+  const photoUploadPromise = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/tasks/${taskId}/items/1/uploads`) &&
+      response.request().method() === 'POST',
+  );
+  await photoSubmit.click();
+  expect((await photoUploadPromise).status()).toBe(201);
+  await expect(photoItem).toContainText('最后提交：李店长');
+  await expect(photoItem).toContainText('上传于 22:45');
+
+  const noteItem = page.getByTestId('task-item-2');
+  const noteSubmit = noteItem.getByTestId('submit-item-2');
+  await expect(noteItem.getByTestId('capture-item-2')).toHaveCount(0);
+  await expect(noteItem.getByTestId('assess-pass-2')).toHaveCount(0);
+  await expect(noteSubmit).toBeDisabled();
+  await noteItem.getByLabel('第2项备注').fill('地面干燥');
+  await expect(noteSubmit).toBeEnabled();
+  const noteUploadPromise = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/tasks/${taskId}/items/2/uploads`) &&
+      response.request().method() === 'POST',
+  );
+  await noteSubmit.click();
+  expect((await noteUploadPromise).status()).toBe(201);
+  await expect(noteItem).toContainText('最后提交：李店长');
+  await page.getByRole('button', { name: '返回今日任务' }).click();
+  await expect(page.getByTestId(`today-task-${taskId}`)).toContainText(
+    '状态：已提交',
+  );
 });
 
 test('首次启动时删除旧的本地 token 并显示登录页', async ({ page }) => {

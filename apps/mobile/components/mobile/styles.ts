@@ -34,6 +34,8 @@ export const classes = {
   highlightText: 'will-change-variable text-accent',
   chatMessage: 'will-change-variable border-border',
   chatImage: 'will-change-variable bg-raised',
+  actionButton: 'flex-row items-center justify-center gap-2',
+  removePhoto: 'will-change-variable bg-background',
 } as const;
 
 export const styles = StyleSheet.create({
@@ -111,6 +113,46 @@ export const styles = StyleSheet.create({
   disabledButton: { opacity: 0.5 },
   pressedRow: { opacity: 0.88 },
   touchTarget: { justifyContent: 'center', minHeight: 44 },
+  assessmentOption: {
+    alignItems: 'center',
+    borderRadius: tokens.radius.control,
+    flex: 1,
+    minHeight: 44,
+    paddingHorizontal: tokens.space.sm,
+  },
+  actionButton: {
+    alignSelf: 'flex-start',
+    borderRadius: tokens.radius.control,
+    flexDirection: 'row',
+    gap: tokens.space.sm,
+    minHeight: 44,
+    paddingHorizontal: tokens.space.md,
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: tokens.space.sm,
+  },
+  photoPreview: {
+    height: 88,
+    position: 'relative',
+    width: 88,
+  },
+  photoImage: {
+    borderRadius: tokens.radius.control,
+    height: '100%',
+    width: '100%',
+  },
+  removePhoto: {
+    alignItems: 'center',
+    borderRadius: 16,
+    height: 32,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 2,
+    top: 2,
+    width: 32,
+  },
   buttonText: {
     alignSelf: 'stretch',
     fontFamily: tokens.font.sans.semibold,

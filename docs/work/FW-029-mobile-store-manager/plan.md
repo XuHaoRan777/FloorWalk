@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- 工作单元状态：`in_progress`
-- 归档状态：`active`
-- 当前任务：T03 相机拍摄、逐项上传与刷新
+- 工作单元状态：`verified`
+- 归档状态：`archived`
+- 当前任务：全部任务完成
 - 阻塞：无
-- 下一步：完成 T03，取得 AC-03、AC-05、AC-08 证据。
+- 下一步：已于 2026-11-12 Promote 并归档接力线 FW-024～FW-029。
 
 <!-- Preflight：编码前在此写一到三行——要动哪些模块；涉及既有数据时的只读统计计数；后端/库/开发者工具是否能起。不需要章节名。 -->
 
@@ -24,9 +24,9 @@ T02：已读取 Expo `expo-overview`、`expo-router`、`expo-native-ui`、`expo-
 | --- | ------------------------ | ------------- | -------------------------------------------------------------------------------- |
 | T01 | 今日任务 API 与列表      | `done`        | AC-01：本店任务、模板名、时间窗、四种状态和跨零点显示；API 契约测试与 Mobile e2e |
 | T02 | 任务详情读取与时间状态   | `done`        | AC-02、AC-04、AC-07：检查项、结论、提交人、上传时间、操作窗口及聊天              |
-| T03 | 相机拍摄、逐项上传与刷新 | `in_progress` | AC-03、AC-05、AC-08：相机限定、张数/备注门槛、同店最新提交人、模拟器主流程       |
-| T04 | 按任务显示记录           | `pending`     | AC-06：任务状态与分数、调店后仅可见参与过的历史                                  |
-| T05 | 最终代码审查             | `pending`     | AC-01～AC-08：受影响套件、类型检查、lint、构建、原生模拟器证据及独立审查         |
+| T03 | 相机拍摄、逐项上传与刷新 | `done`        | AC-03、AC-05、AC-08：相机限定、张数/备注门槛、同店最新提交人、模拟器主流程       |
+| T04 | 按任务显示记录           | `done`        | AC-06：任务状态与分数、调店后仅可见参与过的历史                                  |
+| T05 | 最终代码审查             | `done`        | AC-01～AC-08：受影响套件、类型检查、lint、构建、原生模拟器证据及独立审查         |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
 方式 B 按用户可观察的切片切，不按数据、后端、前端分层切：每行写交付哪几条 AC，并在本任务内取得它们的证据；一条 AC 跨几个切片时记在完成它的那个任务。可以有一个先行任务只做数据结构与共享契约（表、迁移、共享类型，不含接口和页面），这一列写「无，机器门」。不设"Agent 验收""机器门汇总"这类只收集其他任务证据的任务；单元结束的全量套件和构建在「最终代码审查」任务里、派审查之前跑。
@@ -38,6 +38,11 @@ T02：已读取 Expo `expo-overview`、`expo-router`、`expo-native-ui`、`expo-
 | ---- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T01  | passed | `pnpm --filter @apps/api test -- tasks.test.ts`; `FW_SLOT=1 pnpm exec playwright test --config=playwright.mobile.config.ts tests/mobile/mobile-inspection.spec.ts --grep "今日任务显示模板、四种状态"`                                                                                                        | `apps/api/src/tasks.test.ts`; `tests/mobile/mobile-inspection.spec.ts`                                                                                                  | 同店、同商家时区日期过滤通过；页面显示四种状态和 `22:00～次日 00:30`。                                                                                   |
 | T02  | passed | `FW_SLOT=1 pnpm --filter @apps/api test -- tasks.test.ts`; `pnpm --filter @apps/api typecheck`; `pnpm --filter @apps/mobile typecheck`; `FW_SLOT=1 pnpm exec playwright test --config=playwright.mobile.config.ts tests/mobile/mobile-inspection.spec.ts --grep "任务详情显示检查项结论、操作时间和巡检聊天"` | `apps/api/src/tasks.test.ts`; `apps/api/src/inspection.controller.ts`; `tests/mobile/mobile-inspection.spec.ts`; `apps/mobile/components/mobile/task-detail-screen.tsx` | API 7/7、API 与 Mobile 类型检查通过；详情页 1/1 通过，覆盖失败重试、跨午夜、四类结论、提交信息、隐藏理由及聊天。首轮因同文案定位重复，限定详情页后通过。 |
+| T03  | passed | `pnpm --filter @apps/mobile typecheck`; `pnpm exec prettier --check ...`; `FW_SLOT=1 pnpm exec playwright test --config=playwright.mobile.config.ts tests/mobile/mobile-inspection.spec.ts --grep "逐项拍照上传"`; `FW_SLOT=1 pnpm --filter @apps/api test -- tasks.test.ts`; Android `Medium_Phone_API_37.0` 原生拍照、上传、API 打回与重传 | `apps/mobile/components/mobile/task-item-card.tsx`; `apps/mobile/components/mobile/task-detail-screen.tsx`; `apps/mobile/lib/api/inspection.ts`; `tests/mobile/mobile-inspection.spec.ts`; `docs/work/FW-029-mobile-store-manager/evidence/fw029-camera-preview.png`; `docs/work/FW-029-mobile-store-manager/evidence/fw029-first-upload-pending.png`; `docs/work/FW-029-mobile-store-manager/evidence/fw029-item-rework.png`; `docs/work/FW-029-mobile-store-manager/evidence/fw029-resubmitted.png` | Mobile 类型与格式检查通过；Mobile e2e 1/1、API 7/7 通过。模拟器相机拍到虚拟场景；首传待审，管理员 API 打回后店长重传，详情显示待审、最新提交人/时间，任务状态已提交。 |
+| T04  | passed | `pnpm --filter @libs/shared build`; `pnpm --filter @apps/api typecheck`; `pnpm --filter @apps/mobile typecheck`; `pnpm exec prettier --check apps/api/src/records.controller.ts apps/api/src/records.test.ts apps/mobile/components/mobile/records-screen.tsx packages/shared/src/contract/index.ts tests/mobile/records.spec.ts`; `FW_SLOT=1 pnpm --filter @apps/api test -- records.test.ts`; `FW_SLOT=1 pnpm exec playwright test --config=playwright.mobile.config.ts tests/mobile/records.spec.ts`; `pnpm --filter @apps/api build` | `apps/api/src/records.controller.ts`; `apps/api/src/records.test.ts`; `apps/mobile/components/mobile/records-screen.tsx`; `tests/mobile/records.spec.ts` | API 与 Mobile 类型检查、格式检查和 API 构建通过；API 2/2、Mobile e2e 5/5。验证任务与旧记录字段、状态和分数展示，以及调店后的原门店参与记录投影。 |
+| T05  | failed | 独立 Subagent 按 `docs/howto/final-review.md` 审查 FW-029 完整差异 | `docs/howto/final-review.md`; `tests/mobile/mobile-inspection.spec.ts` | P2：AC-04 未有 Mobile 证据覆盖截止后禁用、重传宽限边界及 API 拒绝提示；已增加定向 e2e，待复核。 |
+| T05  | passed | `FW_SLOT=1 pnpm exec playwright test --config=playwright.mobile.config.ts tests/mobile/mobile-inspection.spec.ts --grep "截止后禁用未上传项"`; 独立 Subagent 定向复核 | `tests/mobile/mobile-inspection.spec.ts`; `docs/howto/final-review.md` | 1/1；P2 finding 复核通过，覆盖截止后未上传项禁用、宽限内重传、409 中文提示及宽限到期后禁用。 |
+| T05  | passed | `pnpm typecheck`; `pnpm lint`; `pnpm format:check`; `pnpm --filter @apps/mobile check`; `pnpm build`; `FW_SLOT=1 pnpm --filter @apps/api test -- tasks.test.ts records.test.ts contract.e2e.test.ts`; `FW_SLOT=1 pnpm exec playwright test --config=playwright.mobile.config.ts tests/mobile/mobile-inspection.spec.ts tests/mobile/records.spec.ts` | `apps/api/src/tasks.test.ts`; `apps/api/src/records.test.ts`; `apps/api/src/contract.e2e.test.ts`; `tests/mobile/mobile-inspection.spec.ts`; `tests/mobile/records.spec.ts`; `apps/mobile/dist/metadata.json` | 类型、lint、格式、Expo 依赖检查、根构建通过；API 24/24、Mobile e2e 16/16。Vite 报告未修改 Web bundle 533.59 kB 超过 500 kB 提示。原生模拟器 AC-08 证据见 T03。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 

@@ -65,10 +65,17 @@ export class RecordsController {
 
     const rows = await this.pool.query(
       `SELECT i.id, i.status, i.score, i.created_at AS "createdAt",
+          task.task_date::text AS "taskDate", template.name AS "templateName",
+          task.status AS "taskStatus",
           to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorCreatedAt",
           i.submitted_at AS "submittedAt", i.decided_at AS "decidedAt"
        FROM floorwalk.inspections i
        JOIN floorwalk.sites s ON s.id = i.site_id
+       JOIN floorwalk.templates template
+         ON template.id = i.template_id AND template.org_id = s.org_id
+       LEFT JOIN floorwalk.inspection_tasks task
+         ON task.id = i.task_id AND task.org_id = s.org_id
+         AND task.site_id = i.site_id AND task.template_id = i.template_id
        WHERE s.org_id = $5 AND (i.site_id = $1 OR EXISTS (
          SELECT 1 FROM floorwalk.inspection_participants p
          WHERE p.inspection_id = i.id AND p.user_id = $6
@@ -87,6 +94,9 @@ export class RecordsController {
     const hasMore = rows.rows.length > limit;
     const items = rows.rows.slice(0, limit).map((row) => ({
       id: row.id,
+      taskDate: row.taskDate,
+      templateName: row.templateName,
+      taskStatus: row.taskStatus,
       status: row.status,
       score: row.score,
       createdAt: iso(row.createdAt),

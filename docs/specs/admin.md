@@ -1,6 +1,6 @@
 # 门店与模板管理
 
-代码（归档时再生成）：`apps/api/src/admin.controller.ts`、`apps/api/src/users.controller.ts`、`apps/api/src/templates.controller.ts`、`apps/web/src/components/console/`；Web 客户端为 `apps/web/src/lib/api/`。
+代码（归档时再生成）：`apps/api/src/admin.controller.ts`、`apps/api/src/users.controller.ts`、`apps/api/src/templates.controller.ts`、`apps/api/src/ai-standards.controller.ts`、`apps/web/src/components/console/`；Web 客户端为 `apps/web/src/lib/api/`。
 
 ## 权限
 
@@ -10,7 +10,7 @@
 
 门店页列出本商家的门店、启用状态和绑定的店长。商家管理员可以用编码与名称新建启用门店、改名、停用和重新启用。编码在商家内不可重复，冲突返回 409；不存在或跨商家资源返回 404，非法请求返回 400。新建门店不会创建店长账号；管理员在账号页创建店长并绑定门店，也可调店。
 
-停用保留门店和历史数据，写入 `deactivated_at`；重新启用清空它。店长仍可登录、看记录和历史详情。停用门店不再生成当天任务；同步时删除尚未开始且没有巡检记录的任务，已开始任务保持不变。对停用门店的任务首次上传会被服务端拒绝；已经创建巡检记录的任务仍可继续逐条处理。总部看板保留最近判定分数并标「已停用」。
+停用保留门店和历史数据，写入 `deactivated_at`；重新启用清空它。店长仍可登录、看记录和历史详情。停用门店不再生成当天任务；同步时删除尚未开始且没有巡检记录的任务，已开始任务保持不变。对停用门店的任务首次上传会被服务端拒绝；已经创建巡检记录的任务仍可继续逐条处理。商家看板保留最近判定分数并标「已停用」。
 
 ## 模板
 
@@ -29,8 +29,9 @@
 | 门店管理 | GET/POST `/api/admin/sites`、PATCH `/api/admin/sites/:id`；返回 `active` 和店长列表                               | [控制器](../../apps/api/src/admin.controller.ts)、[共享契约](../../packages/shared/src/contract/index.ts)                                                   |
 | 店长账号 | GET/POST `/api/admin/users`、PATCH `/api/admin/users/:id`；建号时绑定门店，可调店                                 | [账号控制器](../../apps/api/src/users.controller.ts)                                                                                                        |
 | 模板管理 | GET/POST `/api/admin/templates`、POST `/api/admin/templates/quick-setup`、PUT `/api/admin/templates/:id`          | [控制器](../../apps/api/src/templates.controller.ts)                                                                                                        |
-| 持久化   | organizations、sites、users、templates、template_items；每商家一个管理员，账号登录名与门店编码/模板名均按商家唯一 | [数据结构](inspection.md#数据结构)、[schema](../../apps/api/src/db/)                                                                                        |
-| 停用效果 | 任务日程同步、首次上传、总部看板                                                                                  | [任务日程](../../apps/api/src/task-scheduler.ts)、[任务上传](../../apps/api/src/evidence.controller.ts)、[看板](../../apps/api/src/dashboard.controller.ts) |
+| AI 标准  | GET/POST `/api/admin/ai-standards`、PUT/DELETE `/api/admin/ai-standards/:id`；被模板引用的标准不能删除              | [控制器](../../apps/api/src/ai-standards.controller.ts)、[共享契约](../../packages/shared/src/contract/index.ts)                                               |
+| 持久化   | organizations、sites、users、templates、template_items、ai_review_standards；每商家一个管理员，登录名、门店编码、模板名和标准名均按商家唯一 | [数据结构](inspection.md#数据结构)、[schema](../../apps/api/src/db/) |
+| 停用效果 | 任务日程同步、首次上传、商家看板                                                                                     | [任务日程](../../apps/api/src/task-scheduler.ts)、[任务上传](../../apps/api/src/evidence.controller.ts)、[看板](../../apps/api/src/dashboard.controller.ts) |
 
 ## 修订记录
 
@@ -39,3 +40,4 @@
 | 2026-10-29 | 门店与模板管理落库并提供 Web 页面；停用限制新建、保留历史与审核，看板标停用；模板修改保持已有巡检快照。  |
 | 2026-11-03 | g03 增加商家隔离与主管门店范围；商家管理员可指派主管，门店编码和模板名在商家内唯一、每商家一个当前模板。 |
 | 2026-11-11 | 管理员为唯一商家角色；店长账号直接绑定门店并可调店。模板由周循环日程按任务选用，不再设全商家当前模板。   |
+| 2026-11-11 | FW-026 提供多模板、AI 标准库与快捷配置；模板可配置 AI 开关并引用本商家标准。                              |
