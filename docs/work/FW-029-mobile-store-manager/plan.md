@@ -4,13 +4,17 @@
 
 ## 当前状态
 
-- 工作单元状态：`approved`
+- 工作单元状态：`blocked`
 - 归档状态：`active`
-- 当前任务：无
-- 阻塞：无
-- 下一步：开工时按 relay.md 核对上游，Preflight 后拆任务表（≤8 行）
+- 当前任务：代码前契约核对
+- 阻塞：AC-02 要求打回原因，但 FW-028 的判定契约与存储没有原因字段；需用户决定是否调整 AC 或扩大审核数据契约。
+- 下一步：等用户决定后再拆任务表和写代码。
 
 <!-- Preflight：编码前在此写一到三行——要动哪些模块；涉及既有数据时的只读统计计数；后端/库/开发者工具是否能起。不需要章节名。 -->
+
+Preflight：预期涉及 `apps/mobile`、`packages/shared`、`apps/api`；SDK 57 已有 `expo-image-picker`，可从用户动作调用系统相机。`proc.mjs status` 为空，3018–3020 未监听；`local-pg18` 正在运行并发布 5433。
+
+Preflight：`python scripts/validate_docs.py --env-keys` 报 workflow.conf 没有可检查的配置分组；按接力批准记录由用户手动核对配置，Agent 未读取 `.env*` 内容。
 
 ## 任务表
 
@@ -46,3 +50,7 @@
 ## 决策与偏差
 
 <!-- 只记会影响后续的：用户决策、放弃的方案、发现的范围外问题。每条一行。归档时把仍然重要的升入 adr/、specs/ 或 pitfalls.md。 -->
+
+- 卡在哪：FW-029 AC-02 要求打回附理由；FW-028 `taskItemDecisionRequestSchema` 只接受结论，`inspection_item_decisions` 只保存前后结论、操作人和时间，Mobile 可读的 `taskReviewItemSchema` 也没有理由。
+- 要用户定什么：是否将 AC-02 收窄为显示打回结论，待后续 AI 审核单元提供理由；还是扩展审核写入与读取契约，使打回原因成为持久化、可验证的数据。
+- 可选项和倾向：倾向先收窄 FW-029 AC-02，避免虚构打回理由或把后续 AI 语义提前塞进 FW-029；若选扩展，需同步修订已批准规格并将 `specs/inspection.md`「巡检规则」「接口」「数据结构」列入涉及事实，评估是否需要版本化迁移。
