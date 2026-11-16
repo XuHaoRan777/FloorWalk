@@ -19,7 +19,10 @@ test('管理员门店页显示门店、店长与状态', async ({ page }) => {
     active: boolean;
     storeManagers: Array<{ displayName: string }>;
   }>;
-  await page.getByRole('button', { name: '门店', exact: true }).click();
+  await page
+    .getByLabel('控制台导航')
+    .getByRole('button', { name: '门店', exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { name: '门店', exact: true }),
   ).toBeVisible();

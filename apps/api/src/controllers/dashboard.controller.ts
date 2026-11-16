@@ -10,6 +10,8 @@ import {
 import {
   apiRoutePath,
   apiRoutes,
+  adminTodayResponseSchema,
+  dashboardPeriodResponseSchema,
   dashboardSitesResponseSchema,
   selfCheckStatsResponseSchema,
 } from '@libs/shared';
@@ -20,11 +22,69 @@ import {
   type AuthedRequest,
   iso,
   assertRole,
+  getDateInTimezone,
 } from '../queries/inspection-queries.js';
+import {
+  loadDashboardTasks,
+  loadPeriodDashboard,
+} from '../queries/dashboard-query.js';
 
 @Controller('api')
 export class DashboardController {
   constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+
+  @UseGuards(AuthGuard)
+  @Get(apiRoutePath(apiRoutes.adminToday))
+  async today(@Req() request: AuthedRequest) {
+    assertRole(request.user, ...apiRoutes.adminToday.roles);
+    const organization = await this.pool.query<{ timezone: string }>(
+      'SELECT timezone FROM floorwalk.organizations WHERE id = $1',
+      [request.user.orgId],
+    );
+    const timezone = organization.rows[0].timezone;
+    const now = new Date();
+    const date = getDateInTimezone(now, timezone);
+    const tasks = await loadDashboardTasks(
+      this.pool,
+      request.user.orgId,
+      date,
+      date,
+      now,
+    );
+    return adminTodayResponseSchema.parse({
+      date,
+      timezone,
+      tasks,
+      summary: {
+        expected: tasks.length,
+        completed: tasks.filter((task) => task.status === 'submitted').length,
+        overdue: tasks.filter((task) => task.status === 'overdue').length,
+      },
+    });
+  }
+
+  @UseGuards(AuthGuard)
+  @Get(apiRoutePath(apiRoutes.dashboardPeriod))
+  async period(@Query() query: unknown, @Req() request: AuthedRequest) {
+    assertRole(request.user, ...apiRoutes.dashboardPeriod.roles);
+    const input = apiRoutes.dashboardPeriod.requestSchema.parse(query);
+    const organization = await this.pool.query<{ timezone: string }>(
+      'SELECT timezone FROM floorwalk.organizations WHERE id = $1',
+      [request.user.orgId],
+    );
+    const timezone = organization.rows[0].timezone;
+    const now = new Date();
+    return dashboardPeriodResponseSchema.parse(
+      await loadPeriodDashboard(
+        this.pool,
+        request.user.orgId,
+        input.period,
+        getDateInTimezone(now, timezone),
+        timezone,
+        now,
+      ),
+    );
+  }
 
   @UseGuards(AuthGuard)
   @Get(apiRoutePath(apiRoutes.selfCheckStats))

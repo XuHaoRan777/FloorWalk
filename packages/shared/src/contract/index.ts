@@ -1,6 +1,11 @@
 import { z, type ZodTypeAny } from 'zod';
 import { aiReviewJobStatusSchema } from './ai.js';
 import {
+  adminTodayResponseSchema,
+  dashboardPeriodQuerySchema,
+  dashboardPeriodResponseSchema,
+} from './dashboard.js';
+import {
   selfCheckStatsQuerySchema,
   selfCheckStatsResponseSchema,
 } from './stats.js';
@@ -59,6 +64,7 @@ export * from './ai.js';
 export * from './schedules.js';
 export * from './tasks.js';
 export * from './stats.js';
+export * from './dashboard.js';
 
 export const inspectionStatuses = [
   'draft',
@@ -704,6 +710,22 @@ export const apiRoutes = {
     roles: ['admin'],
     requestSchema: null,
     responseSchema: dashboardSitesResponseSchema,
+    successStatus: 200,
+  },
+  adminToday: {
+    method: 'GET',
+    path: '/api/dashboard/today',
+    roles: ['admin'],
+    requestSchema: null,
+    responseSchema: adminTodayResponseSchema,
+    successStatus: 200,
+  },
+  dashboardPeriod: {
+    method: 'GET',
+    path: '/api/dashboard/period',
+    roles: ['admin'],
+    requestSchema: dashboardPeriodQuerySchema,
+    responseSchema: dashboardPeriodResponseSchema,
     successStatus: 200,
   },
   selfCheckStats: {

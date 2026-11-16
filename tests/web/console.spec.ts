@@ -4,7 +4,7 @@ import {
   type APIRequestContext,
   type Page,
 } from '@playwright/test';
-import type { TaskReview } from '@libs/shared';
+import type { DashboardPeriodResponse, TaskReview } from '@libs/shared';
 
 const configuredSlot = Number(process.env.FW_SLOT ?? 3);
 const apiPort = 3100 + configuredSlot * 10;
@@ -135,12 +135,11 @@ test('总部看板与 API 返回一致，且不显示条目判定按钮', async 
   request,
 }) => {
   await apiLogin(request, 'hq@northbean.example');
-  const response = await request.get(`${apiBase}/api/dashboard/sites`);
+  const response = await request.get(
+    `${apiBase}/api/dashboard/period?period=week`,
+  );
   expect(response.ok()).toBeTruthy();
-  const sites = (await response.json()) as Array<{
-    site: { code: string; name: string };
-    latestScore: number | null;
-  }>;
+  const { sites, overall } = (await response.json()) as DashboardPeriodResponse;
   expect(sites).toHaveLength(12);
   expect(
     sites
@@ -159,13 +158,18 @@ test('总部看板与 API 返回一致，且不显示条目判定按钮', async 
 
   await login(page, 'hq@northbean.example');
   await expect(page.getByRole('heading', { name: /总部看板/ })).toBeVisible();
-  for (const entry of sites) {
-    const row = page
-      .getByRole('row')
-      .filter({ has: page.getByText(entry.site.name, { exact: true }) });
-    await expect(row).toBeVisible();
-    if (entry.latestScore !== null)
-      await expect(row).toContainText(String(entry.latestScore));
+  if (overall.expected === 0) {
+    await expect(page.getByText('本周暂无数据')).toBeVisible();
+  } else {
+    for (const entry of sites) {
+      const row = page
+        .getByRole('row')
+        .filter({ has: page.getByText(entry.site.name, { exact: true }) });
+      await expect(row).toBeVisible();
+      await expect(row).toContainText(
+        `${entry.metrics.completed}/${entry.metrics.expected}`,
+      );
+    }
   }
   await expect(
     page.getByRole('button', { name: /通过|打回|不合格/ }),

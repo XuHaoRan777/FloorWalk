@@ -31,7 +31,12 @@ export {
   getTaskReview,
   decideTaskItem,
 } from './api/review';
-export { getDashboard } from './api/dashboard';
+export {
+  getDashboard,
+  getAdminToday,
+  getPeriodDashboard,
+  getSelfCheckStats,
+} from './api/dashboard';
 export { getChatMessages, sendChatMessage } from './api/chat';
 export { getAdminSites, getAdminTemplates } from './api/admin';
 export { getInspectorRecords } from './api/records';

@@ -40,6 +40,7 @@ import {
   writeSession,
 } from '@/lib/api';
 import { DashboardView } from '@/components/console/dashboard-view';
+import { TodayView } from '@/components/console/today-view';
 import { ErrorBanner } from '@/components/console/error-banner';
 import { getErrorMessage } from '@/components/console/helpers';
 import { roleLabel } from '@/components/console/labels';
@@ -112,6 +113,7 @@ function useConsoleSession() {
 }
 
 type ConsoleSection =
+  | 'today'
   | 'queue'
   | 'dashboard'
   | 'sites'
@@ -152,9 +154,6 @@ export function ConsolePage() {
   const { user } = session;
   if (user.mustChangePassword) return null;
   const isAdmin = user.role === 'admin';
-  const canManage = isAdmin;
-  const canSeeDashboard = isAdmin;
-  const showDashboard = canSeeDashboard && section === 'dashboard';
   return (
     <SidebarProvider className="fw-console">
       <Sidebar variant="inset">
@@ -169,6 +168,20 @@ export function ConsolePage() {
               {isAdmin && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
+                    isActive={section === 'today'}
+                    onClick={() => {
+                      setSection('today');
+                      setSelected(null);
+                    }}
+                  >
+                    <CalendarDays aria-hidden="true" />
+                    <span>今日视图</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
                     isActive={section === 'queue'}
                     onClick={() => {
                       setSection('queue');
@@ -180,10 +193,10 @@ export function ConsolePage() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
-              {canSeeDashboard && (
+              {isAdmin && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    isActive={showDashboard}
+                    isActive={isAdmin && section === 'dashboard'}
                     onClick={() => {
                       setSection('dashboard');
                       setSelected(null);
@@ -194,7 +207,7 @@ export function ConsolePage() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
-              {canManage && (
+              {isAdmin && (
                 <>
                   <SidebarMenuItem>
                     <SidebarMenuButton
@@ -321,17 +334,17 @@ export function ConsolePage() {
         <Main id="main">
           <div className="fw-console-sheet">
             <ErrorBanner message={error} />
-            {canManage && section === 'sites' ? (
+            {isAdmin && section === 'sites' ? (
               <SitesPage />
-            ) : canManage && section === 'templates' ? (
+            ) : isAdmin && section === 'templates' ? (
               <TemplatesPage />
-            ) : canManage && section === 'standards' ? (
+            ) : isAdmin && section === 'standards' ? (
               <AiStandardsPage />
-            ) : canManage && section === 'schedules' ? (
+            ) : isAdmin && section === 'schedules' ? (
               <SchedulesPage />
-            ) : canManage && section === 'site-schedules' ? (
+            ) : isAdmin && section === 'site-schedules' ? (
               <SiteSchedulesPage />
-            ) : canManage && section === 'users' ? (
+            ) : isAdmin && section === 'users' ? (
               <UsersPage />
             ) : user.role === 'store_manager' ? (
               <div className="fw-inspector-notice mx-auto rounded-md border bg-card p-8 text-center">
@@ -355,7 +368,18 @@ export function ConsolePage() {
                 }}
                 onReviewed={reviewQueue.refresh}
               />
-            ) : showDashboard ? (
+            ) : section === 'today' ? (
+              <TodayView
+                manualQueue={reviewQueue.manualQueue}
+                queueLoading={reviewQueue.loading}
+                queueError={reviewQueue.error}
+                onRefreshQueue={reviewQueue.refresh}
+                onSelect={(task) => {
+                  setSelected(task);
+                  setError('');
+                }}
+              />
+            ) : isAdmin && section === 'dashboard' ? (
               <DashboardView onQueue={() => setSection('queue')} />
             ) : (
               <QueueView

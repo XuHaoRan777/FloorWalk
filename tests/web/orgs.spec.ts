@@ -97,12 +97,12 @@ test('FW-019 AC-02 首页注册商家，自动进入空看板并刷新保持会�
   createdOrgIds.push(created.org.id);
   await expect(page).toHaveURL(/\/console$/);
   await expect(page.getByRole('heading', { name: '总部看板' })).toBeVisible();
-  await expect(page.getByText('暂无门店数据')).toBeVisible();
+  await expect(page.getByText('本周暂无数据')).toBeVisible();
   expect(
     (await page.request.get(`${apiBase}/dashboard/sites`)).ok(),
   ).toBeTruthy();
   await page.reload();
-  await expect(page.getByText('暂无门店数据')).toBeVisible();
+  await expect(page.getByText('本周暂无数据')).toBeVisible();
   await page.getByRole('button', { name: '门店', exact: true }).click();
   await expect(page.getByText('暂无门店', { exact: true })).toBeVisible();
 });

@@ -1,111 +1,272 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ClipboardCheck, LayoutDashboard, RotateCcw } from 'lucide-react';
+import type {
+  DashboardPeriod,
+  DashboardPeriodResponse,
+  SelfCheckStatsResponse,
+} from '@libs/shared';
 import {
-  ClipboardCheck,
-  LayoutDashboard,
-  LoaderCircle,
-  RotateCcw,
-} from 'lucide-react';
-import { getDashboard, type DashboardSite } from '@/lib/api';
+  getDashboard,
+  getPeriodDashboard,
+  getSelfCheckStats,
+  type DashboardSite,
+} from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { ErrorBanner } from './error-banner';
 import { getErrorMessage } from './helpers';
-import { statusLabel } from './labels';
+import { DashboardTrend } from './dashboard-trend';
+import { DashboardSiteTable } from './dashboard-site-table';
+import { percentage, scoreLabel } from './dashboard-format';
+
+type DashboardData = {
+  summary: DashboardPeriodResponse;
+  siteChecks: Record<string, SelfCheckStatsResponse>;
+  managerChecks: Record<string, SelfCheckStatsResponse>;
+  latestSites: Record<string, DashboardSite>;
+  accuracy: number | null;
+};
 
 export function DashboardView({ onQueue }: { onQueue: () => void }) {
-  const [sites, setSites] = useState<
-    Array<DashboardSite & { site: DashboardSite['site'] & { active: boolean } }>
-  >([]);
+  const [period, setPeriod] = useState<DashboardPeriod>('week');
+  const [dimension, setDimension] = useState<'site' | 'manager' | 'date'>(
+    'site',
+  );
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const load = useCallback(() => {
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    let active = true;
     setLoading(true);
     setError('');
-    void getDashboard()
-      .then((result) =>
-        setSites(
-          result as Array<
-            DashboardSite & {
-              site: DashboardSite['site'] & { active: boolean };
-            }
-          >,
-        ),
-      )
-      .catch((reason: unknown) => setError(getErrorMessage(reason)))
-      .finally(() => setLoading(false));
-  }, []);
-  useEffect(() => load(), [load]);
+    async function load() {
+      try {
+        const [summary, latestSites] = await Promise.all([
+          getPeriodDashboard(period),
+          getDashboard(),
+        ]);
+        const range = { from: summary.from, to: summary.to };
+        const [sites, managers] = await Promise.all([
+          Promise.all(
+            summary.sites.map(
+              async ({ site }) =>
+                [
+                  site.id,
+                  await getSelfCheckStats({
+                    scope: 'site',
+                    id: site.id,
+                    ...range,
+                  }),
+                ] as const,
+            ),
+          ),
+          Promise.all(
+            summary.managers.map(
+              async (manager) =>
+                [
+                  manager.id,
+                  await getSelfCheckStats({
+                    scope: 'manager',
+                    id: manager.id,
+                    ...range,
+                  }),
+                ] as const,
+            ),
+          ),
+        ]);
+        const counts = sites.reduce(
+          (total, [, stats]) => ({
+            samples: total.samples + stats.sampleCount,
+            matching: total.matching + stats.matchingCount,
+          }),
+          { samples: 0, matching: 0 },
+        );
+        if (active)
+          setData({
+            summary,
+            siteChecks: Object.fromEntries(sites),
+            managerChecks: Object.fromEntries(managers),
+            latestSites: Object.fromEntries(
+              latestSites.map((entry) => [entry.site.id, entry]),
+            ),
+            accuracy: counts.samples ? counts.matching / counts.samples : null,
+          });
+      } catch (reason) {
+        if (active) setError(getErrorMessage(reason));
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [period, revision]);
+  const periodLabel = period === 'week' ? '本周' : '本月';
   return (
     <>
       <div className="fw-page-heading">
         <div>
-          <p className="fw-page-eyebrow">Northbean 连锁门店</p>
-          <h1>总部看板</h1>
+          <p className="fw-page-eyebrow">门店巡检概况</p>
+          <h1 className="text-balance">总部看板</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={onQueue}>
             <ClipboardCheck aria-hidden="true" />
             审核队列
           </Button>
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            onClick={() => setRevision((value) => value + 1)}
+          >
             <RotateCcw aria-hidden="true" />
-            刷新
+            刷新看板
           </Button>
         </div>
+      </div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div role="group" aria-label="统计周期" className="flex gap-2">
+          {(['week', 'month'] as const).map((value) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={period === value ? 'default' : 'outline'}
+              aria-pressed={period === value}
+              onClick={() => setPeriod(value)}
+            >
+              {value === 'week' ? '本周' : '本月'}
+            </Button>
+          ))}
+        </div>
+        {!loading && !error && data && (
+          <p className="text-sm text-muted-foreground tabular-nums">
+            {data.summary.from} 至 {data.summary.to} · {data.summary.timezone}
+          </p>
+        )}
       </div>
       <ErrorBanner message={error} />
       {loading ? (
         <p className="fw-state" role="status">
-          <LoaderCircle className="animate-spin" aria-hidden="true" />
-          正在加载门店数据…
+          正在加载看板…
         </p>
-      ) : error && sites.length === 0 ? null : sites.length === 0 ? (
-        <div className="fw-state">
-          <LayoutDashboard aria-hidden="true" />
-          <p>暂无门店数据</p>
-        </div>
+      ) : error || !data ? null : data.summary.overall.expected === 0 ? (
+        <>
+          <div className="fw-state">
+            <LayoutDashboard aria-hidden="true" />
+            <p>{periodLabel}暂无数据</p>
+          </div>
+          <DashboardSiteTable
+            sites={data.summary.sites}
+            checks={data.siteChecks}
+            latestSites={data.latestSites}
+            showMetrics={false}
+          />
+        </>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="fw-data-table min-w-[38rem]">
-            <thead>
-              <tr>
-                <th className="px-4 py-3 font-medium">门店</th>
-                <th className="px-4 py-3 text-right font-medium">最近分数</th>
-                <th className="px-4 py-3 font-medium">状态</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sites.map((entry) => (
-                <tr key={entry.site.id}>
-                  <td>
-                    <span className="font-medium">{entry.site.name}</span>
-                    <span className="ml-2 font-mono text-xs text-muted-foreground">
-                      {entry.site.code}
-                    </span>
-                  </td>
-                  <td className="text-right">
-                    {entry.latestScore === null ? (
-                      '暂无'
-                    ) : (
-                      <>
-                        <span>{entry.latestScore}</span> 分
-                      </>
-                    )}
-                  </td>
-                  <td>
-                    {entry.latestStatus
-                      ? statusLabel[entry.latestStatus]
-                      : '暂无记录'}
-                    {!entry.site.active && (
-                      <span className="ml-2 font-medium text-destructive">
-                        已停用
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <dl
+            aria-label="看板指标"
+            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+          >
+            {(
+              [
+                ['完成率', percentage(data.summary.overall.completionRate)],
+                ['逾期任务', String(data.summary.overall.overdue)],
+                ['自检准确率', percentage(data.accuracy)],
+                ['平均分', scoreLabel(data.summary.overall.averageScore)],
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label} className="rounded-md border bg-card p-4">
+                <dt className="text-sm text-muted-foreground">{label}</dt>
+                <dd className="mt-2 text-2xl font-semibold tabular-nums">
+                  {value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mb-6 mt-3 text-sm text-muted-foreground">
+            {periodLabel}应完成 {data.summary.overall.expected}{' '}
+            项任务，截止前交齐 {data.summary.overall.completed}{' '}
+            项。应完成数为本期已生成的任务；平均分仅计已判定任务。无样本以「—」显示。
+          </p>
+          <div
+            role="group"
+            aria-label="统计维度"
+            className="mb-4 flex flex-wrap gap-2"
+          >
+            {(
+              [
+                ['site', '门店'],
+                ['manager', '店长排行榜'],
+                ['date', '日期趋势'],
+              ] as const
+            ).map(([value, label]) => (
+              <Button
+                key={value}
+                variant={dimension === value ? 'default' : 'outline'}
+                size="sm"
+                aria-pressed={dimension === value}
+                onClick={() => setDimension(value)}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+          {dimension === 'site' ? (
+            <DashboardSiteTable
+              sites={data.summary.sites}
+              checks={data.siteChecks}
+              latestSites={data.latestSites}
+              showMetrics
+            />
+          ) : dimension === 'manager' ? (
+            <section aria-label="店长排行榜">
+              <p className="mb-3 text-sm text-muted-foreground">
+                按提交条目数排序。提交数和通过率按当前上传人统计，通过率只计已判定条目；自检准确率归首次上传人。
+              </p>
+              {data.summary.managers.length === 0 ? (
+                <p className="fw-state">{periodLabel}暂无店长提交</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="fw-data-table min-w-[32rem]">
+                    <thead>
+                      <tr>
+                        <th>排名</th>
+                        <th>店长</th>
+                        <th className="text-right">提交条目数</th>
+                        <th className="text-right">通过率</th>
+                        <th className="text-right">自检准确率</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.summary.managers.map((manager, index) => (
+                        <tr key={manager.id}>
+                          <td className="tabular-nums">{index + 1}</td>
+                          <td>{manager.displayName}</td>
+                          <td className="text-right tabular-nums">
+                            {manager.submittedItems}
+                          </td>
+                          <td className="text-right tabular-nums">
+                            {percentage(manager.passRate)}
+                          </td>
+                          <td className="text-right tabular-nums">
+                            {percentage(
+                              data.managerChecks[manager.id]?.accuracy ?? null,
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          ) : (
+            <DashboardTrend dates={data.summary.dates} />
+          )}
+        </>
       )}
     </>
   );

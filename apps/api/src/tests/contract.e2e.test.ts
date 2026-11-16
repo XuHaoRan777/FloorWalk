@@ -416,7 +416,7 @@ describe('inspection contract API', () => {
   });
 
   it('publishes the complete route table under /api', () => {
-    expect(Object.keys(apiRoutes)).toHaveLength(46);
+    expect(Object.keys(apiRoutes)).toHaveLength(48);
     for (const route of Object.values(apiRoutes)) {
       expect(route.path.startsWith('/api/')).toBe(true);
       expect(route.responseSchema).toBeDefined();
@@ -621,6 +621,29 @@ describe('inspection contract API', () => {
           store_manager: async () => {
             const response = await request(app.getHttpServer())
               .get('/api/dashboard/sites')
+              .set('Cookie', inspectorCookie);
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'adminToday',
+        {
+          store_manager: async () => {
+            const response = await request(app.getHttpServer())
+              .get('/api/dashboard/today')
+              .set('Cookie', inspectorCookie);
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'dashboardPeriod',
+        {
+          store_manager: async () => {
+            const response = await request(app.getHttpServer())
+              .get('/api/dashboard/period')
+              .query({ period: 'week' })
               .set('Cookie', inspectorCookie);
             return { status: response.status, body: response.body };
           },
@@ -1803,6 +1826,15 @@ describe('inspection contract API', () => {
       .set('Cookie', hqCookie)
       .expect(200);
     dashboardSitesResponseSchema.parse(dashboard.body);
+    const adminToday = await request(app.getHttpServer())
+      .get('/api/dashboard/today')
+      .set('Cookie', hqCookie)
+      .expect(200);
+    const dashboardPeriod = await request(app.getHttpServer())
+      .get('/api/dashboard/period')
+      .query({ period: 'week' })
+      .set('Cookie', hqCookie)
+      .expect(200);
     const selfCheckStats = await request(app.getHttpServer())
       .get('/api/stats/self-check')
       .query({
@@ -2057,6 +2089,8 @@ describe('inspection contract API', () => {
       getTaskReview: taskReview,
       decideTaskItem: decided,
       dashboardSites: dashboard,
+      adminToday,
+      dashboardPeriod,
       selfCheckStats,
       listInspectionMessages: chatListResponse,
       createInspectionMessage: chatCreateResponse,
