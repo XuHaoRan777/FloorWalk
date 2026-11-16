@@ -1,0 +1,173 @@
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import type { Request } from 'express';
+import { inspectionDetailSchema } from '@libs/shared';
+import { createPool } from '../db/client.js';
+import { type AuthUser } from '../auth/auth.js';
+import { canAccessSite } from '../services/site-scope.js';
+
+export type AuthedRequest = Request & { user: AuthUser };
+export type UploadedImage = {
+  fieldname: string;
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+};
+export const iso = (value: unknown) =>
+  value instanceof Date ? value.toISOString() : value;
+
+export function getShanghaiDayBounds(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  const start = new Date(
+    Date.UTC(values.year, values.month - 1, values.day) - 8 * 60 * 60 * 1000,
+  );
+  return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
+}
+
+export function getDateInTimezone(now: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+export function assertRole(
+  user: AuthUser,
+  ...roles: readonly AuthUser['role'][]
+) {
+  if (!roles.includes(user.role))
+    throw new ForbiddenException({
+      code: 'FORBIDDEN',
+      message: '当前角色无权执行此操作。',
+    });
+}
+
+export function assertInspectionAccess(
+  inspection: {
+    id: string;
+    siteId: string;
+    inspectorId: string | null;
+    orgId: string;
+    participated?: boolean;
+  },
+  user: AuthUser,
+  allowHistory = false,
+) {
+  if (inspection.orgId !== user.orgId)
+    throw new NotFoundException({
+      code: 'NOT_FOUND',
+      message: '巡检单不存在。',
+    });
+  if (
+    !canAccessSite(user, { id: inspection.siteId, orgId: inspection.orgId }) &&
+    !(allowHistory && inspection.participated)
+  )
+    throw new NotFoundException({
+      code: 'NOT_FOUND',
+      message: '巡检单不存在。',
+    });
+}
+
+export async function getInspectionAccess(
+  pool: ReturnType<typeof createPool>,
+  id: string,
+  user: AuthUser,
+) {
+  const result = await pool.query(
+    `SELECT i.id, i.site_id AS "siteId", i.template_id AS "templateId",
+        i.inspector_id AS "inspectorId", i.status, i.score,
+        i.submitted_at AS "submittedAt", i.decided_at AS "decidedAt",
+        i.created_at AS "createdAt", s.org_id AS "orgId",
+        EXISTS (SELECT 1 FROM floorwalk.inspection_participants p
+          WHERE p.inspection_id = i.id AND p.user_id = $2) AS participated
+     FROM floorwalk.inspections i
+     JOIN floorwalk.sites s ON s.id = i.site_id
+     WHERE i.id = $1`,
+    [id, user.id],
+  );
+  if (!result.rows[0])
+    throw new NotFoundException({
+      code: 'NOT_FOUND',
+      message: '巡检单不存在。',
+    });
+  assertInspectionAccess(result.rows[0], user, true);
+  return result.rows[0];
+}
+
+export async function loadInspectionDetail(
+  pool: ReturnType<typeof createPool>,
+  inspection: Record<string, unknown>,
+) {
+  const site = await pool.query(
+    'SELECT id, code, name, deactivated_at IS NULL AS active, created_at AS "createdAt" FROM floorwalk.sites WHERE id = $1',
+    [inspection.siteId],
+  );
+  if (!site.rows[0])
+    throw new NotFoundException({
+      code: 'NOT_FOUND',
+      message: '门店不存在。',
+    });
+  const items = await pool.query(
+    `SELECT id, inspection_id AS "inspectionId", position, title,
+       min_photo_count AS "minPhotoCount", acceptance_criteria AS "acceptanceCriteria",
+        critical, result, note, created_at AS "createdAt"
+       FROM floorwalk.inspection_items WHERE inspection_id = $1 ORDER BY position`,
+    [inspection.id],
+  );
+  const detailItems = [];
+  for (const item of items.rows) {
+    const evidence = await pool.query(
+      `SELECT id, inspection_item_id AS "inspectionItemId", storage_key AS "storageKey",
+          mime, size, created_at AS "createdAt"
+         FROM floorwalk.evidence WHERE inspection_item_id = $1 ORDER BY created_at`,
+      [item.id],
+    );
+    detailItems.push({
+      ...item,
+      createdAt: iso(item.createdAt),
+      evidence: evidence.rows.map((row) => ({
+        ...row,
+        createdAt: iso(row.createdAt),
+      })),
+    });
+  }
+  const reviews = await pool.query(
+    `SELECT id, inspection_id AS "inspectionId", reviewer_id AS "reviewerId",
+        action, comment, rework_item_ids AS "reworkItemIds", created_at AS "createdAt"
+       FROM floorwalk.reviews WHERE inspection_id = $1 ORDER BY created_at ASC, id ASC`,
+    [inspection.id],
+  );
+  return inspectionDetailSchema.parse({
+    ...inspection,
+    submittedAt: iso(inspection.submittedAt),
+    decidedAt: iso(inspection.decidedAt),
+    createdAt: iso(inspection.createdAt),
+    site: {
+      ...site.rows[0],
+      createdAt: iso(site.rows[0].createdAt),
+    },
+    items: detailItems,
+    reviews: reviews.rows.map((row) => ({
+      ...row,
+      createdAt: iso(row.createdAt),
+    })),
+  });
+}

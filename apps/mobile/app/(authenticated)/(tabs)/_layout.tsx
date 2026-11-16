@@ -2,13 +2,16 @@ import Tabs from 'expo-router/tabs';
 import { ClipboardCheck, ListChecks, UserRound } from 'lucide-react-native';
 import { useTabColors } from '../../../components/mobile/use-tab-colors';
 
+export const unstable_settings = {
+  initialRouteName: 'today',
+};
+
 export default function TabLayout() {
   const tabColors = useTabColors();
 
   return (
     <>
       <Tabs
-        initialRouteName="today"
         screenOptions={{
           headerShown: false,
           sceneStyle: { backgroundColor: tabColors.background },

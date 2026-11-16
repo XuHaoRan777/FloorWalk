@@ -1,6 +1,6 @@
 # 门店与模板管理
 
-代码（归档时再生成）：`apps/api/src/admin.controller.ts`、`apps/api/src/users.controller.ts`、`apps/api/src/templates.controller.ts`、`apps/api/src/ai-standards.controller.ts`、`apps/web/src/components/console/`；Web 客户端为 `apps/web/src/lib/api/`。
+代码（归档时再生成）：`apps/api/src/controllers/admin.controller.ts`、`apps/api/src/controllers/users.controller.ts`、`apps/api/src/controllers/templates.controller.ts`、`apps/api/src/controllers/ai-standards.controller.ts`、`apps/web/src/components/console/`；Web 客户端为 `apps/web/src/lib/api/`。
 
 ## 权限
 
@@ -26,12 +26,12 @@
 
 | 入口     | 当前契约                                                                                                          | 代码（归档时再生成）                                                                                                                                        |
 | -------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 门店管理 | GET/POST `/api/admin/sites`、PATCH `/api/admin/sites/:id`；返回 `active` 和店长列表                               | [控制器](../../apps/api/src/admin.controller.ts)、[共享契约](../../packages/shared/src/contract/index.ts)                                                   |
-| 店长账号 | GET/POST `/api/admin/users`、PATCH `/api/admin/users/:id`；建号时绑定门店，可调店                                 | [账号控制器](../../apps/api/src/users.controller.ts)                                                                                                        |
-| 模板管理 | GET/POST `/api/admin/templates`、POST `/api/admin/templates/quick-setup`、PUT `/api/admin/templates/:id`          | [控制器](../../apps/api/src/templates.controller.ts)                                                                                                        |
-| AI 标准  | GET/POST `/api/admin/ai-standards`、PUT/DELETE `/api/admin/ai-standards/:id`；被模板引用的标准不能删除              | [控制器](../../apps/api/src/ai-standards.controller.ts)、[共享契约](../../packages/shared/src/contract/index.ts)                                               |
+| 门店管理 | GET/POST `/api/admin/sites`、PATCH `/api/admin/sites/:id`；返回 `active` 和店长列表                               | [控制器](../../apps/api/src/controllers/admin.controller.ts)、[共享契约](../../packages/shared/src/contract/index.ts)                                                   |
+| 店长账号 | GET/POST `/api/admin/users`、PATCH `/api/admin/users/:id`；建号时绑定门店，可调店                                 | [账号控制器](../../apps/api/src/controllers/users.controller.ts)                                                                                                        |
+| 模板管理 | GET/POST `/api/admin/templates`、POST `/api/admin/templates/quick-setup`、PUT `/api/admin/templates/:id`          | [控制器](../../apps/api/src/controllers/templates.controller.ts)                                                                                                        |
+| AI 标准  | GET/POST `/api/admin/ai-standards`、PUT/DELETE `/api/admin/ai-standards/:id`；被模板引用的标准不能删除              | [控制器](../../apps/api/src/controllers/ai-standards.controller.ts)、[共享契约](../../packages/shared/src/contract/index.ts)                                               |
 | 持久化   | organizations、sites、users、templates、template_items、ai_review_standards；每商家一个管理员，登录名、门店编码、模板名和标准名均按商家唯一 | [数据结构](inspection.md#数据结构)、[schema](../../apps/api/src/db/) |
-| 停用效果 | 任务日程同步、首次上传、商家看板                                                                                     | [任务日程](../../apps/api/src/task-scheduler.ts)、[任务上传](../../apps/api/src/evidence.controller.ts)、[看板](../../apps/api/src/dashboard.controller.ts) |
+| 停用效果 | 任务日程同步、首次上传、商家看板                                                                                     | [任务日程](../../apps/api/src/services/task-scheduler.ts)、[任务上传](../../apps/api/src/controllers/evidence.controller.ts)、[看板](../../apps/api/src/controllers/dashboard.controller.ts) |
 
 ## 修订记录
 

@@ -1,6 +1,6 @@
 # 日程方案与门店安排
 
-代码（归档时再生成）：`apps/api/src/schedules.controller.ts`、`apps/api/src/schedule-persistence.ts`、`apps/api/src/task-scheduler.ts`、`packages/shared/src/schedule-plan.ts`、`packages/shared/src/contract/schedules.ts`、`apps/web/src/`
+代码（归档时再生成）：`apps/api/src/controllers/schedules.controller.ts`、`apps/api/src/services/schedule-persistence.ts`、`apps/api/src/services/task-scheduler.ts`、`packages/shared/src/schedule-plan.ts`、`packages/shared/src/contract/schedules.ts`、`apps/web/src/`
 
 ## 日程方案
 
@@ -35,7 +35,7 @@ API 进程启动时同步一次任务，此后每分钟同步所有商家的当�
 
 ## 数据契约（归档时再生成）
 
-共享结构与规则函数位于 `packages/shared/src/contract/schedules.ts`、`packages/shared/src/schedule-plan.ts`；API 持久化与同步位于 `apps/api/src/schedule-persistence.ts`、`apps/api/src/task-scheduler.ts`、`apps/api/src/schedules.controller.ts`。底层表定义及迁移以 `apps/api/src/db/` 和 `apps/api/drizzle/` 为准。
+共享结构与规则函数位于 `packages/shared/src/contract/schedules.ts`、`packages/shared/src/schedule-plan.ts`；API 持久化与同步位于 `apps/api/src/services/schedule-persistence.ts`、`apps/api/src/services/task-scheduler.ts`、`apps/api/src/controllers/schedules.controller.ts`。底层表定义及迁移以 `apps/api/src/db/` 和 `apps/api/drizzle/` 为准。
 
 ## 修订记录
 

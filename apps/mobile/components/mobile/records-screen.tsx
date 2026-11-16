@@ -146,7 +146,7 @@ export function RecordsScreen({
         </View>
       }
       ListFooterComponent={
-        records.length === 0 ? null : nextCursor ? (
+        records.length === 0 ? undefined : nextCursor ? (
           <Pressable
             accessibilityRole="button"
             accessibilityState={{

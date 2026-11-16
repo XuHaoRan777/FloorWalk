@@ -7,7 +7,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdir, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { getJwtSecret } from '../auth-config.js';
+import { getJwtSecret } from '../config/auth-config.js';
 import type { StorageDriver } from './types.js';
 
 export class LocalStorageDriver implements StorageDriver {

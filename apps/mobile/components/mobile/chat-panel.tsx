@@ -6,6 +6,7 @@ import {
   Image,
   Platform,
   ScrollView,
+  type ScrollViewInstance,
   Text,
   TextInput,
   View,
@@ -51,7 +52,7 @@ export function ChatPanel({
     AppState.currentState === 'active',
   );
   const [focused, setFocused] = useState(true);
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<ScrollViewInstance | null>(null);
   const latestSeq = useRef<string | null>(null);
   const loaded = useRef(false);
   const fetching = useRef(false);

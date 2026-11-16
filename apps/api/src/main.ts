@@ -5,9 +5,9 @@ import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-option
 import { NestFactory } from '@nestjs/core';
 import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module.js';
-import { getJwtSecret } from './auth-config.js';
-import { getAllowedOrigins } from './cors-config.js';
-import { HttpErrorFilter } from './http-exception.filter.js';
+import { getJwtSecret } from './config/auth-config.js';
+import { getAllowedOrigins } from './config/cors-config.js';
+import { HttpErrorFilter } from './filters/http-exception.filter.js';
 
 const writeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 

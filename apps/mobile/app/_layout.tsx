@@ -42,14 +42,20 @@ function Routes() {
   );
 }
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     [tokens.font.mono.regular]: IBMPlexMono_400Regular,
     [tokens.font.sans.regular]: IBMPlexSans_400Regular,
     [tokens.font.sans.medium]: IBMPlexSans_500Medium,
     [tokens.font.sans.semibold]: IBMPlexSans_600SemiBold,
   });
 
-  if (!fontsLoaded) return null;
+  if (fontError) throw fontError;
+  if (!fontsLoaded)
+    return (
+      <View style={styles.centered}>
+        <Text>正在加载字体…</Text>
+      </View>
+    );
 
   return (
     <SafeAreaProvider>

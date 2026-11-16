@@ -1,0 +1,72 @@
+diff --git a/dist/commonjs/components/index.cjs b/dist/commonjs/components/index.cjs
+index bf661727ee33dc92f69aaaf06159b60cef51cff1..1ca08becc64d87784ed50778a560bc5c56348d35 100644
+--- a/dist/commonjs/components/index.cjs
++++ b/dist/commonjs/components/index.cjs
+@@ -120,6 +120,9 @@ module.exports = {
+   get AppState() {
+     return require("react-native").AppState;
+   },
++  get AssetRegistry() {
++    return require("react-native").AssetRegistry;
++  },
+   get BackHandler() {
+     return require("react-native").BackHandler;
+   },
+@@ -183,6 +186,9 @@ module.exports = {
+   get NativeEventEmitter() {
+     return require("react-native").NativeEventEmitter;
+   },
++  get NativeComponentRegistry() {
++    return require("react-native").NativeComponentRegistry;
++  },
+   get NativeModules() {
+     return require("react-native").NativeModules;
+   },
+diff --git a/dist/module/components/index.cjs b/dist/module/components/index.cjs
+index bf661727ee33dc92f69aaaf06159b60cef51cff1..1ca08becc64d87784ed50778a560bc5c56348d35 100644
+--- a/dist/module/components/index.cjs
++++ b/dist/module/components/index.cjs
+@@ -120,6 +120,9 @@ module.exports = {
+   get AppState() {
+     return require("react-native").AppState;
+   },
++  get AssetRegistry() {
++    return require("react-native").AssetRegistry;
++  },
+   get BackHandler() {
+     return require("react-native").BackHandler;
+   },
+@@ -183,6 +186,9 @@ module.exports = {
+   get NativeEventEmitter() {
+     return require("react-native").NativeEventEmitter;
+   },
++  get NativeComponentRegistry() {
++    return require("react-native").NativeComponentRegistry;
++  },
+   get NativeModules() {
+     return require("react-native").NativeModules;
+   },
+diff --git a/src/components/index.cts b/src/components/index.cts
+index d8aeb204d10e1f7e665da659aec32ddbec6c128a..c57d58d678cd5f362f2e083e96b1acbaf6606de9 100644
+--- a/src/components/index.cts
++++ b/src/components/index.cts
+@@ -119,6 +119,9 @@ module.exports = {
+   get AppState() {
+     return require("react-native").AppState;
+   },
++  get AssetRegistry() {
++    return require("react-native").AssetRegistry;
++  },
+   get BackHandler() {
+     return require("react-native").BackHandler;
+   },
+@@ -182,6 +185,9 @@ module.exports = {
+   get NativeEventEmitter() {
+     return require("react-native").NativeEventEmitter;
+   },
++  get NativeComponentRegistry() {
++    return require("react-native").NativeComponentRegistry;
++  },
+   get NativeModules() {
+     return require("react-native").NativeModules;
+   },
