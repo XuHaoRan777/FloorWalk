@@ -1,8 +1,10 @@
 import {
   ArrowRight,
+  BarChart3,
   CalendarDays,
   CalendarRange,
   ClipboardList,
+  ClipboardCheck,
   SlidersHorizontal,
   Store,
   UserRound,
@@ -22,6 +24,24 @@ const entries: {
   icon: LucideIcon;
   testID: string;
 }[] = [
+  {
+    href: '/admin/dashboard',
+    label: '总部看板',
+    icon: BarChart3,
+    testID: 'admin-entry-dashboard',
+  },
+  {
+    href: '/admin/today',
+    label: '今日视图',
+    icon: CalendarDays,
+    testID: 'admin-entry-today',
+  },
+  {
+    href: '/admin/review',
+    label: '审核队列',
+    icon: ClipboardCheck,
+    testID: 'admin-entry-review',
+  },
   {
     href: '/admin/accounts',
     label: '账号',

@@ -47,6 +47,8 @@ const apiEnv = {
   NODE_ENV: 'development',
   CORS_ORIGINS: metroUrl,
   MAIL_DRIVER: 'fake',
+  AI_REVIEW_DRIVER: 'fake',
+  STORAGE_DRIVER: 'local',
 };
 const webEnv = {
   FW_SLOT: String(slot),
@@ -70,7 +72,7 @@ export default defineConfig({
   use: { baseURL: metroUrl },
   webServer: [
     {
-      command: 'node scripts/e2e-api.mjs',
+      command: 'node scripts/e2e-api.mjs --fake-ai-failure',
       env: apiEnv,
       url: `http://127.0.0.1:${apiPort}/health`,
       reuseExistingServer: false,

@@ -93,11 +93,14 @@ test('Expo Web chat pagination, polling, sending, validation and HQ read-only', 
   const staffEmail = 'inspector+nb-002@northbean.example';
   const staff = await signedInContext(staffEmail);
   const admin = await signedInContext('hq@northbean.example');
-  const todayResponse = await staff.get(`${apiBase}/api/inspector/today`);
-  const today = (await todayResponse.json()) as {
-    reworkInspections: Array<{ id: string }>;
+  const recordsResponse = await staff.get(
+    `${apiBase}/api/inspector/inspections?limit=10`,
+  );
+  expect(recordsResponse.status()).toBe(200);
+  const records = (await recordsResponse.json()) as {
+    items: Array<{ id: string }>;
   };
-  const targetInspectionId = today.reworkInspections[0]?.id;
+  const targetInspectionId = records.items[0]?.id;
   expect(targetInspectionId).toBeTruthy();
   if (!targetInspectionId) return;
   const target = { id: targetInspectionId };
