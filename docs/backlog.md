@@ -16,12 +16,12 @@
 | 个人中心（头像、改密码，管理员改昵称）                                                                       | 无                  | Mobile「我的」只能看账号与门店                                                                                                                           |
 | 门店管理、停用、分配店长                                                                                     | 有                  | [门店与模板管理](specs/admin.md)；账号创建或调店时绑定门店                                                                                               |
 | 多模板，检查项含严重项、最少张数（0 不拍）、验收要点                                                         | 有                  | [门店与模板管理](specs/admin.md)；每个日程任务选择所用模板                                                                                               |
-| AI 审核标准库、模板开关 AI、三套快捷配置                                                                     | 有                  | [门店与模板管理](specs/admin.md)；AI 逐条审核引擎尚未接入                                                                                                |
+| AI 审核标准库、模板开关 AI、三套快捷配置                                                                     | 有                  | [门店与模板管理](specs/admin.md)、[巡检主链](specs/inspection.md)；模板已接入逐条审核引擎                                                                  |
 | 日程方案、门店日程安排（选用、跳过日期区间）、每日生成任务                                                   | 有                  | [日程方案与门店安排](specs/schedules.md)；任务生成由巡检主链同步                                                                                         |
 | 今日任务、只能相机拍、时间窗与宽限、多人逐条上传与覆盖、逐项自评                                             | 有                  | [巡检主链](specs/inspection.md)、[Mobile 店长巡检](specs/mobile-inspector.md)；今日任务、相机上传/重传、自评和调店后参与记录可见均已实现                  |
-| AI 逐条审核（通过、打回、属实不合格、失败转人工）                                                            | 无                  |                                                                                                                                                          |
-| 判定与分数：判定时间、分数、整单结论、改判、关闭 AI 时人工审                                                 | 部分                | [巡检主链](specs/inspection.md)、[Web 控制台](specs/web-console.md)；已有管理员逐条人工判定、自动截止判定与改判，AI 审核尚未接入                         |
-| 今日视图与看板（完成率、逾期、自检准确率、分数；门店、店长、日期）                                           | 部分                | [Web 控制台](specs/web-console.md)；只有最近分数                                                                                                         |
+| AI 逐条审核（通过、打回、属实不合格、失败转人工）                                                            | 有                  | [巡检主链](specs/inspection.md)；假模型与异步队列已取证，真实门店图片效果待 FW-038                                                                         |
+| 判定与分数：判定时间、分数、整单结论、改判、关闭 AI 时人工审                                                 | 部分                | [巡检主链](specs/inspection.md)、[Web 控制台](specs/web-console.md)；AI 已接入既有判定规则，审核界面待 FW-031                                               |
+| 今日视图与看板（完成率、逾期、自检准确率、分数；门店、店长、日期）                                           | 部分                | [Web 控制台](specs/web-console.md)、[巡检主链](specs/inspection.md)；页面只有最近分数，自检准确率只读接口已实现                                              |
 | Mobile 管理端，功能与 Web 相同                                                                               | 无                  | Mobile 目前只给店长                                                                                                                                      |
 | 巡检单聊天                                                                                                   | 有                  | [巡检单聊天](specs/chat.md)                                                                                                                              |
 | Mobile 本店记录                                                                                              | 有                  | [Mobile 店长巡检](specs/mobile-inspector.md)                                                                                                             |
@@ -36,7 +36,7 @@
 
 | ID | 工作单元 | 状态 | 依赖 | 下一步 |
 | --- | --- | --- | --- | --- |
-| FW-030 | [AI 逐条审核](work/FW-030-ai-review/spec.md) | `approved` | FW-028 | 接力待开工（线二 1/9） |
+| FW-030 | [AI 逐条审核](work/FW-030-ai-review/spec.md) | `verified` | FW-028 | 已交付，自动接力 FW-031，线尾统一归档（线二 1/9） |
 | FW-031 | [管理员审核与改判（Web）](work/FW-031-admin-review-web/spec.md) | `approved` | FW-030 | 接力待开工（线二 2/9） |
 | FW-032 | [今日视图与看板（Web）](work/FW-032-dashboard-web/spec.md) | `approved` | FW-031 | 接力待开工（线二 3/9） |
 | FW-033 | [Mobile 管理端（一）：配置](work/FW-033-mobile-admin-config/spec.md) | `approved` | FW-029 | 接力待开工（线二 4/9） |

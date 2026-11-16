@@ -20,6 +20,7 @@ import {
   TASK_SCHEDULER_CLOCK,
 } from './services/task-scheduler.js';
 import { TaskDecisionService } from './services/task-decisions.js';
+import { AiReviewQueueService } from './services/ai-review-queue.js';
 import { TaskReviewController } from './controllers/task-review.controller.js';
 import { FakeMailboxController } from './controllers/fake-mailbox.controller.js';
 import { EmailVerificationService } from './services/email-verification.js';
@@ -38,6 +39,7 @@ import {
     { provide: EMAIL_SENDER, useFactory: () => createEmailSender() },
     EmailVerificationService,
     TaskDecisionService,
+    AiReviewQueueService,
     TaskSchedulerService,
     { provide: TASK_SCHEDULER_CLOCK, useValue: { now: () => new Date() } },
     { provide: 'STORAGE_DRIVER', useFactory: () => getStorageDriver() },

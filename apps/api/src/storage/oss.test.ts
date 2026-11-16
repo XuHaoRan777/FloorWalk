@@ -49,7 +49,7 @@ describe('OSS configuration at startup', () => {
         ...configuration,
         [missing]: '',
         STORAGE_DRIVER: 'oss',
-        AI_DRIVER: 'fake',
+        AI_REVIEW_DRIVER: 'fake',
         FW_SLOT: '2',
         HOST: '127.0.0.1',
         PORT: '3120',

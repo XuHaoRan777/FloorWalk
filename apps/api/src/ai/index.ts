@@ -6,7 +6,7 @@ export { FakeAiReviewer } from './fake.js';
 export { safeReview } from './safe-review.js';
 
 export async function getAiReviewer(): Promise<AiReviewer> {
-  const driver = process.env.AI_DRIVER ?? 'fake';
+  const driver = process.env.AI_REVIEW_DRIVER ?? 'fake';
   if (driver === 'fake') return new FakeAiReviewer();
   if (driver === 'openai') {
     const modulePath = './openai.js';

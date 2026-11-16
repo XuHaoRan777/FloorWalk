@@ -1,18 +1,32 @@
-import type { AiReviewInput } from '@libs/shared';
+import type { AiReviewInput, AiReviewConclusion } from '@libs/shared';
 import { safeReview } from './safe-review.js';
 import type { AiClient, AiReviewer } from './types.js';
 
-const fakeClient: AiClient = async (input) => ({
-  verdict: input.items.some((item) => item.selfResult === 'fail')
-    ? 'fail'
-    : 'pass',
-  items: input.items.map((item) => ({
-    itemId: item.itemId,
-    verdict: item.selfResult,
-    reason: '模拟审核：沿用店员自评。',
-  })),
-  reworkItemIds: [],
-});
+const fakeClient: AiClient = async (input) => {
+  const items = input.items.map((item) => {
+    const verdict: AiReviewConclusion =
+      item.expectedConclusion ?? item.selfResult;
+    const reason =
+      verdict === 'pass'
+        ? '模拟审核通过。'
+        : verdict === 'rework'
+          ? '模拟审核打回。'
+          : '模拟审核不合格。';
+    return { itemId: item.itemId, verdict, reason };
+  });
+  const verdict = items.some((item) => item.verdict === 'rework')
+    ? 'rework'
+    : items.some((item) => item.verdict === 'fail')
+      ? 'fail'
+      : 'pass';
+  return {
+    verdict,
+    items,
+    reworkItemIds: items
+      .filter((item) => item.verdict === 'rework')
+      .map((item) => item.itemId),
+  };
+};
 
 export class FakeAiReviewer implements AiReviewer {
   constructor(

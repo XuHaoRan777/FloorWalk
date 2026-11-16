@@ -89,8 +89,8 @@ export async function seedHistoricalInspection(
       `INSERT INTO floorwalk.inspection_items
         (inspection_id, position, title, min_photo_count, acceptance_criteria,
          critical, result, self_assessment, first_self_assessment, first_result,
-         uploaded_by_id, uploaded_at, note, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $7, $9, $10, $11, $12)
+         uploaded_by_id, first_uploaded_by_id, uploaded_at, note, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $7, $9, $9, $10, $11, $12)
        RETURNING id`,
       [
         inspectionId,

@@ -58,10 +58,22 @@ export async function loadTaskReview(
          item.result, item.self_assessment AS "selfAssessment",
          item.first_self_assessment AS "firstSelfAssessment",
          item.first_result AS "firstResult", item.uploaded_by_id AS "uploadedById",
+         item.ai_reason AS "aiReason",
+         CASE WHEN item.result = 'pending' AND item.uploaded_at IS NOT NULL
+           AND NOT template.ai_enabled THEN 'manual'
+           ELSE ai_job.status END AS "aiReviewStatus",
          uploader.display_name AS "uploadedByName", item.uploaded_at AS "uploadedAt",
          item.incomplete, item.note, item.created_at AS "createdAt"
        FROM floorwalk.inspection_items item
+       JOIN floorwalk.inspections inspection ON inspection.id = item.inspection_id
+       JOIN floorwalk.templates template ON template.id = inspection.template_id
        LEFT JOIN floorwalk.users uploader ON uploader.id = item.uploaded_by_id
+       LEFT JOIN LATERAL (
+         SELECT job.status FROM floorwalk.ai_review_jobs job
+         WHERE job.inspection_item_id = item.id
+           AND job.upload_version = item.upload_version
+         ORDER BY job.created_at DESC, job.id DESC LIMIT 1
+       ) ai_job ON true
        WHERE item.inspection_id = $1 ORDER BY item.position`,
       [row.inspectionId],
     );

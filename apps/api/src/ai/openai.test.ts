@@ -215,7 +215,7 @@ describe('AI 驱动启动配置', () => {
   it.each(['OPENAI_API_KEY', 'OPENAI_MODEL'])(
     'openai 缺 %s 时 API 模块无法启动，错误仅列键名',
     async (key) => {
-      vi.stubEnv('AI_DRIVER', 'openai');
+      vi.stubEnv('AI_REVIEW_DRIVER', 'openai');
       vi.stubEnv(key, '');
       const startup = Test.createTestingModule({ imports: [AppModule] })
         .overrideProvider(DATABASE_POOL)
@@ -228,9 +228,9 @@ describe('AI 驱动启动配置', () => {
   );
 
   it('选择 openai 时加载新适配器，默认仍为 fake', async () => {
-    vi.stubEnv('AI_DRIVER', 'openai');
+    vi.stubEnv('AI_REVIEW_DRIVER', 'openai');
     expect(await getAiReviewer()).toBeInstanceOf(OpenAiReviewer);
-    vi.stubEnv('AI_DRIVER', undefined);
+    vi.stubEnv('AI_REVIEW_DRIVER', undefined);
     vi.stubEnv('OPENAI_API_KEY', '');
     vi.stubEnv('OPENAI_MODEL', '');
     const reviewer = await getAiReviewer();

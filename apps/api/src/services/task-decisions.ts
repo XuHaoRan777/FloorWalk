@@ -107,6 +107,11 @@ export class TaskDecisionService {
         [input.itemId, input.result],
       );
       await client.query(
+        `UPDATE floorwalk.ai_review_jobs SET status = 'cancelled'
+         WHERE inspection_item_id = $1 AND status IN ('pending', 'processing')`,
+        [input.itemId],
+      );
+      await client.query(
         `INSERT INTO floorwalk.inspection_item_decisions
            (inspection_item_id, actor_id, previous_result, new_result, created_at)
          VALUES ($1, $2, $3, $4, $5)`,
@@ -144,7 +149,7 @@ export class TaskDecisionService {
     for (const task of due.rows) await this.finalizeTask(task.id, now);
   }
 
-  private async finalizeTask(taskId: string, now: Date) {
+  async finalizeTask(taskId: string, now: Date) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -279,6 +284,13 @@ export class TaskDecisionService {
          SELECT 1 FROM floorwalk.inspection_item_decisions decision
          JOIN floorwalk.inspection_items item ON item.id = decision.inspection_item_id
          WHERE item.inspection_id = $1 AND decision.new_result = 'rework'
+       ) OR EXISTS (
+         SELECT 1 FROM floorwalk.inspection_items item
+         WHERE item.inspection_id = $1 AND item.first_result = 'rework'
+       ) OR EXISTS (
+         SELECT 1 FROM floorwalk.ai_review_jobs job
+         JOIN floorwalk.inspection_items item ON item.id = job.inspection_item_id
+         WHERE item.inspection_id = $1 AND job.conclusion = 'rework'
        ) AS exists`,
       [inspectionId],
     );

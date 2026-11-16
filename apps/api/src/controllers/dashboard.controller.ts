@@ -1,8 +1,17 @@
-import { Controller, Get, Inject, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Inject,
+  NotFoundException,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import {
   apiRoutePath,
   apiRoutes,
   dashboardSitesResponseSchema,
+  selfCheckStatsResponseSchema,
 } from '@libs/shared';
 import { DATABASE_POOL } from '../db/pool.provider.js';
 import type { Pool } from 'pg';
@@ -16,6 +25,48 @@ import {
 @Controller('api')
 export class DashboardController {
   constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+
+  @UseGuards(AuthGuard)
+  @Get(apiRoutePath(apiRoutes.selfCheckStats))
+  async selfCheckStats(@Query() query: unknown, @Req() request: AuthedRequest) {
+    assertRole(request.user, ...apiRoutes.selfCheckStats.roles);
+    const input = apiRoutes.selfCheckStats.requestSchema.parse(query);
+    const target = await this.pool.query(
+      input.scope === 'site'
+        ? 'SELECT id FROM floorwalk.sites WHERE id = $1 AND org_id = $2'
+        : `SELECT id FROM floorwalk.users
+           WHERE id = $1 AND org_id = $2 AND role = 'store_manager'`,
+      [input.id, request.user.orgId],
+    );
+    if (!target.rowCount)
+      throw new NotFoundException({
+        code: 'NOT_FOUND',
+        message: '统计对象不存在。',
+      });
+    const counts = await this.pool.query<{
+      sampleCount: number;
+      matchingCount: number;
+    }>(
+      `SELECT count(*)::int AS "sampleCount",
+         count(*) FILTER (WHERE item.first_self_assessment = item.first_result)::int
+           AS "matchingCount"
+       FROM floorwalk.inspection_items item
+       JOIN floorwalk.inspections inspection ON inspection.id = item.inspection_id
+       JOIN floorwalk.inspection_tasks task ON task.id = inspection.task_id
+       WHERE task.org_id = $1
+         AND (($3 = 'site' AND task.site_id = $2)
+           OR ($3 = 'manager' AND item.first_uploaded_by_id = $2))
+         AND task.task_date BETWEEN $4::date AND $5::date
+         AND item.first_self_assessment IS NOT NULL AND item.first_result IS NOT NULL`,
+      [request.user.orgId, input.id, input.scope, input.from, input.to],
+    );
+    const { sampleCount, matchingCount } = counts.rows[0];
+    return selfCheckStatsResponseSchema.parse({
+      sampleCount,
+      matchingCount,
+      accuracy: sampleCount === 0 ? null : matchingCount / sampleCount,
+    });
+  }
 
   @UseGuards(AuthGuard)
   @Get(apiRoutePath(apiRoutes.dashboardSites))

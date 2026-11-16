@@ -41,10 +41,20 @@ import {
   iso,
 } from '../queries/inspection-queries.js';
 import { getStorageDriver } from '../storage/index.js';
+import { AiReviewQueueService } from '../services/ai-review-queue.js';
 import {
   TASK_SCHEDULER_CLOCK,
   type TaskSchedulerClock,
 } from '../services/task-scheduler.js';
+
+type UploadTaskRow = {
+  id: string;
+  orgId: string;
+  siteId: string;
+  templateId: string;
+  startsAt: Date;
+  dueAt: Date;
+};
 
 @Controller('api')
 export class EvidenceController {
@@ -53,6 +63,8 @@ export class EvidenceController {
   constructor(
     @Inject(DATABASE_POOL) private readonly pool: Pool,
     @Inject(TASK_SCHEDULER_CLOCK) private readonly clock: TaskSchedulerClock,
+    @Inject(AiReviewQueueService)
+    private readonly aiReviewQueue: AiReviewQueueService,
   ) {}
 
   @UseGuards(AuthGuard)
@@ -98,14 +110,7 @@ export class EvidenceController {
     let committed = false;
     try {
       await client.query('BEGIN');
-      const taskHintResult = await client.query<{
-        id: string;
-        orgId: string;
-        siteId: string;
-        templateId: string;
-        startsAt: Date;
-        dueAt: Date;
-      }>(
+      const taskHintResult = await client.query<UploadTaskRow>(
         `SELECT id, org_id AS "orgId", site_id AS "siteId",
            template_id AS "templateId", starts_at AS "startsAt",
            due_at AS "dueAt"
@@ -144,14 +149,7 @@ export class EvidenceController {
           code: 'NOT_FOUND',
           message: '任务不存在。',
         });
-      const taskResult = await client.query<{
-        id: string;
-        orgId: string;
-        siteId: string;
-        templateId: string;
-        startsAt: Date;
-        dueAt: Date;
-      }>(
+      const taskResult = await client.query<UploadTaskRow>(
         `SELECT id, org_id AS "orgId", site_id AS "siteId",
            template_id AS "templateId", starts_at AS "startsAt",
            due_at AS "dueAt"
@@ -169,6 +167,18 @@ export class EvidenceController {
       if (now.getTime() < task.startsAt.getTime() - 60 * 60 * 1000)
         throw uploadConflict('任务尚未开放上传。');
 
+      const templateResult = await client.query<{ aiEnabled: boolean }>(
+        `SELECT ai_enabled AS "aiEnabled" FROM floorwalk.templates
+         WHERE id = $1 AND org_id = $2 FOR SHARE`,
+        [task.templateId, task.orgId],
+      );
+      const template = templateResult.rows[0];
+      if (!template)
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: '任务模板不存在。',
+        });
+
       let inspectionResult = await client.query<{
         id: string;
         decidedAt: Date | null;
@@ -180,16 +190,6 @@ export class EvidenceController {
       if (!inspectionResult.rows[0]) {
         if (!siteResult.rows[0].active)
           throw uploadConflict('已停用门店不能开始巡检任务。');
-        const template = await client.query(
-          `SELECT id FROM floorwalk.templates
-           WHERE id = $1 AND org_id = $2 FOR SHARE`,
-          [task.templateId, task.orgId],
-        );
-        if (!template.rowCount)
-          throw new NotFoundException({
-            code: 'NOT_FOUND',
-            message: '任务模板不存在。',
-          });
         const templateItems = await client.query(
           `SELECT position, title, min_photo_count AS "minPhotoCount",
              acceptance_criteria AS "acceptanceCriteria", critical
@@ -292,13 +292,17 @@ export class EvidenceController {
         `UPDATE floorwalk.inspection_items
          SET result = 'pending', self_assessment = $2,
            first_self_assessment = COALESCE(first_self_assessment, $2),
-           uploaded_by_id = $3, uploaded_at = $4, note = $5
+           first_uploaded_by_id = CASE WHEN first_self_assessment IS NULL
+             THEN $3 ELSE first_uploaded_by_id END,
+           uploaded_by_id = $3, uploaded_at = $4, note = $5,
+           ai_reason = NULL, upload_version = upload_version + 1
          WHERE id = $1
          RETURNING id, inspection_id AS "inspectionId", position, title,
            min_photo_count AS "minPhotoCount",
            acceptance_criteria AS "acceptanceCriteria", critical, result, note,
            self_assessment AS "selfAssessment", uploaded_by_id AS "uploadedById",
-           uploaded_at AS "uploadedAt", created_at AS "createdAt"`,
+           uploaded_at AS "uploadedAt", upload_version AS "uploadVersion",
+           created_at AS "createdAt"`,
         [
           item.id,
           input.selfAssessment,
@@ -348,6 +352,12 @@ export class EvidenceController {
         createdAt: iso(persisted.rows[0].createdAt),
         uploadedByName: request.user.displayName,
         evidence: evidence.map((row) => evidenceSchema.parse(row)),
+      });
+      await this.aiReviewQueue.enqueue(client, {
+        inspectionItemId: item.id,
+        uploadVersion: persisted.rows[0].uploadVersion,
+        uploadedAt: persisted.rows[0].uploadedAt,
+        aiEnabled: template.aiEnabled,
       });
       await client.query('COMMIT');
       committed = true;

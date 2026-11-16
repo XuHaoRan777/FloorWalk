@@ -1,4 +1,9 @@
 import { z, type ZodTypeAny } from 'zod';
+import { aiReviewJobStatusSchema } from './ai.js';
+import {
+  selfCheckStatsQuerySchema,
+  selfCheckStatsResponseSchema,
+} from './stats.js';
 import {
   siteSchema,
   loginNameSchema,
@@ -53,6 +58,7 @@ export * from './users.js';
 export * from './ai.js';
 export * from './schedules.js';
 export * from './tasks.js';
+export * from './stats.js';
 
 export const inspectionStatuses = [
   'draft',
@@ -150,6 +156,8 @@ export const taskReviewItemSchema = inspectionItemSchema.extend({
   uploadedByName: z.string().nullable(),
   uploadedAt: timestamp.nullable(),
   incomplete: z.boolean(),
+  aiReviewStatus: aiReviewJobStatusSchema.nullable(),
+  aiReason: z.string().nullable(),
   evidence: z.array(evidenceSchema),
 });
 
@@ -690,6 +698,14 @@ export const apiRoutes = {
     roles: ['admin'],
     requestSchema: null,
     responseSchema: dashboardSitesResponseSchema,
+    successStatus: 200,
+  },
+  selfCheckStats: {
+    method: 'GET',
+    path: '/api/stats/self-check',
+    roles: ['admin'],
+    requestSchema: selfCheckStatsQuerySchema,
+    responseSchema: selfCheckStatsResponseSchema,
     successStatus: 200,
   },
   listInspectionMessages: {

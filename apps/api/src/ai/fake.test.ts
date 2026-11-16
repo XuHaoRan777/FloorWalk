@@ -27,12 +27,36 @@ describe('FakeAiReviewer', () => {
       items: input.items.map((item) => ({
         itemId: item.itemId,
         verdict: item.selfResult,
-        reason: '模拟审核：沿用店员自评。',
+        reason:
+          item.selfResult === 'pass' ? '模拟审核通过。' : '模拟审核不合格。',
       })),
       reworkItemIds: [],
     });
     const passed = await reviewer.review({ ...input, items: [input.items[0]] });
     expect(aiReviewOutputSchema.parse(passed).verdict).toBe('pass');
+  });
+
+  it('uses the expected conclusion from each request for deterministic e2e results', async () => {
+    const reviewer = new FakeAiReviewer();
+    const request = {
+      ...input,
+      items: ['pass', 'rework', 'fail'].map((expectedConclusion, index) => ({
+        ...input.items[0],
+        itemId: `00000000-0000-4000-8000-00000000000${index + 1}`,
+        expectedConclusion: expectedConclusion as 'pass' | 'rework' | 'fail',
+      })),
+    };
+    const result = aiReviewOutputSchema.parse(await reviewer.review(request));
+    expect(result.items.map((item) => item.verdict)).toEqual([
+      'pass',
+      'rework',
+      'fail',
+    ]);
+    expect(result.items[0].reason).toBe('模拟审核通过。');
+    expect(result.items.slice(1).every((item) => item.reason?.length)).toBe(
+      true,
+    );
+    expect(result.reworkItemIds).toEqual([request.items[1].itemId]);
   });
 
   it('falls back to human review when the injected client returns invalid schema', async () => {

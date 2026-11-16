@@ -1,0 +1,2 @@
+ALTER TABLE "floorwalk"."ai_review_jobs" ADD COLUMN "conclusion" text;--> statement-breakpoint
+ALTER TABLE "floorwalk"."ai_review_jobs" ADD CONSTRAINT "ai_review_jobs_conclusion_check" CHECK ("floorwalk"."ai_review_jobs"."conclusion" IS NULL OR "floorwalk"."ai_review_jobs"."conclusion" IN ('pass', 'rework', 'fail'));

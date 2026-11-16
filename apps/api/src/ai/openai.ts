@@ -25,15 +25,15 @@ export type OpenAiClient = (
 const outputJsonSchema = {
   type: 'object',
   properties: {
-    verdict: { type: 'string', enum: ['pass', 'fail', 'rework'] },
+    verdict: { type: 'string', enum: ['pass', 'rework', 'fail'] },
     items: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
           itemId: { type: 'string' },
-          verdict: { type: 'string', enum: ['pass', 'fail'] },
-          reason: { type: 'string', minLength: 1 },
+          verdict: { type: 'string', enum: ['pass', 'rework', 'fail'] },
+          reason: { type: ['string', 'null'], minLength: 1, maxLength: 500 },
         },
         required: ['itemId', 'verdict', 'reason'],
         additionalProperties: false,
@@ -155,7 +155,9 @@ export class OpenAiReviewer implements AiReviewer {
     if (
       output.verdict === 'pass' &&
       output.items.some(
-        (item) => critical.has(item.itemId) && item.verdict === 'fail',
+        (item) =>
+          critical.has(item.itemId) &&
+          (item.verdict === 'fail' || item.verdict === 'rework'),
       )
     ) {
       return needsHuman('AI 整单结论与严重项结论矛盾，请人工审核。');

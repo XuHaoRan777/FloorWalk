@@ -416,7 +416,7 @@ describe('inspection contract API', () => {
   });
 
   it('publishes the complete route table under /api', () => {
-    expect(Object.keys(apiRoutes)).toHaveLength(45);
+    expect(Object.keys(apiRoutes)).toHaveLength(46);
     for (const route of Object.values(apiRoutes)) {
       expect(route.path.startsWith('/api/')).toBe(true);
       expect(route.responseSchema).toBeDefined();
@@ -594,6 +594,23 @@ describe('inspection contract API', () => {
               )
               .set('Cookie', inspectorCookie)
               .send({ result: 'pass' });
+            return { status: response.status, body: response.body };
+          },
+        },
+      ],
+      [
+        'selfCheckStats',
+        {
+          store_manager: async () => {
+            const response = await request(app.getHttpServer())
+              .get('/api/stats/self-check')
+              .query({
+                scope: 'site',
+                id: northbeanSiteId,
+                from: '2026-01-01',
+                to: '2026-12-31',
+              })
+              .set('Cookie', inspectorCookie);
             return { status: response.status, body: response.body };
           },
         },
@@ -1095,6 +1112,33 @@ describe('inspection contract API', () => {
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
       );
+    const detail = await request(app.getHttpServer())
+      .get(`/api/tasks/${inspectionTaskId}/review`)
+      .set('Cookie', hqCookie)
+      .expect(200);
+    await request(app.getHttpServer())
+      .post(
+        `/api/tasks/${inspectionTaskId}/items/${detail.body.items[0].id}/decision`,
+      )
+      .set('Cookie', demo2AdminCookie)
+      .send({ result: 'fail' })
+      .expect(404)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+      );
+    for (const [scope, id] of [
+      ['site', northbeanSiteId],
+      ['manager', detail.body.items[0].uploadedById],
+    ]) {
+      await request(app.getHttpServer())
+        .get('/api/stats/self-check')
+        .query({ scope, id, from: '2026-01-01', to: '2026-12-31' })
+        .set('Cookie', demo2AdminCookie)
+        .expect(404)
+        .expect(({ body }) =>
+          expect(errorResponseSchema.parse(body).code).toBe('NOT_FOUND'),
+        );
+    }
     const foreignQueue = await request(app.getHttpServer())
       .get('/api/review/tasks')
       .set('Cookie', demo2AdminCookie)
@@ -1759,6 +1803,16 @@ describe('inspection contract API', () => {
       .set('Cookie', hqCookie)
       .expect(200);
     dashboardSitesResponseSchema.parse(dashboard.body);
+    const selfCheckStats = await request(app.getHttpServer())
+      .get('/api/stats/self-check')
+      .query({
+        scope: 'site',
+        id: northbeanSiteId,
+        from: '2026-01-01',
+        to: '2026-12-31',
+      })
+      .set('Cookie', hqCookie)
+      .expect(200);
     expect(taskItems).toHaveLength(8);
 
     const deletedSession = await request(app.getHttpServer())
@@ -2003,6 +2057,7 @@ describe('inspection contract API', () => {
       getTaskReview: taskReview,
       decideTaskItem: decided,
       dashboardSites: dashboard,
+      selfCheckStats,
       listInspectionMessages: chatListResponse,
       createInspectionMessage: chatCreateResponse,
       getMessageImageUrl: chatImageUrlResponse,

@@ -14,7 +14,11 @@
 
 店长在任务开始前 1 小时起可以上传。截止后未上传的条目不能补传；已打回的条目可在截止后 1 小时内重传。每次上传包含自评、备注及本次照片；照片整组覆盖旧照片，同一条目以最后一次上传为准，并记录提交店长与服务端时间。照片数为 0 时备注必填；照片数须达到模板最低张数。所有条目首次上传后任务变为 `submitted`；截止未交齐的任务变为 `overdue`。
 
+启用 AI 的模板在上传事务内按条目及上传版本入队，后台异步给出通过、打回或属实不合格；打回与不合格必须附 1～500 字理由。打回不限制次数。失败按 1、2、4 秒退避重试，含首次最多调用 4 次，耗尽后转「待人工」。重传取消旧版本尚未开始的任务，已开始的旧调用也不能覆盖新版本；管理员手工判定后，后台调用不能覆盖其结论。关闭 AI 的模板上传时不创建审核任务，直接显示「待人工」，由管理员逐条判定。管理员任务详情返回当前上传版本的 AI 审核状态及理由。
+
 管理员逐条判为通过、打回或不合格。未上传条目不能提前判；截止时尚未判定的已上传条目自动判不合格，未上传条目自动判不合格并标记「未完成」。截止后 1 小时仍打回的条目强制判不合格并标记「未完成」。存在打回项时，系统等待它们有结论；无打回项则在截止时判定，最晚截止后 1 小时强制判定。分数为通过条目数除以总条目数乘 100，四舍五入取整。任一严重项不合格，或不合格条目达到总数一半，整单不通过。判定后管理员仍可逐条改判，系统重算分数和整单结论，并记录操作人、时间、原结论和新结论。每条保存首次自评及首次判定，用于计算自检准确率。
+
+AI 结论沿用上述判定时间规则：无打回历史的任务在截止时判定，有打回历史的任务在截止后取得最终结论时判定，最晚截止后 1 小时。首次自评、首次结论及首传店长独立保存，重传与改判不覆盖。自检准确率按任务日期的闭区间筛选，按门店或首传店长聚合；样本为首次自评和首次结论均非空的条目，一致条目数除以样本数为准确率（0～1），首次结论为打回时计入样本但不算一致；无样本时准确率为 `null`。旧记录首传者未知时保留为空，不归到后续重传者。
 
 巡检详情与历史记录为只读；旧整单创建、检查项编辑、整单提交与整单审核接口已删除。看板按每家门店 `decided_at` 最大的 `passed` 或 `failed` 巡检单显示分数。照片上传字段为 `files`，只接受 `image/jpeg`、`image/png`，单张不超过 10 MB；照片链接使用 API 当前访问地址拼接。
 
@@ -46,6 +50,7 @@
 | `GET /api/tasks/:taskId/review`                   | 任务、巡检结果、逐条上传人与时间、照片及结论                                              |
 | `POST /api/tasks/:taskId/items/:itemId/decision`  | 商家管理员逐条判定或改判；响应更新后的整单分数与结论                                      |
 | `GET /api/dashboard/sites`                        | 各店按 `decided_at` 最近的巡检分数                                                        |
+| `GET /api/stats/self-check`                       | 仅管理员；`scope=site\|manager`、`id`、`from`、`to` 必填，返回样本数、一致数及自检准确率 |
 | `GET /storage/*key`                               | 由当前存储驱动按 `storageKey` 返回照片；本地驱动拒绝越出 `STORAGE_DIR` 的路径             |
 | `GET /api/inspections/:id/messages`               | 按消息序号读取聊天；`after` 与 `before` 互斥，不带游标读最近消息；默认 50 条，最多 100 条 |
 | `POST /api/inspections/:id/messages`              | 发送 1～1000 字文本和/或 jpeg/png 图片，图片最大 10 MB                                    |
@@ -86,7 +91,8 @@ schema 为 `floorwalk`。主键通常为 uuid；消息序号为 bigint。各实�
 | `site_schedule_skips`       | `org_id`、`site_id`、`starts_on`、`ends_on`、`note`                                                                                                                |
 | `inspection_tasks`          | `org_id`、`site_id`、`template_id`、`task_date`、`position`、`occurrence`、`starts_at`、`due_at`、`status`                                                          |
 | `inspections`               | 可空 `task_id`（任务单唯一）、`site_id`、`template_id`、可空 `inspector_id`、`status`、`score`、`submitted_at`、`decided_at`                                        |
-| `inspection_items`          | `inspection_id`、`position`、模板快照、`result`、`self_assessment`、`first_self_assessment`、`first_result`、`uploaded_by_id`、`uploaded_at`、`incomplete`、`note` |
+| `inspection_items`          | `inspection_id`、`position`、模板快照、`result`、`self_assessment`、`first_self_assessment`、`first_result`、`first_uploaded_by_id`、`uploaded_by_id`、`uploaded_at`、`upload_version`、`ai_reason`、`incomplete`、`note` |
+| `ai_review_jobs`            | `inspection_item_id`、`uploaded_at`、`upload_version`、`status`、`conclusion`、`attempt_count`、`available_at`、`created_at` |
 | `inspection_participants`   | `inspection_id`、`user_id`（逐条上传参与者）                                                                                                                        |
 | `inspection_item_decisions` | `inspection_item_id`、`actor_id`、`previous_result`、`new_result`、`created_at`（逐条判定审计）                                                                     |
 | `evidence`                  | `inspection_item_id`、`storage_key`、`mime`、`size`                                                                                                                 |
@@ -95,6 +101,8 @@ schema 为 `floorwalk`。主键通常为 uuid；消息序号为 bigint。各实�
 | `chat_messages`             | `seq`（自增、唯一）、`inspection_id`、`author_id`、`body`（最多 1000 字）、`storage_key`、`mime`、`size`                                                            |
 
 `chat_messages` 的 `body` 与 `storage_key` 至少一项非空；图片存储键、MIME 与大小同时为空或同时非空；另有 `(inspection_id, seq)` 索引。每个商家一个管理员，管理员账号不能停用；店长必须绑定门店。`inspection_tasks` 按商家、门店、日期、模板、时间窗和重复序号唯一；每个非空 `inspections.task_id` 至多一条巡检记录。模板与 AI 标准均按商家名称唯一；日程方案名称也按商家唯一。另有 `inspection_tasks(status, due_at)`、`inspection_item_decisions(inspection_item_id, created_at)`、`evidence(inspection_item_id)`、`sessions(user_id)` 等索引，以及验证码用途/尝试次数、角色/状态/结果、时间窗和照片大小等 CHECK 约束；完整约束以现有 schema 与迁移为准。
+
+AI 审核任务以条目和上传版本唯一，状态为 `pending|processing|completed|manual|cancelled`；领取使用行锁及 75 秒租约，调用次数为 0～4。保留每次已完成的 AI 结论，用于识别重传前的打回历史；条目保存当前 AI 理由。
 
 ## 种子数据
 
@@ -122,3 +130,4 @@ Northbean 有 12 家门店 `NB-001`～`NB-012`，每店至少一位店长，`NB-
 | 2026-11-03 | g03 完成商家数据隔离、主管门店范围、账号停用与首次改密、7 天闲置续期及 CORS 来源白名单；ADR 0003 取代任意来源策略。                                           |
 | 2026-11-11 | FW-028 增加按日程生成的巡检任务、店长逐条上传与管理员逐条判定/改判；删除整单写接口，并允许系统为从未上传任务补建 `inspector_id` 为空的巡检记录。              |
 | 2026-11-11 | FW-024～FW-029 收敛为 admin 与 store_manager 两层角色，增加邮箱验证码与日程契约，并接入按需任务详情、Mobile 逐项操作和调店后的参与记录可见性。 |
+| 2026-11-17 | FW-030 接入逐条异步 AI 审核、退避重试与待人工，保留首传信息并提供管理员自检准确率接口；AI 与人工结论沿用任务判定时间规则。 |

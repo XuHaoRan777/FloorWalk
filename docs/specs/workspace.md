@@ -16,6 +16,8 @@ shared 导出运行时常量 `APP_NAME = 'FloorWalk'` 以及巡检主链 zod 契
 
 `GET /health` 返回 HTTP 200 和 `{"status":"ok"}`。登录校验当前用户，受保护请求读取数据库中的当前角色与门店绑定；巡检、审核队列、证据链接和看板业务见[巡检主链](inspection.md)，聊天与管理见[聊天](chat.md)、[管理](admin.md)。邮件驱动由 `MAIL_DRIVER` 选择，支持测试假驱动和 Resend 模板驱动；Resend 使用 `verification-code` 模板，配置键为 `MAIL_FROM_ADDRESS`、`RESEND_API_KEY`、`RESEND_TEMPLATE_ID`，验证码过期变量 `EXPIRES_IN` 固定为「5 分钟」。API 监听 `HOST`（缺省 `127.0.0.1`），启动日志输出 shared 项目名及监听地址；PORT 必须为 1—65535 的整数。API 进程共用一个数据库连接池，应用关闭时释放。
 
+AI 审核由 `AI_REVIEW_DRIVER` 选择 `fake` 或 `openai`，缺省为 `fake`。假模型按输入条目的 `expectedConclusion` 返回固定结论，省略时沿用自评，不发外部请求。OpenAI 兼容驱动使用 `OPENAI_BASE_URL`、`OPENAI_API_KEY`、`OPENAI_MODEL`；仅选用 `openai` 时要求 API Key 和模型名，未填 Base URL 时使用 SDK 默认地址，`fake` 时三者均可不填。各键的属性注释与模板位置见[开发环境](../context/dev-environment.md#配置)。逐条队列、结论与重试规则见[巡检主链](inspection.md#巡检规则)；图片压缩与签名链接读取见[开发环境](../context/dev-environment.md)。
+
 ## Web 页面壳
 
 独立 Web 的 `/` 是公开首页占位；`/console` 为商家管理员显示任务审核队列与详情、门店看板和管理入口，登录与审核行为见 [Web 控制台](web-console.md)。两页可相互导航，支持直接访问和刷新，控制台侧边栏可开关。开发及构建后 preview 已验证，上游许可与来源见 [本地开发说明](../howto/local-development.md#上游来源)。
@@ -34,7 +36,7 @@ Web 控制台与 Mobile 店长端统一使用 Framed sheet 视觉方向。颜色
 
 ## 没有的
 
-没有缓存、CI/CD、云部署、APK 签名或商店发布。聊天、门店和模板管理见[聊天](chat.md)与[管理](admin.md)，Mobile 历史记录见[店长巡检](mobile-inspector.md#记录)。Web 与 Mobile 使用服务端会话表和 HttpOnly cookie，不把 token 放进脚本可读存储。存储接口支持本地文件与阿里云 OSS，OSS 配置及切换方式见[开发环境](../context/dev-environment.md)。AI 审核接口支持 fake 和 OpenAI 兼容驱动，默认 fake；模型调用与图片压缩、结构化结果校验规则见[开发环境](../context/dev-environment.md)。Web 生产构建与 preview 带 CSP，开发服务器不添加 CSP。
+没有缓存、CI/CD、云部署、APK 签名或商店发布。聊天、门店和模板管理见[聊天](chat.md)与[管理](admin.md)，Mobile 历史记录见[店长巡检](mobile-inspector.md#记录)。Web 与 Mobile 使用服务端会话表和 HttpOnly cookie，不把 token 放进脚本可读存储。存储接口支持本地文件与阿里云 OSS，OSS 配置及切换方式见[开发环境](../context/dev-environment.md)。Web 生产构建与 preview 带 CSP，开发服务器不添加 CSP。
 
 ## 数据契约（归档时再生成）
 
@@ -64,3 +66,4 @@ Web 控制台与 Mobile 店长端统一使用 Framed sheet 视觉方向。颜色
 | 2026-11-03 | g03 接入商家注册、商家/账号/主管范围、7 天会话续期、OSS 与 OpenAI 兼容审核适配器；统一开发入口保留 shared 构建产物。                                        |
 | 2026-11-11 | FW-024～FW-029 完成两层角色、邮箱验证码、模板与日程配置、按任务审核及 Mobile 店长逐项巡检。                                                                 |
 | 2026-11-12 | Mobile 升级至 Expo SDK 58（Expo 58.0.24、Router 58.0.31、React 19.3.0、React Native 0.88.1），补齐 SDK 58 类型兼容，并修复 NativeWind 包装层缺少 NativeComponentRegistry、AssetRegistry 导致的原生启动错误与白屏；2026-11-16 用户确认原生真机复测通过，未采集设备系统版本。 |
+| 2026-11-17 | FW-030 以 `AI_REVIEW_DRIVER` 选择逐条审核驱动；默认假模型无外部请求，OpenAI 凭据和模型名仅在启用兼容驱动时必填。 |

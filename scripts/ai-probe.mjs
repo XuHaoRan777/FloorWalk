@@ -10,7 +10,7 @@ process.loadEnvFile('apps/api/.env.development');
 const required = ['OPENAI_BASE_URL', 'OPENAI_API_KEY', 'OPENAI_MODEL'];
 const keys = [
   'STORAGE_DRIVER',
-  'AI_DRIVER',
+  'AI_REVIEW_DRIVER',
   'OSS_REGION',
   'OSS_BUCKET',
   'OSS_ACCESS_KEY_ID',

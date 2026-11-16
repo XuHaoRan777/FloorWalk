@@ -112,6 +112,11 @@ export const inspectionItems = floorwalk.table(
     selfAssessment: text('self_assessment'),
     firstSelfAssessment: text('first_self_assessment'),
     firstResult: text('first_result'),
+    firstUploadedById: uuid('first_uploaded_by_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    aiReason: text('ai_reason'),
+    uploadVersion: integer('upload_version').notNull().default(0),
     uploadedById: uuid('uploaded_by_id').references(() => users.id),
     uploadedAt: timestamp('uploaded_at', { withTimezone: true }),
     incomplete: boolean('incomplete').notNull().default(false),
@@ -144,9 +149,57 @@ export const inspectionItems = floorwalk.table(
       sql`${table.firstResult} IS NULL OR ${table.firstResult} IN ('pass', 'rework', 'fail')`,
     ),
     check(
+      'inspection_items_ai_reason_length_check',
+      sql`${table.aiReason} IS NULL OR char_length(btrim(${table.aiReason})) BETWEEN 1 AND 500`,
+    ),
+    check(
+      'inspection_items_upload_version_check',
+      sql`${table.uploadVersion} >= 0`,
+    ),
+    check(
       'inspection_items_upload_metadata_check',
       sql`(${table.uploadedById} IS NULL AND ${table.uploadedAt} IS NULL)
         OR (${table.uploadedById} IS NOT NULL AND ${table.uploadedAt} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export const aiReviewJobs = floorwalk.table(
+  'ai_review_jobs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    inspectionItemId: uuid('inspection_item_id')
+      .notNull()
+      .references(() => inspectionItems.id, { onDelete: 'cascade' }),
+    uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull(),
+    uploadVersion: integer('upload_version').notNull(),
+    status: text('status').notNull().default('pending'),
+    conclusion: text('conclusion'),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    availableAt: timestamp('available_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    unique('ai_review_jobs_item_version_unique').on(
+      table.inspectionItemId,
+      table.uploadVersion,
+    ),
+    index('ai_review_jobs_pending_available_idx')
+      .on(table.availableAt, table.id)
+      .where(sql`${table.status} = 'pending'`),
+    check(
+      'ai_review_jobs_status_check',
+      sql`${table.status} IN ('pending', 'processing', 'completed', 'manual', 'cancelled')`,
+    ),
+    check(
+      'ai_review_jobs_attempt_count_check',
+      sql`${table.attemptCount} BETWEEN 0 AND 4`,
+    ),
+    check(
+      'ai_review_jobs_conclusion_check',
+      sql`${table.conclusion} IS NULL OR ${table.conclusion} IN ('pass', 'rework', 'fail')`,
     ),
   ],
 );

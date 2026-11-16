@@ -1,10 +1,23 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Pool } from 'pg';
 import request from 'supertest';
-import { inspectorTaskDetailSchema, todayResponseSchema } from '@libs/shared';
+import {
+  errorResponseSchema,
+  inspectorTaskDetailSchema,
+  selfCheckStatsResponseSchema,
+  todayResponseSchema,
+} from '@libs/shared';
 import { AppModule } from '../app.module.js';
 import { hashSessionId } from '../auth/auth.js';
 import { createPool } from '../db/client.js';
@@ -12,6 +25,9 @@ import { runMigrations } from '../db/migrate.js';
 import { HttpErrorFilter } from '../filters/http-exception.filter.js';
 import { getStorageDriver } from '../storage/index.js';
 import { TaskDecisionService } from '../services/task-decisions.js';
+import { AiReviewQueueService } from '../services/ai-review-queue.js';
+import { FakeAiReviewer } from '../ai/fake.js';
+import type { AiReviewer } from '../ai/types.js';
 import {
   TASK_SCHEDULER_CLOCK,
   TaskSchedulerService,
@@ -20,6 +36,8 @@ import {
 describe('FW-028 task uploads', () => {
   let app: NestExpressApplication;
   let pool: Pool;
+  let aiQueue: AiReviewQueueService;
+  let reviewer: AiReviewer = new FakeAiReviewer();
   let now = new Date('2026-11-09T10:30:00.000Z');
   const orgId = randomUUID();
   const siteId = randomUUID();
@@ -29,6 +47,7 @@ describe('FW-028 task uploads', () => {
   const secondManagerId = randomUUID();
   const otherManagerId = randomUUID();
   const templateId = randomUUID();
+  const standardId = randomUUID();
   const adminToken = randomUUID();
   const managerToken = randomUUID();
   const secondManagerToken = randomUUID();
@@ -39,7 +58,10 @@ describe('FW-028 task uploads', () => {
   const otherManagerCookie = `fw_session=${otherManagerToken}`;
   let nextOccurrence = 0;
 
-  async function createTask(taskSiteId = siteId, taskDate = '2026-11-09') {
+  async function createTask(
+    taskSiteId: string = siteId,
+    taskDate = '2026-11-09',
+  ) {
     const taskId = randomUUID();
     await pool.query(
       `INSERT INTO floorwalk.inspection_tasks
@@ -139,6 +161,11 @@ describe('FW-028 task uploads', () => {
         ],
       );
       await client.query(
+        `INSERT INTO floorwalk.ai_review_standards (id, org_id, name, prompt)
+         VALUES ($1, $2, 'FW-030 test standard', '按条目要求审核。')`,
+        [standardId, orgId],
+      );
+      await client.query(
         `INSERT INTO floorwalk.templates (id, org_id, name, ai_enabled)
          VALUES ($1, $2, 'FW-028 upload template', false)`,
         [templateId, orgId],
@@ -158,7 +185,15 @@ describe('FW-028 task uploads', () => {
     } finally {
       client.release();
     }
+    aiQueue = new AiReviewQueueService(
+      pool,
+      { review: (input) => reviewer.review(input) },
+      { now: () => new Date(now) },
+      new TaskDecisionService(pool),
+    );
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(AiReviewQueueService)
+      .useValue({ enqueue: aiQueue.enqueue.bind(aiQueue) })
       .overrideProvider(TASK_SCHEDULER_CLOCK)
       .useValue({ now: () => new Date(now) })
       .overrideProvider(TaskSchedulerService)
@@ -168,6 +203,15 @@ describe('FW-028 task uploads', () => {
     app.useGlobalFilters(new HttpErrorFilter());
     await app.init();
   }, 60000);
+
+  beforeEach(async () => {
+    reviewer = new FakeAiReviewer();
+    await pool.query(
+      `UPDATE floorwalk.templates SET ai_enabled = false, ai_standard_id = $2
+       WHERE id = $1`,
+      [templateId, standardId],
+    );
+  });
 
   afterAll(async () => {
     if (app) await app.close();
@@ -229,6 +273,10 @@ describe('FW-028 task uploads', () => {
         await client.query('DELETE FROM floorwalk.templates WHERE id = $1', [
           templateId,
         ]);
+        await client.query(
+          'DELETE FROM floorwalk.ai_review_standards WHERE id = $1',
+          [standardId],
+        );
         await client.query(
           'DELETE FROM floorwalk.sessions WHERE user_id = ANY($1::uuid[])',
           [[adminId, managerId, secondManagerId, otherManagerId]],
@@ -706,5 +754,561 @@ describe('FW-028 task uploads', () => {
       firstResult: 'rework',
     });
     await decide(forcedTaskId, forcedItemId, 'rework').expect(409);
+  });
+
+  it('FW-030 skips the queue for disabled AI and exposes the pending manual review', async () => {
+    now = new Date('2026-11-09T10:30:00.000Z');
+    const taskId = await createTask();
+    const uploaded = await upload(
+      taskId,
+      2,
+      managerCookie,
+      'pass',
+      '已检查',
+      0,
+    ).expect(201);
+    const review = vi.fn();
+    reviewer = { review };
+    await aiQueue.processPending();
+    expect(review).not.toHaveBeenCalled();
+    const jobs = await pool.query(
+      'SELECT id FROM floorwalk.ai_review_jobs WHERE inspection_item_id = $1',
+      [uploaded.body.id],
+    );
+    expect(jobs.rowCount).toBe(0);
+    const detail = await request(app.getHttpServer())
+      .get(`/api/tasks/${taskId}/review`)
+      .set('Cookie', adminCookie)
+      .expect(200);
+    expect(detail.body.items[1]).toMatchObject({
+      result: 'pending',
+      aiReviewStatus: 'manual',
+      aiReason: null,
+    });
+    await decide(taskId, uploaded.body.id, 'pass').expect(201);
+  });
+
+  it('FW-030 cancels an unstarted upload even when its replacement has the same timestamp', async () => {
+    now = new Date('2026-11-09T10:30:00.000Z');
+    await pool.query(
+      'UPDATE floorwalk.templates SET ai_enabled = true WHERE id = $1',
+      [templateId],
+    );
+    const taskId = await createTask();
+    const first = await upload(
+      taskId,
+      2,
+      managerCookie,
+      'pass',
+      '第一次',
+      0,
+    ).expect(201);
+    await upload(taskId, 2, secondManagerCookie, 'fail', '替换', 0).expect(201);
+    const review = vi.fn((input: Parameters<AiReviewer['review']>[0]) =>
+      new FakeAiReviewer().review(input),
+    );
+    reviewer = { review };
+    await aiQueue.processPending();
+    expect(review).toHaveBeenCalledTimes(1);
+    expect(review.mock.calls[0][0].items[0]).toMatchObject({
+      selfResult: 'fail',
+      expectedConclusion: 'fail',
+    });
+    const jobs = await pool.query(
+      `SELECT upload_version AS version, status, attempt_count AS attempts
+       FROM floorwalk.ai_review_jobs WHERE inspection_item_id = $1 ORDER BY upload_version`,
+      [first.body.id],
+    );
+    expect(jobs.rows).toEqual([
+      { version: 1, status: 'cancelled', attempts: 0 },
+      { version: 2, status: 'completed', attempts: 1 },
+    ]);
+  });
+
+  it('FW-030 retries at exponential intervals three times before requesting manual judgment', async () => {
+    now = new Date('2026-11-09T10:30:00.000Z');
+    await pool.query(
+      'UPDATE floorwalk.templates SET ai_enabled = true WHERE id = $1',
+      [templateId],
+    );
+    const taskId = await createTask();
+    const uploaded = await upload(
+      taskId,
+      2,
+      managerCookie,
+      'pass',
+      '待审核',
+      0,
+    ).expect(201);
+    const review = vi
+      .fn<AiReviewer['review']>()
+      .mockRejectedValueOnce(new Error('test transport failure'))
+      .mockResolvedValue({ kind: 'needs_human', reason: '测试模型不可用。' });
+    reviewer = { review };
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      await aiQueue.processPending();
+      const jobs = await pool.query(
+        `SELECT status, attempt_count AS attempts, available_at AS available
+         FROM floorwalk.ai_review_jobs WHERE inspection_item_id = $1`,
+        [uploaded.body.id],
+      );
+      expect(review).toHaveBeenCalledTimes(attempt);
+      expect(jobs.rows[0]).toMatchObject({
+        status: attempt === 4 ? 'manual' : 'pending',
+        attempts: attempt,
+      });
+      if (attempt < 4) {
+        const due = new Date(now.getTime() + 1_000 * 2 ** (attempt - 1));
+        expect(jobs.rows[0].available).toEqual(due);
+        now = new Date(due.getTime() - 1);
+        await aiQueue.processPending();
+        expect(review).toHaveBeenCalledTimes(attempt);
+        now = due;
+      }
+    }
+    now = new Date(now.getTime() + 60_000);
+    await aiQueue.processPending();
+    expect(review).toHaveBeenCalledTimes(4);
+    const detail = await request(app.getHttpServer())
+      .get(`/api/tasks/${taskId}/review`)
+      .set('Cookie', adminCookie)
+      .expect(200);
+    expect(detail.body.items[1]).toMatchObject({
+      result: 'pending',
+      firstResult: null,
+      aiReviewStatus: 'manual',
+    });
+    const decided = await decide(taskId, uploaded.body.id, 'fail').expect(201);
+    expect(decided.body.items[1]).toMatchObject({
+      result: 'fail',
+      firstResult: 'fail',
+    });
+  });
+
+  it('FW-030 prevents an in-flight old result from overwriting the replacement', async () => {
+    now = new Date('2026-11-09T10:30:00.000Z');
+    await pool.query(
+      'UPDATE floorwalk.templates SET ai_enabled = true WHERE id = $1',
+      [templateId],
+    );
+    const taskId = await createTask();
+    const uploaded = await upload(
+      taskId,
+      2,
+      managerCookie,
+      'pass',
+      '第一次',
+      0,
+    ).expect(201);
+    let release: () => void = () => undefined;
+    let started: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const claimed = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const review = vi.fn<AiReviewer['review']>(async (input) => {
+      if (review.mock.calls.length === 1) {
+        started();
+        await gate;
+      }
+      return new FakeAiReviewer().review(input);
+    });
+    reviewer = { review };
+    const processing = aiQueue.processPending();
+    await claimed;
+    await upload(taskId, 2, secondManagerCookie, 'fail', '替换', 0).expect(201);
+    release();
+    await processing;
+    const item = await pool.query(
+      'SELECT result, first_result FROM floorwalk.inspection_items WHERE id = $1',
+      [uploaded.body.id],
+    );
+    expect(item.rows[0]).toEqual({ result: 'fail', first_result: 'fail' });
+    expect(review).toHaveBeenCalledTimes(2);
+  });
+
+  it('FW-030 keeps first results through repeated AI rework and uses the grace conclusion time', async () => {
+    now = new Date('2026-11-09T10:30:00.000Z');
+    await pool.query(
+      'UPDATE floorwalk.templates SET ai_enabled = true WHERE id = $1',
+      [templateId],
+    );
+    const taskId = await createTask();
+    await upload(taskId, 1).expect(201);
+    const item = await upload(
+      taskId,
+      2,
+      managerCookie,
+      'pass',
+      '首次自检',
+      0,
+    ).expect(201);
+    await upload(taskId, 3, managerCookie, 'pass', '已检查', 0).expect(201);
+    await aiQueue.processPending();
+    const initial = await request(app.getHttpServer())
+      .get(`/api/tasks/${taskId}/review`)
+      .set('Cookie', adminCookie)
+      .expect(200);
+    expect(initial.body.score).toBeNull();
+    expect(initial.body.items[1]).toMatchObject({
+      result: 'pass',
+      firstSelfAssessment: 'pass',
+      firstResult: 'pass',
+      aiReviewStatus: 'completed',
+      aiReason: '模拟审核通过。',
+    });
+
+    reviewer = {
+      review: (input) =>
+        new FakeAiReviewer().review({
+          ...input,
+          items: input.items.map((entry) => ({
+            ...entry,
+            expectedConclusion: 'rework',
+          })),
+        }),
+    };
+    for (let attempt = 0; attempt < 4; attempt++) {
+      now = new Date(now.getTime() + 60_000);
+      await upload(taskId, 2, secondManagerCookie, 'fail', '补传', 0).expect(
+        201,
+      );
+      await aiQueue.processPending();
+      const reworked = await request(app.getHttpServer())
+        .get(`/api/tasks/${taskId}/review`)
+        .set('Cookie', adminCookie)
+        .expect(200);
+      expect(reworked.body.items[1]).toMatchObject({
+        result: 'rework',
+        firstSelfAssessment: 'pass',
+        firstResult: 'pass',
+        aiReason: '模拟审核打回。',
+      });
+    }
+    const decisions = new TaskDecisionService(pool);
+    now = new Date('2026-11-09T12:00:00.000Z');
+    await decisions.processDueTasks(now);
+    const waiting = await pool.query(
+      'SELECT decided_at FROM floorwalk.inspections WHERE task_id = $1',
+      [taskId],
+    );
+    expect(waiting.rows[0].decided_at).toBeNull();
+
+    now = new Date('2026-11-09T12:30:00.000Z');
+    reviewer = new FakeAiReviewer();
+    await upload(
+      taskId,
+      2,
+      secondManagerCookie,
+      'fail',
+      '属实不合格',
+      0,
+    ).expect(201);
+    await aiQueue.processPending();
+    const settled = await request(app.getHttpServer())
+      .get(`/api/tasks/${taskId}/review`)
+      .set('Cookie', adminCookie)
+      .expect(200);
+    expect(settled.body).toMatchObject({
+      score: 67,
+      inspectionStatus: 'passed',
+      decidedAt: '2026-11-09T12:30:00.000Z',
+    });
+    expect(settled.body.items[1]).toMatchObject({
+      result: 'fail',
+      firstSelfAssessment: 'pass',
+      firstResult: 'pass',
+      aiReason: '模拟审核不合格。',
+    });
+    const attribution = await pool.query(
+      'SELECT first_uploaded_by_id FROM floorwalk.inspection_items WHERE id = $1',
+      [item.body.id],
+    );
+    expect(attribution.rows[0].first_uploaded_by_id).toBe(managerId);
+    const changed = await decide(taskId, item.body.id, 'pass').expect(201);
+    expect(changed.body.decidedAt).toBe('2026-11-09T12:30:00.000Z');
+    expect(changed.body.items[1].firstResult).toBe('pass');
+  });
+
+  it('FW-030 locks normal AI results at the deadline and unresolved rework at one hour', async () => {
+    now = new Date('2026-11-09T10:30:00.000Z');
+    await pool.query(
+      'UPDATE floorwalk.templates SET ai_enabled = true WHERE id = $1',
+      [templateId],
+    );
+    const normalTaskId = await createTask();
+    const reworkTaskId = await createTask();
+    for (const taskId of [normalTaskId, reworkTaskId]) {
+      await upload(taskId, 1).expect(201);
+      await upload(taskId, 2, managerCookie, 'pass', '已检查', 0).expect(201);
+      await upload(taskId, 3, managerCookie, 'pass', '已检查', 0).expect(201);
+    }
+    await aiQueue.processPending();
+    reviewer = {
+      review: (input) =>
+        new FakeAiReviewer().review({
+          ...input,
+          items: input.items.map((entry) => ({
+            ...entry,
+            expectedConclusion: 'rework',
+          })),
+        }),
+    };
+    const reworked = await upload(
+      reworkTaskId,
+      2,
+      managerCookie,
+      'pass',
+      '待补传',
+      0,
+    ).expect(201);
+    await aiQueue.processPending();
+    const decisions = new TaskDecisionService(pool);
+    now = new Date('2026-11-09T12:00:00.000Z');
+    await decisions.processDueTasks(now);
+    const normal = await request(app.getHttpServer())
+      .get(`/api/tasks/${normalTaskId}/review`)
+      .set('Cookie', adminCookie)
+      .expect(200);
+    expect(normal.body).toMatchObject({
+      score: 100,
+      inspectionStatus: 'passed',
+      decidedAt: '2026-11-09T12:00:00.000Z',
+    });
+    now = new Date('2026-11-09T13:00:00.000Z');
+    await decisions.processDueTasks(now);
+    const forced = await request(app.getHttpServer())
+      .get(`/api/tasks/${reworkTaskId}/review`)
+      .set('Cookie', adminCookie)
+      .expect(200);
+    expect(forced.body).toMatchObject({
+      score: 67,
+      decidedAt: '2026-11-09T13:00:00.000Z',
+    });
+    expect(forced.body.items[1]).toMatchObject({
+      id: reworked.body.id,
+      result: 'fail',
+      incomplete: true,
+      firstResult: 'pass',
+    });
+  });
+
+  it('FW-030 calculates self-check accuracy from first decisions and first uploaders by task date', async () => {
+    now = new Date('2026-11-09T10:30:00.000Z');
+    const firstTask = await createTask(siteId, '2026-10-01');
+    const firstPass = await upload(firstTask, 1).expect(201);
+    const reworked = await upload(
+      firstTask,
+      2,
+      secondManagerCookie,
+      'fail',
+      '首次不合格',
+      0,
+    ).expect(201);
+    await upload(firstTask, 3, managerCookie, 'pass', '尚未判定', 0).expect(
+      201,
+    );
+    await decide(firstTask, firstPass.body.id, 'pass').expect(201);
+    await decide(firstTask, reworked.body.id, 'rework').expect(201);
+    await upload(firstTask, 2, managerCookie, 'pass', '另一店长补传', 0).expect(
+      201,
+    );
+    await decide(firstTask, reworked.body.id, 'fail').expect(201);
+
+    const secondTask = await createTask(siteId, '2026-10-02');
+    const secondFail = await upload(
+      secondTask,
+      2,
+      secondManagerCookie,
+      'fail',
+      '不合格',
+      0,
+    ).expect(201);
+    const mismatched = await upload(
+      secondTask,
+      3,
+      managerCookie,
+      'pass',
+      '自检合格',
+      0,
+    ).expect(201);
+    await decide(secondTask, secondFail.body.id, 'fail').expect(201);
+    await decide(secondTask, mismatched.body.id, 'fail').expect(201);
+    for (const [taskSiteId, taskDate, cookie] of [
+      [siteId, '2026-10-03', managerCookie],
+      [otherSiteId, '2026-10-01', otherManagerCookie],
+    ]) {
+      const excludedTask = await createTask(taskSiteId, taskDate);
+      const excludedItem = await upload(
+        excludedTask,
+        2,
+        cookie,
+        'pass',
+        '范围外',
+        0,
+      ).expect(201);
+      await decide(excludedTask, excludedItem.body.id, 'pass').expect(201);
+    }
+    for (const [scope, id, sampleCount, matchingCount] of [
+      ['site', siteId, 4, 2],
+      ['manager', managerId, 2, 1],
+      ['manager', secondManagerId, 2, 1],
+    ]) {
+      const response = await request(app.getHttpServer())
+        .get('/api/stats/self-check')
+        .query({ scope, id, from: '2026-10-01', to: '2026-10-02' })
+        .set('Cookie', adminCookie)
+        .expect(200);
+      expect(selfCheckStatsResponseSchema.parse(response.body)).toEqual({
+        sampleCount,
+        matchingCount,
+        accuracy: 0.5,
+      });
+    }
+    const empty = await request(app.getHttpServer())
+      .get('/api/stats/self-check')
+      .query({
+        scope: 'site',
+        id: siteId,
+        from: '2026-09-01',
+        to: '2026-09-01',
+      })
+      .set('Cookie', adminCookie)
+      .expect(200);
+    expect(empty.body).toEqual({
+      sampleCount: 0,
+      matchingCount: 0,
+      accuracy: null,
+    });
+
+    const legacyTask = await createTask(siteId, '2026-10-04');
+    const legacyItem = await upload(
+      legacyTask,
+      2,
+      managerCookie,
+      'fail',
+      '首传者未知的旧记录',
+      0,
+    ).expect(201);
+    await pool.query(
+      'UPDATE floorwalk.inspection_items SET first_uploaded_by_id = NULL WHERE id = $1',
+      [legacyItem.body.id],
+    );
+    await upload(
+      legacyTask,
+      2,
+      secondManagerCookie,
+      'pass',
+      '另一店长重传',
+      0,
+    ).expect(201);
+    await decide(legacyTask, legacyItem.body.id, 'fail').expect(201);
+    const unattributed = await request(app.getHttpServer())
+      .get('/api/stats/self-check')
+      .query({
+        scope: 'manager',
+        id: secondManagerId,
+        from: '2026-10-04',
+        to: '2026-10-04',
+      })
+      .set('Cookie', adminCookie)
+      .expect(200);
+    expect(unattributed.body).toEqual({
+      sampleCount: 0,
+      matchingCount: 0,
+      accuracy: null,
+    });
+  });
+
+  it('FW-030 restricts review and statistics to admins and normalizes service failures', async () => {
+    now = new Date('2026-11-09T10:30:00.000Z');
+    const taskId = await createTask();
+    const uploaded = await upload(
+      taskId,
+      2,
+      managerCookie,
+      'pass',
+      '已检查',
+      0,
+    ).expect(201);
+    const statsPath = `/api/stats/self-check?scope=site&id=${siteId}&from=2026-11-09&to=2026-11-09`;
+    for (const path of [
+      '/api/review/tasks',
+      `/api/tasks/${taskId}/review`,
+      statsPath,
+    ]) {
+      const anonymous = await request(app.getHttpServer())
+        .get(path)
+        .expect(401);
+      expect(errorResponseSchema.parse(anonymous.body).code).toBe(
+        'UNAUTHENTICATED',
+      );
+      const denied = await request(app.getHttpServer())
+        .get(path)
+        .set('Cookie', managerCookie)
+        .expect(403);
+      expect(errorResponseSchema.parse(denied.body).code).toBe('FORBIDDEN');
+    }
+    for (const cookie of [undefined, managerCookie]) {
+      const pending = request(app.getHttpServer())
+        .post(`/api/tasks/${taskId}/items/${uploaded.body.id}/decision`)
+        .send({ result: 'pass' });
+      if (cookie) pending.set('Cookie', cookie);
+      const denied = await pending.expect(cookie ? 403 : 401);
+      expect(errorResponseSchema.parse(denied.body).code).toBe(
+        cookie ? 'FORBIDDEN' : 'UNAUTHENTICATED',
+      );
+    }
+    const validQuery = {
+      scope: 'site',
+      id: siteId,
+      from: '2026-11-09',
+      to: '2026-11-09',
+    };
+    for (const query of [
+      {},
+      { ...validQuery, scope: 'unknown' },
+      { ...validQuery, id: 'not-a-uuid' },
+      { ...validQuery, from: '2026-02-30' },
+      { ...validQuery, to: '2026-11-08' },
+    ]) {
+      const invalid = await request(app.getHttpServer())
+        .get('/api/stats/self-check')
+        .query(query)
+        .set('Cookie', adminCookie)
+        .expect(400);
+      expect(errorResponseSchema.parse(invalid.body).code).toBe(
+        'VALIDATION_FAILED',
+      );
+    }
+    for (const [scope, id] of [
+      ['site', randomUUID()],
+      ['manager', randomUUID()],
+      ['manager', adminId],
+    ]) {
+      const missing = await request(app.getHttpServer())
+        .get('/api/stats/self-check')
+        .query({ ...validQuery, scope, id })
+        .set('Cookie', adminCookie)
+        .expect(404);
+      expect(errorResponseSchema.parse(missing.body).code).toBe('NOT_FOUND');
+    }
+    const failed = vi
+      .spyOn(app.get(TaskDecisionService), 'listReviewQueue')
+      .mockRejectedValueOnce(new Error('internal fixture details'));
+    try {
+      const response = await request(app.getHttpServer())
+        .get('/api/review/tasks')
+        .set('Cookie', adminCookie)
+        .expect(500);
+      expect(errorResponseSchema.parse(response.body)).toEqual({
+        code: 'VALIDATION_FAILED',
+        message: '请求无法处理。',
+      });
+    } finally {
+      failed.mockRestore();
+    }
   });
 });
