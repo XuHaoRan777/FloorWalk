@@ -51,12 +51,14 @@ test('停用门店仍可查看历史，今日页不显示旧巡检入口', async
     await expect(
       page.getByRole('heading', { name: 'Northbean Coffee 1' }),
     ).toBeVisible();
-    await expect(page.getByText('今日任务暂不可用')).toBeVisible();
+    await expect(page.getByText('今天没有巡检任务。')).toBeVisible();
     await expect(page.getByTestId('start-inspection')).toHaveCount(0);
     await expect(page.getByTestId('submit-inspection')).toHaveCount(0);
     const today = await page.request.get(`${apiBase}/inspector/today`);
     expect(today.ok()).toBeTruthy();
-    expect((await today.json()).site.active).toBe(false);
+    const stoppedToday = await today.json();
+    expect(stoppedToday.site.active).toBe(false);
+    expect(stoppedToday.tasks).toHaveLength(0);
 
     const recordsResponse = await page.request.get(
       `${apiBase}/inspector/inspections?limit=10`,
@@ -85,7 +87,12 @@ test('停用门店仍可查看历史，今日页不显示旧巡检入口', async
     expect(reactivated.ok()).toBeTruthy();
     await page.goto('/');
     await page.getByLabel('刷新今日任务').click();
-    await expect(page.getByText('今日任务暂不可用')).toBeVisible();
+    await expect(page.getByText('今天没有巡检任务。')).toBeVisible();
+    const refreshedToday = await page.request.get(`${apiBase}/inspector/today`);
+    expect(refreshedToday.ok()).toBeTruthy();
+    const activeToday = await refreshedToday.json();
+    expect(activeToday.site.active).toBe(true);
+    expect(activeToday.tasks).toHaveLength(0);
     await expect(page.getByTestId('start-inspection')).toHaveCount(0);
     await expect(page.getByTestId('submit-inspection')).toHaveCount(0);
   } finally {

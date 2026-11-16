@@ -39,7 +39,7 @@
 | FW-030 | [AI 逐条审核](work/FW-030-ai-review/spec.md) | `verified` | FW-028 | 已交付，自动接力 FW-031，线尾统一归档（线二 1/9） |
 | FW-031 | [管理员审核与改判（Web）](work/FW-031-admin-review-web/spec.md) | `verified` | FW-030 | 已交付，自动接力 FW-032，线尾统一归档（线二 2/9） |
 | FW-032 | [今日视图与看板（Web）](work/FW-032-dashboard-web/spec.md) | `verified` | FW-031 | 已交付，自动接力 FW-033，线尾统一归档（线二 3/9） |
-| FW-033 | [Mobile 管理端（一）：配置](work/FW-033-mobile-admin-config/spec.md) | `approved` | FW-029 | 接力待开工（线二 4/9） |
+| FW-033 | [Mobile 管理端（一）：配置](work/FW-033-mobile-admin-config/spec.md) | `verified` | FW-029 | 已交付，自动接力 FW-034，线尾统一归档（线二 4/9） |
 | FW-034 | [Mobile 管理端（二）：审核与看板](work/FW-034-mobile-admin-review/spec.md) | `approved` | FW-032、FW-033 | 接力待开工（线二 5/9） |
 | FW-035 | [个人中心（两端）](work/FW-035-profile/spec.md) | `approved` | FW-034 | 接力待开工（线二 6/9） |
 | FW-036 | [站内通知（后端 + Web 收件箱）](work/FW-036-notifications-backend/spec.md) | `approved` | FW-035 | 接力待开工（线二 7/9） |

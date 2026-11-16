@@ -33,7 +33,7 @@ function Routes() {
         <Stack.Screen name="index" />
         <Stack.Screen name="forgot-password" />
       </Stack.Protected>
-      <Stack.Protected guard={!!session}>
+      <Stack.Protected guard={!!session} redirectTo="/">
         <Stack.Screen name="(authenticated)" />
       </Stack.Protected>
       <Stack.Screen name="__design-samples" />

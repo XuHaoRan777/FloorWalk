@@ -15,6 +15,7 @@
     "@expo-google-fonts/ibm-plex-mono": "^0.4.1",
     "@expo-google-fonts/ibm-plex-sans": "^0.4.1",
     "@expo/metro-runtime": "58.0.17",
+    "@expo/ui": "~58.0.28",
     "@gluestack-ui/core": "5.0.15",
     "@gluestack-ui/utils": "5.0.6",
     "@libs/shared": "workspace:*",

@@ -198,6 +198,16 @@ export const styles = StyleSheet.create({
     gap: tokens.space.unit * 2.5,
     padding: tokens.space.md,
   },
+  adminEntry: {
+    alignItems: 'center',
+    borderRadius: tokens.radius.card,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: tokens.space.md,
+    minHeight: 64,
+    paddingHorizontal: tokens.space.md,
+    paddingVertical: tokens.space.sm,
+  },
   highlightedCard: { borderWidth: 2 },
   cardEyebrow: {
     fontFamily: tokens.font.sans.medium,
