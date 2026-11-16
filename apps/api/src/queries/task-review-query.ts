@@ -10,8 +10,33 @@ import { iso } from './inspection-queries.js';
 export async function listReviewQueue(pool: Pool, orgId: string) {
   const tasks = await pool.query<{ id: string }>(
     `SELECT task.id FROM floorwalk.inspection_tasks task
+     JOIN floorwalk.organizations org ON org.id = task.org_id
      JOIN floorwalk.inspections inspection ON inspection.task_id = task.id
-     WHERE task.org_id = $1
+     WHERE task.org_id = $1 AND (
+       (
+         inspection.decided_at >= (
+           date_trunc('day', now() AT TIME ZONE org.timezone)
+           AT TIME ZONE org.timezone
+         )
+         AND inspection.decided_at < (
+           (date_trunc('day', now() AT TIME ZONE org.timezone) + interval '1 day')
+           AT TIME ZONE org.timezone
+         )
+       ) OR EXISTS (
+         SELECT 1 FROM floorwalk.inspection_items item
+         JOIN floorwalk.templates template ON template.id = inspection.template_id
+         LEFT JOIN LATERAL (
+           SELECT job.status FROM floorwalk.ai_review_jobs job
+           WHERE job.inspection_item_id = item.id
+             AND job.upload_version = item.upload_version
+           ORDER BY job.created_at DESC, job.id DESC LIMIT 1
+         ) ai_job ON true
+         WHERE item.inspection_id = inspection.id
+           AND item.uploaded_at IS NOT NULL
+           AND item.result = 'pending'
+           AND (NOT template.ai_enabled OR ai_job.status IS NULL OR ai_job.status = 'manual')
+       )
+     )
      ORDER BY task.task_date DESC, task.starts_at DESC, task.id`,
     [orgId],
   );
@@ -59,8 +84,9 @@ export async function loadTaskReview(
          item.first_self_assessment AS "firstSelfAssessment",
          item.first_result AS "firstResult", item.uploaded_by_id AS "uploadedById",
          item.ai_reason AS "aiReason",
+         last_rework.reason AS "lastReworkReason",
          CASE WHEN item.result = 'pending' AND item.uploaded_at IS NOT NULL
-           AND NOT template.ai_enabled THEN 'manual'
+           AND (NOT template.ai_enabled OR ai_job.status IS NULL) THEN 'manual'
            ELSE ai_job.status END AS "aiReviewStatus",
          uploader.display_name AS "uploadedByName", item.uploaded_at AS "uploadedAt",
          item.incomplete, item.note, item.created_at AS "createdAt"
@@ -74,6 +100,11 @@ export async function loadTaskReview(
            AND job.upload_version = item.upload_version
          ORDER BY job.created_at DESC, job.id DESC LIMIT 1
        ) ai_job ON true
+       LEFT JOIN LATERAL (
+         SELECT decision.reason FROM floorwalk.inspection_item_decisions decision
+         WHERE decision.inspection_item_id = item.id AND decision.reason IS NOT NULL
+         ORDER BY decision.created_at DESC, decision.id DESC LIMIT 1
+       ) last_rework ON true
        WHERE item.inspection_id = $1 ORDER BY item.position`,
       [row.inspectionId],
     );

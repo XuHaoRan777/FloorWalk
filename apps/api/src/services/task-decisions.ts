@@ -50,6 +50,7 @@ export class TaskDecisionService {
     orgId: string;
     actorId: string;
     result: InspectionItemDecisionResult;
+    reason: string | null;
     now: Date;
   }): Promise<TaskReview> {
     const client = await this.pool.connect();
@@ -113,9 +114,16 @@ export class TaskDecisionService {
       );
       await client.query(
         `INSERT INTO floorwalk.inspection_item_decisions
-           (inspection_item_id, actor_id, previous_result, new_result, created_at)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [input.itemId, input.actorId, previousResult, input.result, input.now],
+           (inspection_item_id, actor_id, previous_result, new_result, reason, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          input.itemId,
+          input.actorId,
+          previousResult,
+          input.result,
+          input.reason,
+          input.now,
+        ],
       );
 
       if (inspection.decidedAt) {

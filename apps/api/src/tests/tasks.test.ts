@@ -104,7 +104,11 @@ describe('FW-028 task uploads', () => {
     return request(app.getHttpServer())
       .post(`/api/tasks/${taskId}/items/${itemId}/decision`)
       .set('Cookie', adminCookie)
-      .send({ result });
+      .send(
+        result === 'rework'
+          ? { result, reason: '请补充现场照片与说明。' }
+          : { result },
+      );
   }
 
   beforeAll(async () => {
@@ -701,7 +705,23 @@ describe('FW-028 task uploads', () => {
     const firstItemId = unresolved.body.items.find(
       (item: { position: number }) => item.position === 1,
     ).id as string;
-    await decide(resolvedTaskId, firstItemId, 'rework').expect(201);
+    const reworked = await decide(resolvedTaskId, firstItemId, 'rework').expect(
+      201,
+    );
+    expect(
+      reworked.body.items.find(
+        (item: { id: string }) => item.id === firstItemId,
+      ),
+    ).toMatchObject({
+      result: 'rework',
+      lastReworkReason: '请补充现场照片与说明。',
+    });
+    const reasonAudit = await pool.query<{ reason: string }>(
+      `SELECT reason FROM floorwalk.inspection_item_decisions
+       WHERE inspection_item_id = $1 AND new_result = 'rework'`,
+      [firstItemId],
+    );
+    expect(reasonAudit.rows).toEqual([{ reason: '请补充现场照片与说明。' }]);
     const decisions = new TaskDecisionService(pool);
     now = new Date('2026-11-09T12:00:00.000Z');
     await decisions.processDueTasks(now);
@@ -786,6 +806,94 @@ describe('FW-028 task uploads', () => {
       aiReason: null,
     });
     await decide(taskId, uploaded.body.id, 'pass').expect(201);
+  });
+
+  it('FW-031 AC-01 lists pending manual tasks and decisions made today only', async () => {
+    now = new Date('2026-11-09T10:30:00.000Z');
+    const manualTaskId = await createTask();
+    const manualItem = await upload(
+      manualTaskId,
+      2,
+      managerCookie,
+      'pass',
+      '待管理员处理',
+      0,
+    ).expect(201);
+
+    const decidedTodayTaskId = await createTask();
+    const decidedTodayItem = await upload(
+      decidedTodayTaskId,
+      2,
+      managerCookie,
+      'pass',
+      '今天完成',
+      0,
+    ).expect(201);
+    await decide(decidedTodayTaskId, decidedTodayItem.body.id, 'pass').expect(
+      201,
+    );
+    await pool.query(
+      `UPDATE floorwalk.inspections SET status = 'passed', score = 100,
+         decided_at = now() WHERE task_id = $1`,
+      [decidedTodayTaskId],
+    );
+
+    const decidedEarlierTaskId = await createTask();
+    const decidedEarlierItem = await upload(
+      decidedEarlierTaskId,
+      2,
+      managerCookie,
+      'pass',
+      '昨日完成',
+      0,
+    ).expect(201);
+    await decide(
+      decidedEarlierTaskId,
+      decidedEarlierItem.body.id,
+      'pass',
+    ).expect(201);
+    await pool.query(
+      `UPDATE floorwalk.inspections SET status = 'passed', score = 100,
+         decided_at = now() - interval '1 day' WHERE task_id = $1`,
+      [decidedEarlierTaskId],
+    );
+
+    const queue = await request(app.getHttpServer())
+      .get('/api/review/tasks')
+      .set('Cookie', adminCookie)
+      .expect(200);
+    const taskIds = queue.body.map((task: { id: string }) => task.id);
+    expect(taskIds).toContain(manualTaskId);
+    expect(taskIds).toContain(decidedTodayTaskId);
+    expect(taskIds).not.toContain(decidedEarlierTaskId);
+
+    await pool.query(
+      'UPDATE floorwalk.templates SET ai_enabled = true WHERE id = $1',
+      [templateId],
+    );
+    const afterEnablingAi = await request(app.getHttpServer())
+      .get('/api/review/tasks')
+      .set('Cookie', adminCookie)
+      .expect(200);
+    const stillManual = afterEnablingAi.body.find(
+      (task: { id: string }) => task.id === manualTaskId,
+    );
+    expect(stillManual).toBeDefined();
+    expect(
+      stillManual.items.find(
+        (item: { id: string }) => item.id === manualItem.body.id,
+      ),
+    ).toMatchObject({ result: 'pending', aiReviewStatus: 'manual' });
+    const decided = await decide(
+      manualTaskId,
+      manualItem.body.id,
+      'pass',
+    ).expect(201);
+    expect(
+      decided.body.items.find(
+        (item: { id: string }) => item.id === manualItem.body.id,
+      ).result,
+    ).toBe('pass');
   });
 
   it('FW-030 cancels an unstarted upload even when its replacement has the same timestamp', async () => {
@@ -877,6 +985,7 @@ describe('FW-028 task uploads', () => {
       result: 'pending',
       firstResult: null,
       aiReviewStatus: 'manual',
+      aiReason: '测试模型不可用。',
     });
     const decided = await decide(taskId, uploaded.body.id, 'fail').expect(201);
     expect(decided.body.items[1]).toMatchObject({

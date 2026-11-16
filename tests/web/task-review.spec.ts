@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { expect, request as playwrightRequest, test } from '@playwright/test';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { createPool } from '../../apps/api/src/db/client.js';
+import { seedPhoto } from '../../apps/api/src/db/seed-data.js';
+import { LocalStorageDriver } from '../../apps/api/src/storage/local.js';
 
 const configuredSlot = Number(process.env.FW_SLOT);
 const apiBase = `http://127.0.0.1:${3100 + configuredSlot * 10}/api`;
@@ -17,40 +20,61 @@ async function loginAdmin(page: Page) {
   await expect(page.getByRole('heading', { name: /总部看板/ })).toBeVisible();
 }
 
-test('FW-028 AC-10 逐条上传、打回重传、判定与改判', async ({ page }) => {
+test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改判', async ({
+  page,
+}) => {
   const databaseUrl = new URL(process.env.DATABASE_URL ?? '');
   databaseUrl.pathname = `/floorwalk_e2e_${configuredSlot}`;
   const pool = createPool(databaseUrl.toString());
   let managerContext: APIRequestContext | undefined;
   let siteId: string | undefined;
   let templateId: string | undefined;
+  let standardId: string | undefined;
   let managerId: string | undefined;
   let scheduleId: string | undefined;
   let taskId: string | undefined;
 
   try {
     await loginAdmin(page);
+    const pendingCount = page.getByRole('button', { name: /^待我处理/ });
+    await expect(pendingCount).toHaveText(/^待我处理 \d+$/);
+    const initialCount = Number(
+      (await pendingCount.innerText()).match(/\d+/)![0],
+    );
     const suffix = randomUUID();
     const siteResponse = await page.request.post(`${apiBase}/admin/sites`, {
       data: {
-        code: `FW028-${suffix}`,
-        name: `FW-028 测试门店 ${suffix.slice(0, 8)}`,
+        code: `FW031-${suffix}`,
+        name: `FW-031 测试门店 ${suffix.slice(0, 8)}`,
       },
     });
     expect(siteResponse.status()).toBe(201);
     const site = (await siteResponse.json()) as { id: string; name: string };
     siteId = site.id;
 
+    const standardResponse = await page.request.post(
+      `${apiBase}/admin/ai-standards`,
+      {
+        data: {
+          name: `FW-031 失败模型标准 ${suffix}`,
+          prompt: 'FW-031 fake model failure',
+        },
+      },
+    );
+    expect(standardResponse.status()).toBe(201);
+    standardId = ((await standardResponse.json()) as { id: string }).id;
+
     const templateResponse = await page.request.post(
       `${apiBase}/admin/templates`,
       {
         data: {
-          name: `FW-028 测试模板 ${suffix}`,
-          aiEnabled: false,
+          name: `FW-031 测试模板 ${suffix}`,
+          aiEnabled: true,
+          aiStandardId: standardId,
           items: [
             {
               title: '检查项一',
-              minPhotoCount: 0,
+              minPhotoCount: 1,
               acceptanceCriteria: '确认现场情况。',
               critical: false,
             },
@@ -69,8 +93,8 @@ test('FW-028 AC-10 逐条上传、打回重传、判定与改判', async ({ page
 
     const userResponse = await page.request.post(`${apiBase}/admin/users`, {
       data: {
-        loginName: `fw028-${suffix}@example.test`,
-        displayName: 'FW-028 测试店长',
+        loginName: `fw031-${suffix}@example.test`,
+        displayName: 'FW-031 测试店长',
         role: 'store_manager',
         siteId,
         password: managerInitialPassword,
@@ -103,7 +127,7 @@ test('FW-028 AC-10 逐条上传、打回重传、判定与改判', async ({ page
     }));
     const scheduleResponse = await page.request.post(
       `${apiBase}/admin/schedules`,
-      { data: { name: `FW-028 测试日程 ${suffix}`, days } },
+      { data: { name: `FW-031 测试日程 ${suffix}`, days } },
     );
     expect(scheduleResponse.status()).toBe(201);
     scheduleId = ((await scheduleResponse.json()) as { id: string }).id;
@@ -126,7 +150,7 @@ test('FW-028 AC-10 逐条上传、打回重传、判定与改判', async ({ page
     managerContext = await playwrightRequest.newContext();
     const loginResponse = await managerContext.post(`${apiBase}/auth/session`, {
       data: {
-        loginName: `fw028-${suffix}@example.test`,
+        loginName: `fw031-${suffix}@example.test`,
         password: managerInitialPassword,
       },
     });
@@ -141,26 +165,75 @@ test('FW-028 AC-10 逐条上传、打回重传、判定与改判', async ({ page
     const upload = async (position: number, note: string) =>
       managerContext!.post(
         `${apiBase}/tasks/${taskId}/items/${position}/uploads`,
-        { multipart: { selfAssessment: 'pass', note } },
+        {
+          multipart: {
+            selfAssessment: 'pass',
+            note,
+            ...(position === 1
+              ? {
+                  files: {
+                    name: '现场.jpg',
+                    mimeType: 'image/jpeg',
+                    buffer: seedPhoto,
+                  },
+                }
+              : {}),
+          },
+        },
       );
 
     expect((await upload(1, '首轮现场检查。')).status()).toBe(201);
     expect((await upload(2, '记录另一项检查结果。')).status()).toBe(201);
+    await expect
+      .poll(
+        async () => {
+          const jobs = await pool.query(
+            `SELECT job.status, job.attempt_count AS attempts
+             FROM floorwalk.ai_review_jobs job
+             JOIN floorwalk.inspection_items item ON item.id = job.inspection_item_id
+             JOIN floorwalk.inspections inspection ON inspection.id = item.inspection_id
+             WHERE inspection.task_id = $1 ORDER BY item.position`,
+            [taskId],
+          );
+          return jobs.rows;
+        },
+        { timeout: 20_000 },
+      )
+      .toEqual([
+        { status: 'manual', attempts: 4 },
+        { status: 'manual', attempts: 4 },
+      ]);
+    await expect(pendingCount).toHaveText(`待我处理 ${initialCount + 1}`, {
+      timeout: 15_000,
+    });
 
     await page
       .getByLabel('控制台导航')
       .getByRole('button', { name: '审核队列', exact: true })
       .click();
-    const taskRow = page.getByRole('button').filter({ hasText: site.name });
+    const manualQueue = page.getByRole('region', {
+      name: '待人工',
+      exact: true,
+    });
+    const taskRow = manualQueue
+      .getByRole('button')
+      .filter({ hasText: site.name });
     await expect(taskRow).toBeVisible();
+    await expect(taskRow).toContainText('FW-031 测试模板');
+    await expect(taskRow).toContainText('提交于');
+    await expect(taskRow).toContainText('AI 调用失败，请人工审核。');
     await taskRow.click();
     await expect(page.getByRole('heading', { name: site.name })).toBeVisible();
 
     const firstItem = page
       .getByRole('article')
       .filter({ has: page.getByRole('heading', { name: /检查项一/ }) });
-    await expect(firstItem).toContainText('FW-028 测试店长');
+    await expect(firstItem).toContainText('FW-031 测试店长');
     await expect(firstItem).toContainText(/上传于 \d{2}:\d{2}/);
+    await expect(firstItem).toContainText('AI 理由：AI 调用失败，请人工审核。');
+    await expect(
+      firstItem.getByRole('img', { name: '检查项现场照片' }),
+    ).toHaveJSProperty('naturalWidth', 1);
     const firstItemId = (
       await pool.query<{ id: string }>(
         `SELECT item.id FROM floorwalk.inspection_items item
@@ -177,23 +250,52 @@ test('FW-028 AC-10 逐条上传、打回重传、判定与改判', async ({ page
         response.request().method() === 'POST',
     );
     await firstItem.getByRole('button', { name: '打回' }).click();
+    await expect(
+      firstItem.getByRole('button', { name: '确认打回' }),
+    ).toBeDisabled();
+    await firstItem.getByLabel('打回理由').fill('请补充现场检查的具体说明。');
+    await firstItem.getByRole('button', { name: '确认打回' }).click();
     expect((await firstRework).status()).toBe(201);
-    await expect(firstItem).toContainText('打回');
+    await expect(firstItem).toContainText(
+      '打回理由：请补充现场检查的具体说明。',
+    );
+    await page.reload();
+    await page
+      .getByLabel('控制台导航')
+      .getByRole('button', { name: '审核队列', exact: true })
+      .click();
+    await page.getByRole('button').filter({ hasText: site.name }).click();
+    await expect(firstItem).toContainText(
+      '打回理由：请补充现场检查的具体说明。',
+    );
 
     expect((await upload(1, '按要求补充现场说明。')).status()).toBe(201);
     await page.getByRole('button', { name: '刷新任务' }).click();
-    await expect(firstItem).toContainText('FW-028 测试店长');
+    await expect(firstItem).toContainText('FW-031 测试店长');
     await firstItem.getByRole('button', { name: '通过' }).click();
     const secondItem = page
       .getByRole('article')
       .filter({ has: page.getByRole('heading', { name: /检查项二/ }) });
     await pool.query(
       `UPDATE floorwalk.inspection_tasks
-       SET due_at = now() - interval '2 hours' WHERE id = $1`,
+       SET starts_at = now() - interval '3 hours',
+         due_at = now() - interval '2 hours' WHERE id = $1`,
       [taskId],
     );
-    await secondItem.getByRole('button', { name: '不合格' }).click();
+    await secondItem.getByRole('button', { name: '通过' }).click();
     const summary = page.locator('.fw-page-heading').last();
+    await expect(summary).toContainText('100 分');
+    await expect(summary).toContainText('通过');
+    await expect(pendingCount).toHaveText(`待我处理 ${initialCount}`);
+    await page.getByRole('button', { name: '返回队列' }).click();
+    await expect(taskRow).toHaveCount(0);
+    const decidedRow = page
+      .getByRole('region', { name: '今天已判定', exact: true })
+      .getByRole('button')
+      .filter({ hasText: site.name });
+    await expect(decidedRow).toContainText('100 分');
+    await decidedRow.click();
+    await secondItem.getByRole('button', { name: '不合格' }).click();
     await expect(summary).toContainText('50 分');
     await expect(summary).toContainText('不合格');
     await expect(
@@ -203,6 +305,7 @@ test('FW-028 AC-10 逐条上传、打回重传、判定与改判', async ({ page
     await secondItem.getByRole('button', { name: '通过' }).click();
     await expect(summary).toContainText('100 分');
     await expect(summary).toContainText('通过');
+    await expect(pendingCount).toHaveText(`待我处理 ${initialCount}`);
   } finally {
     if (managerContext) {
       await managerContext
@@ -214,6 +317,31 @@ test('FW-028 AC-10 逐条上传、打回重传、判定与改判', async ({ page
     try {
       await client.query('BEGIN');
       if (taskId) {
+        const evidence = await client.query<{ storageKey: string }>(
+          `SELECT evidence.storage_key AS "storageKey" FROM floorwalk.evidence evidence
+           JOIN floorwalk.inspection_items item ON item.id = evidence.inspection_item_id
+           JOIN floorwalk.inspections inspection ON inspection.id = item.inspection_id
+           WHERE inspection.task_id = $1`,
+          [taskId],
+        );
+        const storage = new LocalStorageDriver(
+          path.resolve(`apps/api/.e2e/slot-${configuredSlot}/storage`),
+        );
+        for (const row of evidence.rows) await storage.delete(row.storageKey);
+        await client.query(
+          `DELETE FROM floorwalk.evidence evidence
+           USING floorwalk.inspection_items item, floorwalk.inspections inspection
+           WHERE evidence.inspection_item_id = item.id
+             AND item.inspection_id = inspection.id AND inspection.task_id = $1`,
+          [taskId],
+        );
+        await client.query(
+          `DELETE FROM floorwalk.ai_review_jobs job
+           USING floorwalk.inspection_items item, floorwalk.inspections inspection
+           WHERE job.inspection_item_id = item.id
+             AND item.inspection_id = inspection.id AND inspection.task_id = $1`,
+          [taskId],
+        );
         await client.query(
           `DELETE FROM floorwalk.inspection_item_decisions decision
            USING floorwalk.inspection_items item, floorwalk.inspections inspection
@@ -269,6 +397,11 @@ test('FW-028 AC-10 逐条上传、打回重传、判定与改判', async ({ page
           templateId,
         ]);
       }
+      if (standardId)
+        await client.query(
+          'DELETE FROM floorwalk.ai_review_standards WHERE id = $1',
+          [standardId],
+        );
       if (siteId)
         await client.query('DELETE FROM floorwalk.sites WHERE id = $1', [
           siteId,

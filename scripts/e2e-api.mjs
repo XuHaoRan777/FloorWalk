@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const slot = Number(process.env.FW_SLOT);
 if (!Number.isInteger(slot) || slot < 1 || slot > 3) {
@@ -17,7 +17,13 @@ const build = spawnSync(
   { cwd: apiRoot, env: process.env, stdio: 'inherit', windowsHide: true },
 );
 if (build.status !== 0) process.exit(build.status ?? 1);
-const api = spawn(process.execPath, [`${output}/main.js`], {
+const apiArguments = process.argv.includes('--fake-ai-failure')
+  ? [
+      '--import',
+      pathToFileURL(path.join(root, 'tests/e2e/fake-ai-failure.mjs')).href,
+    ]
+  : [];
+const api = spawn(process.execPath, [...apiArguments, `${output}/main.js`], {
   cwd: apiRoot,
   env: process.env,
   stdio: 'inherit',

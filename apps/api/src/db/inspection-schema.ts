@@ -216,6 +216,7 @@ export const inspectionItemDecisions = floorwalk.table(
       .references(() => users.id),
     previousResult: text('previous_result'),
     newResult: text('new_result').notNull(),
+    reason: text('reason'),
     createdAt: createdAt(),
   },
   (table) => [

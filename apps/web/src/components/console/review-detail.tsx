@@ -28,17 +28,21 @@ export function ReviewDetail({
   canReview,
   canSendChat,
   onBack,
+  onReviewed,
 }: {
   initialTask: TaskReview;
   canReview: boolean;
   canSendChat: boolean;
   onBack: () => void;
+  onReviewed: () => void;
 }) {
   const [task, setTask] = useState(initialTask);
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
+  const [reworkItemId, setReworkItemId] = useState<string | null>(null);
+  const [reworkReason, setReworkReason] = useState('');
   const locked = task.decidedAt !== null;
   useEffect(() => {
     const graceDeadline = new Date(task.dueAt).getTime() + 60 * 60 * 1000;
@@ -49,7 +53,7 @@ export function ReviewDetail({
     );
     return () => window.clearTimeout(timer);
   }, [task.dueAt]);
-  const reworkAllowed = now <= new Date(task.dueAt).getTime() + 60 * 60 * 1000;
+  const reworkAllowed = now < new Date(task.dueAt).getTime() + 60 * 60 * 1000;
 
   async function refresh() {
     setBusy(true);
@@ -63,11 +67,22 @@ export function ReviewDetail({
     }
   }
 
-  async function decide(itemId: string, result: InspectionItemDecisionResult) {
+  async function decide(
+    itemId: string,
+    result: InspectionItemDecisionResult,
+    reason?: string,
+  ) {
     setBusyItemId(itemId);
     setError('');
     try {
-      setTask(await decideTaskItem(task.id, itemId, { result }));
+      const decision =
+        result === 'rework' ? { result, reason: reason ?? '' } : { result };
+      setTask(await decideTaskItem(task.id, itemId, decision));
+      onReviewed();
+      if (result === 'rework') {
+        setReworkItemId(null);
+        setReworkReason('');
+      }
     } catch (reason) {
       setError(getErrorMessage(reason));
     } finally {
@@ -186,6 +201,16 @@ export function ReviewDetail({
                     验收要点：{item.acceptanceCriteria}
                   </p>
                 )}
+                {item.aiReason && (
+                  <p className="mt-3 border-l-2 border-accent bg-raised px-3 py-2 text-sm">
+                    AI 理由：{item.aiReason}
+                  </p>
+                )}
+                {item.lastReworkReason && (
+                  <p className="mt-3 border-l-2 border-warning bg-raised px-3 py-2 text-sm">
+                    打回理由：{item.lastReworkReason}
+                  </p>
+                )}
                 {item.note && (
                   <p className="mt-3 border-l-2 border-accent bg-raised px-3 py-2 text-sm">
                     备注：{item.note}
@@ -216,7 +241,10 @@ export function ReviewDetail({
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => void decide(item.id, 'rework')}
+                      onClick={() => {
+                        setReworkItemId(item.id);
+                        setReworkReason(item.lastReworkReason ?? '');
+                      }}
                       disabled={
                         !canDecide ||
                         !reworkAllowed ||
@@ -238,6 +266,48 @@ export function ReviewDetail({
                       <X aria-hidden="true" />
                       不合格
                     </Button>
+                  </div>
+                )}
+                {canReview && reworkItemId === item.id && (
+                  <div className="mt-3 space-y-2">
+                    <label className="grid gap-1.5 text-sm font-medium">
+                      打回理由
+                      <textarea
+                        rows={3}
+                        className="w-full rounded-md border bg-background px-3 py-2 font-normal"
+                        value={reworkReason}
+                        onChange={(event) =>
+                          setReworkReason(event.target.value)
+                        }
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          void decide(item.id, 'rework', reworkReason)
+                        }
+                        disabled={
+                          !reworkReason.trim() ||
+                          !canDecide ||
+                          !reworkAllowed ||
+                          itemBusy
+                        }
+                      >
+                        确认打回
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setReworkItemId(null);
+                          setReworkReason('');
+                        }}
+                        disabled={itemBusy}
+                      >
+                        取消
+                      </Button>
+                    </div>
                   </div>
                 )}
                 {itemBusy && (

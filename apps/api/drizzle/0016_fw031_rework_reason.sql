@@ -1,0 +1,1 @@
+ALTER TABLE "floorwalk"."inspection_item_decisions" ADD COLUMN "reason" text;

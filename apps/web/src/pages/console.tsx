@@ -45,6 +45,7 @@ import { getErrorMessage } from '@/components/console/helpers';
 import { roleLabel } from '@/components/console/labels';
 import { QueueView } from '@/components/console/queue-view';
 import { ReviewDetail } from '@/components/console/review-detail';
+import { useReviewQueue } from '@/components/console/use-review-queue';
 import { SitesPage } from '@/components/console/sites-page';
 import { TemplatesPage } from '@/components/console/templates-page';
 import { AiStandardsPage } from '@/components/console/ai-standards-page';
@@ -127,6 +128,11 @@ export function ConsolePage() {
     readSession()?.user.role === 'admin' ? 'dashboard' : 'queue',
   );
   const [selected, setSelected] = useState<TaskReview | null>(null);
+  const reviewQueue = useReviewQueue(
+    !loading &&
+      session?.user.role === 'admin' &&
+      !session.user.mustChangePassword,
+  );
   useEffect(() => {
     if (session?.user.role === 'admin') setSection('dashboard');
   }, [session?.user.role]);
@@ -281,10 +287,31 @@ export function ConsolePage() {
           <span className="text-sm text-muted-foreground">
             {roleLabel[user.role]} · {user.displayName}
           </span>
+          {isAdmin && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto"
+              title={reviewQueue.error || undefined}
+              onClick={() => {
+                setSection('queue');
+                setSelected(null);
+                reviewQueue.refresh();
+              }}
+            >
+              <ClipboardCheck aria-hidden="true" />
+              待我处理{' '}
+              {reviewQueue.error
+                ? '—'
+                : reviewQueue.loading
+                  ? '…'
+                  : reviewQueue.manualQueue.length}
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
-            className="ml-auto"
+            className={isAdmin ? undefined : 'ml-auto'}
             onClick={logout}
           >
             <LogOut aria-hidden="true" />
@@ -322,13 +349,22 @@ export function ConsolePage() {
                 initialTask={selected}
                 canReview={isAdmin}
                 canSendChat={false}
-                onBack={() => setSelected(null)}
+                onBack={() => {
+                  setSelected(null);
+                  reviewQueue.refresh();
+                }}
+                onReviewed={reviewQueue.refresh}
               />
             ) : showDashboard ? (
               <DashboardView onQueue={() => setSection('queue')} />
             ) : (
               <QueueView
                 canReview={isAdmin}
+                manualQueue={reviewQueue.manualQueue}
+                decidedToday={reviewQueue.decidedToday}
+                loading={reviewQueue.loading}
+                error={reviewQueue.error}
+                onRefresh={reviewQueue.refresh}
                 onSelect={(task) => {
                   setSelected(task);
                   setError('');

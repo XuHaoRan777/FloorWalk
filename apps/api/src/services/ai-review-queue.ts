@@ -217,7 +217,7 @@ export class AiReviewQueueService implements OnModuleInit, OnModuleDestroy {
     });
     const result = await this.reviewer.review(input);
     if ('kind' in result) {
-      await this.retryOrRequestManual(job, this.clock.now());
+      await this.retryOrRequestManual(job, this.clock.now(), result.reason);
       return;
     }
     const decision = result.items.find(
@@ -278,12 +278,21 @@ export class AiReviewQueueService implements OnModuleInit, OnModuleDestroy {
       await this.decisions.finalizeTask(job.taskId, this.clock.now());
   }
 
-  private async retryOrRequestManual(job: ReviewJob, now: Date) {
+  private async retryOrRequestManual(
+    job: ReviewJob,
+    now: Date,
+    reason = 'AI 调用失败，请人工审核。',
+  ) {
     const delayMs = 1_000 * 2 ** Math.max(0, job.attemptCount - 1);
     const client = await this.pool.connect();
     let rescheduled: boolean;
     try {
       await client.query('BEGIN');
+      // Uploads and manual decisions also lock the item before its review job.
+      await client.query(
+        'SELECT id FROM floorwalk.inspection_items WHERE id = $1 FOR UPDATE',
+        [job.inspectionItemId],
+      );
       const updated = await client.query(
         `UPDATE floorwalk.ai_review_jobs job
          SET status = CASE WHEN job.attempt_count >= $3 THEN 'manual' ELSE 'pending' END,
@@ -297,6 +306,13 @@ export class AiReviewQueueService implements OnModuleInit, OnModuleDestroy {
         [job.id, now, maxAttempts, delayMs, job.attemptCount],
       );
       rescheduled = Boolean(updated.rowCount);
+      if (rescheduled && job.attemptCount >= maxAttempts) {
+        await client.query(
+          `UPDATE floorwalk.inspection_items SET ai_reason = $3
+           WHERE id = $1 AND upload_version = $2 AND result = 'pending'`,
+          [job.inspectionItemId, job.uploadVersion, reason],
+        );
+      }
       if (!updated.rowCount) {
         await client.query(
           `UPDATE floorwalk.ai_review_jobs SET status = 'cancelled'

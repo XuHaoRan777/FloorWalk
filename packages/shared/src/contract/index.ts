@@ -158,6 +158,7 @@ export const taskReviewItemSchema = inspectionItemSchema.extend({
   incomplete: z.boolean(),
   aiReviewStatus: aiReviewJobStatusSchema.nullable(),
   aiReason: z.string().nullable(),
+  lastReworkReason: z.string().nullable(),
   evidence: z.array(evidenceSchema),
 });
 
@@ -173,9 +174,14 @@ export const taskReviewSchema = inspectionTaskSchema.extend({
 });
 
 export const taskReviewQueueResponseSchema = z.array(taskReviewSchema);
-export const taskItemDecisionRequestSchema = z.object({
-  result: inspectionItemDecisionResultSchema,
-});
+export const taskItemDecisionRequestSchema = z.discriminatedUnion('result', [
+  z.object({ result: z.literal('pass') }),
+  z.object({ result: z.literal('fail') }),
+  z.object({
+    result: z.literal('rework'),
+    reason: z.string().trim().min(1),
+  }),
+]);
 
 const reviewBaseSchema = z.object({
   id: uuid,

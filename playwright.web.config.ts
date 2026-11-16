@@ -39,6 +39,8 @@ const slotEnvironment = {
   NODE_ENV: 'development',
   CORS_ORIGINS: webUrl,
   MAIL_DRIVER: 'fake',
+  AI_REVIEW_DRIVER: 'fake',
+  STORAGE_DRIVER: 'local',
 };
 
 export default defineConfig({
@@ -56,11 +58,11 @@ export default defineConfig({
   webServer: [
     {
       command:
-        'pnpm --filter @apps/api db:migrate && pnpm --filter @apps/api db:seed && node scripts/e2e-api.mjs',
+        'pnpm --filter @apps/api db:migrate && pnpm --filter @apps/api db:seed && node scripts/e2e-api.mjs --fake-ai-failure',
       cwd: projectRoot,
       url: `${apiUrl}/health`,
       timeout: 120_000,
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       env: slotEnvironment,
     },
     {

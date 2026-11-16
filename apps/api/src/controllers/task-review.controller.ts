@@ -63,6 +63,7 @@ export class TaskReviewController {
       orgId: request.user.orgId,
       actorId: request.user.id,
       result: input.result,
+      reason: input.result === 'rework' ? input.reason : null,
       now: this.clock.now(),
     });
   }
