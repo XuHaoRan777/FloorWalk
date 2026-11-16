@@ -41,7 +41,7 @@
 | FW-032 | [今日视图与看板（Web）](work/FW-032-dashboard-web/spec.md) | `verified` | FW-031 | 已交付，自动接力 FW-033，线尾统一归档（线二 3/9） |
 | FW-033 | [Mobile 管理端（一）：配置](work/FW-033-mobile-admin-config/spec.md) | `verified` | FW-029 | 已交付，自动接力 FW-034，线尾统一归档（线二 4/9） |
 | FW-034 | [Mobile 管理端（二）：审核与看板](work/FW-034-mobile-admin-review/spec.md) | `verified` | FW-032、FW-033 | 已交付，自动接力 FW-035，线尾统一归档（线二 5/9） |
-| FW-035 | [个人中心（两端）](work/FW-035-profile/spec.md) | `approved` | FW-034 | 接力待开工（线二 6/9） |
+| FW-035 | [个人中心（两端）](work/FW-035-profile/spec.md) | `blocked` | FW-034 | AC-05 跨商家 404 缺头像读取验收对象，待用户明确（线二 6/9） |
 | FW-036 | [站内通知（后端 + Web 收件箱）](work/FW-036-notifications-backend/spec.md) | `approved` | FW-035 | 接力待开工（线二 7/9） |
 | FW-037 | [站内通知（Mobile 收件箱与角标）](work/FW-037-notifications-mobile/spec.md) | `approved` | FW-036 | 接力待开工（线二 8/9） |
 | FW-038 | [AI 真模型验收与提示词调优](work/FW-038-ai-real-model-acceptance/spec.md) | `approved` | FW-037 | 接力待开工（线二 9/9，线尾 A） |
