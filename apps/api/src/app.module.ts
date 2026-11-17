@@ -3,6 +3,7 @@ import { HealthController } from './controllers/health.controller.js';
 import { InspectionController } from './controllers/inspection.controller.js';
 import { StorageController } from './controllers/storage.controller.js';
 import { AuthController } from './controllers/auth.controller.js';
+import { ProfileController } from './controllers/profile.controller.js';
 import { EvidenceController } from './controllers/evidence.controller.js';
 import { DashboardController } from './controllers/dashboard.controller.js';
 import { AdminController } from './controllers/admin.controller.js';
@@ -48,6 +49,7 @@ import {
   controllers: [
     HealthController,
     AuthController,
+    ProfileController,
     InspectionController,
     EvidenceController,
     TaskReviewController,

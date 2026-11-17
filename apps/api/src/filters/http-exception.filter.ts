@@ -5,7 +5,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import {
   errorCodeSchema,
@@ -26,6 +26,7 @@ const statusToCode: Partial<Record<number, ErrorCode>> = {
 export class HttpErrorFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const response = host.switchToHttp().getResponse<Response>();
+    const request = host.switchToHttp().getRequest<Request>();
     const exceptionRecord =
       typeof exception === 'object' && exception !== null
         ? (exception as Record<string, unknown>)
@@ -58,7 +59,9 @@ export class HttpErrorFilter implements ExceptionFilter {
       ? (code as ErrorCode)
       : 'VALIDATION_FAILED';
     const message = fileTooLarge
-      ? '照片不得超过 10 MB。'
+      ? request.path === '/api/me/avatar'
+        ? '头像不得超过 2 MB。'
+        : '照片不得超过 10 MB。'
       : typeof payloadRecord?.message === 'string'
         ? payloadRecord.message
         : exception instanceof ZodError

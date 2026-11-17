@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
   ClipboardCheck,
@@ -10,6 +10,7 @@ import {
   House,
   LayoutDashboard,
   LogOut,
+  UserRound,
   Users,
 } from 'lucide-react';
 import { APP_NAME } from '@libs/shared';
@@ -26,23 +27,10 @@ import {
   SidebarMenuItem,
   SidebarProvider,
 } from '@/components/ui/sidebar';
-import {
-  clearSession,
-  clearLegacySession,
-  deleteSession,
-  checkSession,
-  hasCheckedSession,
-  readSession,
-  unauthorizedEvent,
-  type TaskReview,
-  type Session,
-  UnauthorizedError,
-  writeSession,
-} from '@/lib/api';
+import { readSession, type TaskReview } from '@/lib/api';
 import { DashboardView } from '@/components/console/dashboard-view';
 import { TodayView } from '@/components/console/today-view';
 import { ErrorBanner } from '@/components/console/error-banner';
-import { getErrorMessage } from '@/components/console/helpers';
 import { roleLabel } from '@/components/console/labels';
 import { QueueView } from '@/components/console/queue-view';
 import { ReviewDetail } from '@/components/console/review-detail';
@@ -53,64 +41,8 @@ import { AiStandardsPage } from '@/components/console/ai-standards-page';
 import { SchedulesPage } from '@/components/console/schedules-page';
 import { SiteSchedulesPage } from '@/components/console/site-schedules-page';
 import { UsersPage } from '@/components/console/users-page';
-
-function useConsoleSession() {
-  const navigate = useNavigate();
-  const [session, setSession] = useState<Session | null>(() => readSession());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  useEffect(() => {
-    const handleUnauthorized = () => {
-      clearSession();
-      setSession(null);
-      void navigate({ to: '/' });
-    };
-    window.addEventListener(unauthorizedEvent, handleUnauthorized);
-    return () =>
-      window.removeEventListener(unauthorizedEvent, handleUnauthorized);
-  }, [navigate]);
-  useEffect(() => {
-    clearLegacySession();
-    const current = readSession();
-    if (current) {
-      setLoading(false);
-      return;
-    }
-    if (hasCheckedSession()) {
-      void navigate({ to: '/' });
-      return;
-    }
-    let active = true;
-    void checkSession()
-      .then((next) => {
-        if (!active) return;
-        writeSession(next);
-        setSession(next);
-      })
-      .catch((reason: unknown) => {
-        if (!active) return;
-        clearSession();
-        if (!(reason instanceof UnauthorizedError))
-          setError(getErrorMessage(reason));
-        void navigate({ to: '/' });
-      })
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [navigate]);
-  const logout = useCallback(async () => {
-    try {
-      await deleteSession();
-      clearSession();
-      setSession(null);
-      void navigate({ to: '/' });
-    } catch (reason) {
-      setError(getErrorMessage(reason));
-    }
-  }, [navigate]);
-  return { session, loading, error, setError, logout };
-}
+import { ProfilePage } from '@/components/console/profile-page';
+import { useConsoleSession } from '@/components/console/use-console-session';
 
 type ConsoleSection =
   | 'today'
@@ -121,11 +53,13 @@ type ConsoleSection =
   | 'standards'
   | 'schedules'
   | 'site-schedules'
-  | 'users';
+  | 'users'
+  | 'profile';
 
 export function ConsolePage() {
   const navigate = useNavigate();
-  const { session, loading, error, setError, logout } = useConsoleSession();
+  const { session, loading, error, setError, logout, updateUser } =
+    useConsoleSession();
   const [section, setSection] = useState<ConsoleSection>(() =>
     readSession()?.user.role === 'admin' ? 'dashboard' : 'queue',
   );
@@ -284,6 +218,18 @@ export function ConsolePage() {
                 </>
               )}
               <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={section === 'profile'}
+                  onClick={() => {
+                    setSection('profile');
+                    setSelected(null);
+                  }}
+                >
+                  <UserRound aria-hidden="true" />
+                  <span>我的</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <Link to="/">
                     <House aria-hidden="true" />
@@ -334,7 +280,9 @@ export function ConsolePage() {
         <Main id="main">
           <div className="fw-console-sheet">
             <ErrorBanner message={error} />
-            {isAdmin && section === 'sites' ? (
+            {section === 'profile' ? (
+              <ProfilePage onUserChange={updateUser} onLogout={logout} />
+            ) : isAdmin && section === 'sites' ? (
               <SitesPage />
             ) : isAdmin && section === 'templates' ? (
               <TemplatesPage />

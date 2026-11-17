@@ -51,6 +51,8 @@ const protocolRouteBodies = {
     password: 'protocol-password',
   },
   updateAdminUser: { displayName: 'Protocol user' },
+  updateMe: { displayName: 'Protocol admin' },
+  uploadAvatar: undefined,
   resetAdminUserPassword: { password: 'protocol-password' },
   changePassword: {
     currentPassword: 'wrong-password',
@@ -358,6 +360,12 @@ describe('inspection contract API', () => {
           .query({ recipient: email })
           .expect(200);
         pending.send({ ...body, email, verificationCode: mailbox.body.code });
+      } else if (routeKey === 'updateMe' && cookie) {
+        const current = await request(app.getHttpServer())
+          .get('/api/me')
+          .set('Cookie', cookie)
+          .expect(200);
+        pending.send({ displayName: current.body.displayName });
       } else {
         pending.send(body);
       }
@@ -366,7 +374,7 @@ describe('inspection contract API', () => {
   };
 
   it('allows every declared role on protocol routes and rejects anonymous protected access', async () => {
-    expect(Object.keys(protocolRouteBodies)).toHaveLength(6);
+    expect(Object.keys(protocolRouteBodies)).toHaveLength(8);
     const cookies = {
       store_manager: inspectorCookie,
       admin: hqCookie,
@@ -393,9 +401,11 @@ describe('inspection contract API', () => {
           continue;
         const response = await protocolRequest(routeKey, cookies[role]);
         expect(response.status, `${routeKey} allowed for ${role}`).toBe(
-          routeKey === 'createOrg' || routeKey === 'listAdminUsers'
+          routeKey === 'createOrg' ||
+            routeKey === 'listAdminUsers' ||
+            routeKey === 'updateMe'
             ? route.successStatus
-            : routeKey === 'createAdminUser'
+            : routeKey === 'createAdminUser' || routeKey === 'uploadAvatar'
               ? 400
               : routeKey === 'updateAdminUser' ||
                   routeKey === 'resetAdminUserPassword'
@@ -407,7 +417,7 @@ describe('inspection contract API', () => {
         if (routeKey === 'createOrg') {
           route.responseSchema.parse(response.body);
           createdProtocolOrgIds.push(response.body.org.id);
-        } else if (routeKey === 'listAdminUsers') {
+        } else if (routeKey === 'listAdminUsers' || routeKey === 'updateMe') {
           route.responseSchema.parse(response.body);
         }
         // Empty implemented writes may fail validation after role admission.
@@ -416,7 +426,7 @@ describe('inspection contract API', () => {
   });
 
   it('publishes the complete route table under /api', () => {
-    expect(Object.keys(apiRoutes)).toHaveLength(48);
+    expect(Object.keys(apiRoutes)).toHaveLength(50);
     for (const route of Object.values(apiRoutes)) {
       expect(route.path.startsWith('/api/')).toBe(true);
       expect(route.responseSchema).toBeDefined();
@@ -2123,9 +2133,11 @@ describe('inspection contract API', () => {
           hqCookie,
         );
         expect(response.status).toBe(
-          routeKey === 'createOrg' || routeKey === 'listAdminUsers'
+          routeKey === 'createOrg' ||
+            routeKey === 'listAdminUsers' ||
+            routeKey === 'updateMe'
             ? route.successStatus
-            : routeKey === 'createAdminUser'
+            : routeKey === 'createAdminUser' || routeKey === 'uploadAvatar'
               ? 400
               : routeKey === 'updateAdminUser' ||
                   routeKey === 'resetAdminUserPassword'
@@ -2137,7 +2149,7 @@ describe('inspection contract API', () => {
         if (routeKey === 'createOrg') {
           route.responseSchema.parse(response.body);
           createdProtocolOrgIds.push(response.body.org.id);
-        } else if (routeKey === 'listAdminUsers') {
+        } else if (routeKey === 'listAdminUsers' || routeKey === 'updateMe') {
           route.responseSchema.parse(response.body);
         }
       } else {

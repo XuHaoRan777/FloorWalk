@@ -1,5 +1,12 @@
 import type { User } from './types';
-import type { ChangePasswordRequest, LoginResponse } from '@libs/shared';
+import {
+  avatarUploadFieldName,
+  type AvatarUploadResponse,
+  type ChangePasswordRequest,
+  type CurrentUser,
+  type LoginResponse,
+  type UpdateMeRequest,
+} from '@libs/shared';
 import { request } from './request';
 
 export function login(loginName: string, password: string, orgId?: string) {
@@ -14,7 +21,20 @@ export function deleteSession() {
 }
 
 export function getMe() {
-  return request<User>('/me');
+  return request<CurrentUser>('/me');
+}
+
+export function updateMe(input: UpdateMeRequest) {
+  return request<User>('/me', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+export function uploadAvatar(file: File) {
+  const body = new FormData();
+  body.append(avatarUploadFieldName, file);
+  return request<AvatarUploadResponse>('/me/avatar', { method: 'POST', body });
 }
 
 export function changePassword(input: ChangePasswordRequest) {

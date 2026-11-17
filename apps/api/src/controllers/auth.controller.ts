@@ -18,6 +18,7 @@ import argon2 from 'argon2';
 import {
   apiRoutePath,
   apiRoutes,
+  currentUserSchema,
   loginRequestSchema,
   loginResponseSchema,
   userSchema,
@@ -32,13 +33,17 @@ import {
   type AuthUser,
 } from '../auth/auth.js';
 import { type AuthedRequest } from '../queries/inspection-queries.js';
+import type { StorageDriver } from '../storage/types.js';
 
 const dummyPasswordHash =
   '$argon2id$v=19$m=65536,t=3,p=4$Ba6wlrKFzsrY3N1sAQcKbA$PB60152pm8Qtu2UQupk0i+KR+NP7Qg5Iyda+j4yWSpI';
 
 @Controller('api')
 export class AuthController {
-  constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(DATABASE_POOL) private readonly pool: Pool,
+    @Inject('STORAGE_DRIVER') private readonly storage: StorageDriver,
+  ) {}
 
   @Post(apiRoutePath(apiRoutes.createSession))
   async login(
@@ -163,8 +168,17 @@ export class AuthController {
       org_id: string;
       org_name: string;
       must_change_password: boolean;
+      avatar_storage_key: string | null;
+      site_name: string | null;
+      site_code: string | null;
+      site_active: boolean | null;
+      site_created_at: string | null;
     }>(
-      `SELECT u.*, o.name AS org_name FROM floorwalk.users u JOIN floorwalk.organizations o ON o.id = u.org_id WHERE u.id = $1`,
+      `SELECT u.*, o.name AS org_name, s.name AS site_name, s.code AS site_code,
+         s.deactivated_at IS NULL AS site_active, s.created_at AS site_created_at
+       FROM floorwalk.users u JOIN floorwalk.organizations o ON o.id = u.org_id
+       LEFT JOIN floorwalk.sites s ON s.id = u.site_id AND s.org_id = u.org_id
+       WHERE u.id = $1`,
       [request.user.id],
     );
     const row = result.rows[0];
@@ -173,7 +187,7 @@ export class AuthController {
         code: 'NOT_FOUND',
         message: '用户不存在。',
       });
-    return userSchema.parse({
+    return currentUserSchema.parse({
       id: row.id,
       loginName: row.login_name,
       displayName: row.display_name,
@@ -182,6 +196,18 @@ export class AuthController {
       org: { id: row.org_id, name: row.org_name },
       mustChangePassword: row.must_change_password,
       createdAt: new Date(row.created_at).toISOString(),
+      site: row.site_id
+        ? {
+            id: row.site_id,
+            name: row.site_name,
+            code: row.site_code,
+            active: row.site_active,
+            createdAt: new Date(row.site_created_at!).toISOString(),
+          }
+        : null,
+      avatarUrl: row.avatar_storage_key
+        ? (await this.storage.signedUrl(row.avatar_storage_key, 3600)).url
+        : null,
     });
   }
 }
