@@ -746,13 +746,14 @@ test('FW-008 AC-03 Tabs 切换会更新 URL，今日页不暴露旧巡检入口'
   await page.getByLabel('密码').fill(password);
   await page.getByTestId('login-button').click();
   await expect(page).toHaveURL('/today');
-  await expect(page.getByRole('tab')).toHaveCount(3);
+  await expect(page.getByRole('tab')).toHaveCount(4);
   await expect(page.getByRole('tab', { name: '记录' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '通知' })).toBeVisible();
   await page.getByLabel('我的').click();
   await expect(page).toHaveURL('/profile');
   await page.getByLabel('今日待巡', { exact: true }).click();
   await expect(page).toHaveURL('/today');
-  await expect(page.getByRole('tab')).toHaveCount(3);
+  await expect(page.getByRole('tab')).toHaveCount(4);
   await expect(page.getByTestId('start-inspection')).toHaveCount(0);
   await expect(page.getByTestId('submit-inspection')).toHaveCount(0);
 });

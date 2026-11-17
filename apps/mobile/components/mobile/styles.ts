@@ -36,6 +36,10 @@ export const classes = {
   chatImage: 'will-change-variable bg-raised',
   actionButton: 'flex-row items-center justify-center gap-2',
   removePhoto: 'will-change-variable bg-background',
+  notificationUnreadDot: 'will-change-variable bg-destructive',
+  notificationReadDot: 'will-change-variable bg-muted-foreground',
+  notificationBadge: 'will-change-variable bg-destructive',
+  notificationBadgeText: 'will-change-variable text-destructive-foreground',
 } as const;
 
 export const styles = StyleSheet.create({
@@ -279,4 +283,69 @@ export const styles = StyleSheet.create({
     paddingLeft: tokens.space.unit * 2.5,
   },
   chatImage: { height: 220, width: '100%' },
+  notificationScreen: { flex: 1, paddingHorizontal: tokens.space.lg },
+  notificationHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: tokens.space.sm,
+    paddingBottom: tokens.space.md,
+    paddingTop: tokens.space.md,
+  },
+  notificationLoading: {
+    alignItems: 'center',
+    flex: 1,
+    gap: tokens.space.md,
+    justifyContent: 'center',
+  },
+  notificationListContent: {
+    paddingBottom: tokens.space.unit * 12,
+    gap: tokens.space.sm,
+  },
+  notificationEmptyContent: {
+    alignItems: 'center',
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  notificationRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: tokens.space.md,
+    minHeight: 76,
+    paddingVertical: tokens.space.md,
+  },
+  notificationDot: { borderRadius: 4, height: 8, marginTop: 6, width: 8 },
+  notificationTitle: {
+    fontFamily: tokens.font.sans.semibold,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  notificationTime: { fontSize: 12 },
+  adminHomeHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: tokens.space.md,
+  },
+  adminNotificationButton: {
+    alignItems: 'center',
+    height: 48,
+    justifyContent: 'center',
+    position: 'relative',
+    width: 48,
+  },
+  adminNotificationBadge: {
+    alignItems: 'center',
+    borderRadius: 10,
+    height: 20,
+    justifyContent: 'center',
+    minWidth: 20,
+    paddingHorizontal: 4,
+    position: 'absolute',
+    right: -2,
+    top: -2,
+  },
+  adminNotificationBadgeText: {
+    fontSize: 10,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '700',
+  },
 });

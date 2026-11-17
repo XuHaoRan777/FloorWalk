@@ -1,4 +1,5 @@
 import Stack from 'expo-router/stack';
+import { NotificationProvider } from '../../components/mobile/notification-provider';
 import { TodayProvider } from '../../components/mobile/today-provider';
 import { useSession } from '../../components/mobile/session-provider';
 import { styles } from '../../components/mobile/styles';
@@ -17,12 +18,19 @@ export default function AuthenticatedLayout() {
         <Stack.Screen name="inspection/[id]" />
         <Stack.Screen name="records/[id]" />
       </Stack.Protected>
+      <Stack.Protected guard={!mustChangePassword}>
+        <Stack.Screen name="chat/[id]" />
+      </Stack.Protected>
       <Stack.Screen name="change-password" />
     </Stack>
   );
-  return mustChangePassword || isAdmin ? (
-    routes
-  ) : (
-    <TodayProvider>{routes}</TodayProvider>
+  return (
+    <NotificationProvider>
+      {mustChangePassword || isAdmin ? (
+        routes
+      ) : (
+        <TodayProvider>{routes}</TodayProvider>
+      )}
+    </NotificationProvider>
   );
 }

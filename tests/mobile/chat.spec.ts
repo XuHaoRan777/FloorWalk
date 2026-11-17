@@ -14,6 +14,8 @@ const apiBase = `http://127.0.0.1:${3100 + slot * 10}`;
 const password = 'northbean-demo';
 const contexts: APIRequestContext[] = [];
 const messageIds: string[] = [];
+let notificationFixture:
+  { inspectionId: string; existingIds: string[] } | undefined;
 const pool = createPool(databaseUrlForSlot());
 
 function databaseUrlForSlot() {
@@ -66,6 +68,14 @@ test.afterEach(async () => {
 
 test.afterAll(async () => {
   try {
+    if (notificationFixture) {
+      await pool.query(
+        `DELETE FROM floorwalk.notifications
+         WHERE type = 'chat_message' AND payload_json->>'inspectionId' = $1
+           AND NOT (id = ANY($2::uuid[]))`,
+        [notificationFixture.inspectionId, notificationFixture.existingIds],
+      );
+    }
     if (messageIds.length) {
       const stored = await pool.query<{ storage_key: string | null }>(
         'DELETE FROM floorwalk.chat_messages WHERE id = ANY($1::uuid[]) RETURNING storage_key',
@@ -103,6 +113,15 @@ test('Expo Web chat pagination, polling, sending, validation and HQ read-only', 
   const targetInspectionId = records.items[0]?.id;
   expect(targetInspectionId).toBeTruthy();
   if (!targetInspectionId) return;
+  const existingNotifications = await pool.query<{ id: string }>(
+    `SELECT id FROM floorwalk.notifications
+     WHERE type = 'chat_message' AND payload_json->>'inspectionId' = $1`,
+    [targetInspectionId],
+  );
+  notificationFixture = {
+    inspectionId: targetInspectionId,
+    existingIds: existingNotifications.rows.map((row) => row.id),
+  };
   const target = { id: targetInspectionId };
   const history = await admin.get(
     `${apiBase}/api/inspections/${target.id}/messages`,

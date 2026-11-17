@@ -63,6 +63,11 @@ export async function createReviewFixture(
         );
       }
       if (taskId) {
+        await client.query(
+          `DELETE FROM floorwalk.notifications
+           WHERE payload_json->>'taskId' = $1`,
+          [taskId],
+        );
         const evidence = await client.query<{ storageKey: string }>(
           `SELECT evidence.storage_key AS "storageKey" FROM floorwalk.evidence evidence
            JOIN floorwalk.inspection_items item ON item.id = evidence.inspection_item_id
@@ -295,6 +300,8 @@ export async function createReviewFixture(
     const resolvedTaskId = taskId;
     return {
       taskId: resolvedTaskId,
+      managerLoginName: `fw034-${suffix}@example.test`,
+      managerPassword,
       site,
       pool,
       upload,
@@ -323,7 +330,7 @@ export async function createReviewFixture(
       async expireWindow() {
         await pool.query(
           `UPDATE floorwalk.inspection_tasks SET starts_at = now() - interval '3 hours',
-           due_at = now() - interval '2 hours' WHERE id = $1`,
+           due_at = now() - interval '1 hour' WHERE id = $1`,
           [resolvedTaskId],
         );
       },

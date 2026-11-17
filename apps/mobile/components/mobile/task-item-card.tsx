@@ -1,7 +1,14 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
-import { Image, Pressable, Text, TextInput, View } from 'react-native';
+import {
+  Image,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+  type LayoutChangeEvent,
+} from 'react-native';
 import {
   evidenceMimeTypes,
   maxEvidenceSizeBytes,
@@ -18,6 +25,8 @@ type InspectorTaskItem = InspectorTaskDetail['items'][number];
 export function TaskItemCard({
   taskId,
   item,
+  focused = false,
+  onLayout,
   timezone,
   canOperate,
   operationLabel,
@@ -26,6 +35,8 @@ export function TaskItemCard({
 }: {
   taskId: string;
   item: InspectorTaskItem;
+  focused?: boolean;
+  onLayout?: (event: LayoutChangeEvent) => void;
   timezone: string;
   canOperate: boolean;
   operationLabel: string;
@@ -123,8 +134,11 @@ export function TaskItemCard({
 
   return (
     <View
-      className={classes.card}
-      style={styles.card}
+      className={
+        focused ? `${classes.card} ${classes.highlightedCard}` : classes.card
+      }
+      onLayout={onLayout}
+      style={[styles.card, focused && styles.highlightedCard]}
       testID={`task-item-${item.position}`}
     >
       <Text className={classes.foreground} style={styles.cardTitle}>

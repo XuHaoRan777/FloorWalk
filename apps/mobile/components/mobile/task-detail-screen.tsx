@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type ScrollViewInstance,
+} from 'react-native';
 import type { InspectorTaskDetail } from '@libs/shared';
 import { api, ApiError, userFacingError } from '../../lib/api';
 import { ErrorBanner } from './error-banner';
@@ -75,11 +81,13 @@ function operationWindow(
 
 export function TaskDetailScreen({
   id,
+  focusPosition,
   onBack,
   onUnauthorized,
   onTaskUpdated,
 }: {
   id: string;
+  focusPosition?: number;
   onBack: () => void;
   onUnauthorized: () => void;
   onTaskUpdated: () => Promise<void>;
@@ -88,6 +96,7 @@ export function TaskDetailScreen({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
+  const scrollRef = useRef<ScrollViewInstance | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -132,6 +141,7 @@ export function TaskDetailScreen({
 
   return (
     <ScrollView
+      ref={scrollRef}
       className={classes.background}
       contentContainerStyle={styles.page}
       contentInsetAdjustmentBehavior="automatic"
@@ -185,6 +195,14 @@ export function TaskDetailScreen({
             key={item.id}
             taskId={detail.id}
             item={item}
+            focused={item.position === focusPosition}
+            onLayout={(event) => {
+              if (item.position === focusPosition)
+                scrollRef.current?.scrollTo({
+                  y: event.nativeEvent.layout.y,
+                  animated: true,
+                });
+            }}
             timezone={detail.timezone}
             canOperate={operation.canOperate}
             operationLabel={operation.label}

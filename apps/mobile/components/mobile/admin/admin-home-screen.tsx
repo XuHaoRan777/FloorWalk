@@ -5,6 +5,7 @@ import {
   CalendarRange,
   ClipboardList,
   ClipboardCheck,
+  Bell,
   SlidersHorizontal,
   Store,
   UserRound,
@@ -17,6 +18,7 @@ import { PrimaryButton } from '../primary-button';
 import { useSession } from '../session-provider';
 import { classes, styles } from '../styles';
 import { useTabColors } from '../use-tab-colors';
+import { useNotifications } from '../notification-provider';
 
 const entries: {
   href: Href;
@@ -90,23 +92,48 @@ export function AdminHomeScreen({ displayName }: { displayName: string }) {
   const router = useRouter();
   const tabColors = useTabColors();
   const { logout, logoutError } = useSession();
+  const { unreadCount } = useNotifications();
 
   return (
     <ScrollView
       className={classes.background}
       contentContainerStyle={styles.page}
     >
-      <View style={{ gap: 4 }}>
-        <Text
-          accessibilityRole="header"
-          className={classes.foreground}
-          style={styles.heading}
+      <View style={styles.adminHomeHeader}>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text
+            accessibilityRole="header"
+            className={classes.foreground}
+            style={styles.heading}
+          >
+            管理员主页
+          </Text>
+          <Text className={classes.muted} style={styles.muted}>
+            {displayName}
+          </Text>
+        </View>
+        <Pressable
+          accessibilityLabel={`通知${unreadCount ? `，${unreadCount} 条未读` : ''}`}
+          accessibilityRole="button"
+          onPress={() => router.push('/admin/notifications')}
+          style={styles.adminNotificationButton}
+          testID="admin-notifications"
         >
-          管理员主页
-        </Text>
-        <Text className={classes.muted} style={styles.muted}>
-          {displayName}
-        </Text>
+          <Bell color={tabColors.accent} size={22} />
+          {unreadCount > 0 ? (
+            <View
+              className={classes.notificationBadge}
+              style={styles.adminNotificationBadge}
+            >
+              <Text
+                className={classes.notificationBadgeText}
+                style={styles.adminNotificationBadgeText}
+              >
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          ) : null}
+        </Pressable>
       </View>
       <View style={{ gap: 8 }}>
         {entries.map(({ href, label, icon: Icon, testID }) => (
