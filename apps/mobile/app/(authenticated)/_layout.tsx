@@ -9,9 +9,6 @@ export default function AuthenticatedLayout() {
   const isAdmin = session?.user.role === 'admin';
   const routes = (
     <Stack screenOptions={{ headerShown: false, contentStyle: styles.app }}>
-      <Stack.Protected guard={mustChangePassword}>
-        <Stack.Screen name="change-password" />
-      </Stack.Protected>
       <Stack.Protected guard={!mustChangePassword && isAdmin}>
         <Stack.Screen name="admin" />
       </Stack.Protected>
@@ -20,6 +17,7 @@ export default function AuthenticatedLayout() {
         <Stack.Screen name="inspection/[id]" />
         <Stack.Screen name="records/[id]" />
       </Stack.Protected>
+      <Stack.Screen name="change-password" />
     </Stack>
   );
   return mustChangePassword || isAdmin ? (

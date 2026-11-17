@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { buffer as consumeBuffer } from 'node:stream/consumers';
 import type { CurrentUser } from '@libs/shared';
 import { createPool } from '../../apps/api/src/db/client.js';
@@ -209,6 +209,134 @@ for (const account of [
           for (const key of storageKeys) await storage.delete(key);
         } finally {
           await pool.end();
+        }
+      }
+    },
+  );
+
+  test(
+    'FW-035 AC-03/05 Mobile Web 主动改密与其他会话登出：' + account.loginName,
+    async ({ browser, page }) => {
+      const databaseUrl = new URL(process.env.DATABASE_URL ?? '');
+      databaseUrl.pathname = '/floorwalk_e2e_' + slot;
+      const pool = createPool(databaseUrl.toString());
+      let original:
+        | {
+            id: string;
+            passwordHash: string;
+            mustChangePassword: boolean;
+          }
+        | undefined;
+      let originalSessionHashes: string[] | undefined;
+      let otherContext: BrowserContext | undefined;
+      const changedPassword = 'fw035-mobile-profile-password';
+      const openProfile = async (target: Page) => {
+        if (account.canRename) {
+          await target.getByTestId('admin-entry-profile').click();
+        } else {
+          await target.getByRole('tab', { name: '我的' }).click();
+        }
+        await expect(
+          target.getByRole('heading', { name: '账号信息', exact: true }),
+        ).toBeVisible();
+      };
+      const login = async (target: Page) => {
+        await target.goto('/');
+        await target
+          .getByLabel('登录名', { exact: true })
+          .fill(account.loginName);
+        await target.getByLabel('密码', { exact: true }).fill('northbean-demo');
+        await target.getByTestId('login-button').click();
+        if (account.canRename) {
+          await expect(
+            target.getByRole('heading', { name: '管理员主页' }),
+          ).toBeVisible();
+        } else {
+          await expect(
+            target.getByRole('tab', { name: '今日待巡' }),
+          ).toBeVisible();
+        }
+      };
+
+      try {
+        original = (
+          await pool.query(
+            'SELECT id, password_hash AS "passwordHash", must_change_password AS "mustChangePassword" FROM floorwalk.users WHERE login_name = $1',
+            [account.loginName],
+          )
+        ).rows[0];
+        if (!original) throw new Error('缺少个人中心测试的种子账号。');
+        expect(original.mustChangePassword).toBe(false);
+        const originalSessions = (
+          await pool.query(
+            'SELECT token_hash FROM floorwalk.sessions WHERE user_id = $1',
+            [original.id],
+          )
+        ).rows as { token_hash: string }[];
+        originalSessionHashes = originalSessions.map((row) => row.token_hash);
+
+        await login(page);
+        otherContext = await browser.newContext({
+          baseURL: new URL('/', page.url()).toString(),
+        });
+        const otherPage = await otherContext.newPage();
+        await login(otherPage);
+        await openProfile(otherPage);
+
+        await openProfile(page);
+        await page.getByRole('button', { name: '改密码', exact: true }).click();
+        await expect(
+          page.getByRole('heading', { name: '修改密码', exact: true }),
+        ).toBeVisible();
+        await page
+          .getByLabel('当前密码', { exact: true })
+          .fill('northbean-demo');
+        await page.getByLabel('新密码', { exact: true }).fill(changedPassword);
+        await page
+          .getByLabel('确认新密码', { exact: true })
+          .fill(changedPassword);
+        await page.getByRole('button', { name: '保存新密码' }).click();
+        if (account.canRename) {
+          await expect(
+            page.getByRole('heading', { name: '管理员主页' }),
+          ).toBeVisible();
+        } else {
+          await expect(
+            page.getByRole('tab', { name: '今日待巡' }),
+          ).toBeVisible();
+        }
+
+        await otherPage.reload();
+        await expect(otherPage.getByTestId('login-button')).toBeVisible();
+        await expect(
+          otherPage.getByLabel('登录名', { exact: true }),
+        ).toBeVisible();
+
+        await page.reload();
+        await openProfile(page);
+        await expect(page.getByLabel('当前登录名', { exact: true })).toHaveText(
+          account.loginName,
+        );
+      } finally {
+        try {
+          if (original) {
+            await pool.query(
+              'UPDATE floorwalk.users SET password_hash = $2, must_change_password = $3 WHERE id = $1',
+              [original.id, original.passwordHash, original.mustChangePassword],
+            );
+            if (originalSessionHashes) {
+              await pool.query(
+                'DELETE FROM floorwalk.sessions WHERE user_id = $1 AND NOT (token_hash = ANY($2::text[]))',
+                [original.id, originalSessionHashes],
+              );
+            }
+          }
+        } finally {
+          try {
+            await otherContext?.close();
+          } finally {
+            await pool.end();
+          }
         }
       }
     },

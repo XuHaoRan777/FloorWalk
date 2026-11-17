@@ -421,6 +421,44 @@ describe('admin user management (FW-020 AC-01/03/04)', () => {
       [user.id],
     );
     expect(state.rows[0].must_change_password).toBe(false);
-    await login(user.loginName, 'changed-password');
+    const ordinaryOtherCookie = await login(user.loginName, 'changed-password');
+    const otherUser = await request(app.getHttpServer())
+      .get('/api/me')
+      .set('Cookie', managerCookie)
+      .expect(200);
+    expect(otherUser.body.id).not.toBe(user.id);
+
+    await request(app.getHttpServer())
+      .post('/api/me/password')
+      .set('Cookie', currentCookie)
+      .send({
+        currentPassword: 'changed-password',
+        newPassword: 'ordinary-changed-password',
+        userId: otherUser.body.id,
+      })
+      .expect(204);
+
+    const current = await request(app.getHttpServer())
+      .get('/api/me')
+      .set('Cookie', currentCookie)
+      .expect(200);
+    expect(current.body).toMatchObject({
+      id: user.id,
+      mustChangePassword: false,
+    });
+    await request(app.getHttpServer())
+      .get('/api/me')
+      .set('Cookie', ordinaryOtherCookie)
+      .expect(401);
+    const unchangedOther = await request(app.getHttpServer())
+      .get('/api/me')
+      .set('Cookie', managerCookie)
+      .expect(200);
+    expect(unchangedOther.body).toMatchObject({
+      id: otherUser.body.id,
+      mustChangePassword: otherUser.body.mustChangePassword,
+    });
+    await login(user.loginName, 'ordinary-changed-password');
+    await login('manager2@northbean.example');
   });
 });
