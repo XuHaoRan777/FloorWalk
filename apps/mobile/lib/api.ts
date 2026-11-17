@@ -2,6 +2,8 @@ import {
   login,
   logout,
   me,
+  updateMe,
+  uploadAvatar,
   changePassword,
   requestPasswordRecoveryCode,
   verifyPasswordRecoveryCode,
@@ -16,12 +18,15 @@ import {
 import { chatMessages, sendChatMessage } from './api/chat';
 import { inspectorRecords } from './api/records';
 export { ApiError } from './api/errors';
+export { AvatarInputError } from './api/auth';
 export { userFacingError } from './api/request';
 
 export const api = {
   login,
   logout,
   me,
+  updateMe,
+  uploadAvatar,
   changePassword,
   requestPasswordRecoveryCode,
   verifyPasswordRecoveryCode,

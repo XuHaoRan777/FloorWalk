@@ -78,6 +78,12 @@ const entries: {
     icon: CalendarRange,
     testID: 'admin-entry-site-schedules',
   },
+  {
+    href: '/admin/profile',
+    label: '我的',
+    icon: UserRound,
+    testID: 'admin-entry-profile',
+  },
 ];
 
 export function AdminHomeScreen({ displayName }: { displayName: string }) {
