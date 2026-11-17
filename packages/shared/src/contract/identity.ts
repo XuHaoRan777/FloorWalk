@@ -41,10 +41,16 @@ export const userSchema = z.object({
   createdAt: timestamp,
 });
 
+export const currentUserSchema = userSchema.extend({
+  site: siteSchema.nullable(),
+  avatarUrl: z.string().url().nullable(),
+});
+
 export type UserRole = z.infer<typeof userRoleSchema>;
 export type Organization = z.infer<typeof organizationSchema>;
 export type Site = z.infer<typeof siteSchema>;
 export type User = z.infer<typeof userSchema>;
+export type CurrentUser = z.infer<typeof currentUserSchema>;
 
 export type CanAccessSite = (
   user: {

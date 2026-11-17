@@ -6,7 +6,7 @@
 
 - 工作单元状态：`in_progress`
 - 归档状态：`active`
-- 当前任务：无
+- 当前任务：T02 Web 个人资料、昵称与头像
 - 阻塞：无
 - 下一步：AC-05 已按用户决定修订，从 T01 连续推进至最终审查；本单元 verified 后接力 FW-036
 
@@ -22,7 +22,7 @@ Preflight：已读 `ui-skills-root`、`fixing-accessibility`、`expo-overview`�
 
 | ID | 任务 | 状态 | 交付的 AC 与证据 |
 | --- | --- | --- | --- |
-| T01 | 头像持久化与共享本人资料契约 | `pending` | 无，机器门 |
+| T01 | 头像持久化与共享本人资料契约 | `done` | 无，机器门 |
 | T02 | Web 个人资料、昵称与头像 | `pending` | AC-02：本人改昵称、店长 403；Web 资料与头像切片 |
 | T03 | Mobile 两角色个人页与原生头像上传 | `pending` | AC-01、AC-04：两端头像、资料字段与入口；原生系统图片选择、上传和刷新 |
 | T04 | 主动改密与跨端会话吊销 | `pending` | AC-03、AC-05：普通与首次改密、其他端登出、只操作本人与一小时签名、过期签名 403、刷新持久化 |
@@ -37,6 +37,7 @@ Preflight：已读 `ui-skills-root`、`fixing-accessibility`、`expo-overview`�
 | 任务 | status | command | artifact | 备注 |
 | --- | --- | --- | --- | --- |
 | T01 | blocked | 只读核对本人接口、存储驱动及共享路由 | `packages/shared/src/contract/index.ts`、`apps/api/src/controllers/auth.controller.ts`、`apps/api/src/storage/local.ts` | `/api/me` 无目标用户或商家参数；签名存储读取是持有链接即可访问，不按访问者商家鉴权，不能把它当作跨商家 404 的验收对象。尚未写业务代码或新增契约。 |
+| T01 | passed | `pnpm --filter @libs/shared build`; `pnpm --filter @libs/shared typecheck`; `pnpm --filter @apps/api typecheck`; `pnpm --filter @apps/api exec drizzle-kit check`; `pnpm exec eslint packages/shared/src/contract/identity.ts packages/shared/src/contract/users.ts packages/shared/src/contract/index.ts apps/api/src/db/base-schema.ts`; `pnpm exec prettier --check packages/shared/src/contract/identity.ts packages/shared/src/contract/users.ts packages/shared/src/contract/index.ts apps/api/src/db/base-schema.ts apps/api/drizzle/meta/_journal.json apps/api/drizzle/meta/0017_snapshot.json`; `git diff --check`; `python scripts/validate_docs.py` | `packages/shared/src/contract/identity.ts`、`packages/shared/src/contract/users.ts`、`packages/shared/src/contract/index.ts`、`apps/api/src/db/base-schema.ts`、`apps/api/drizzle/0017_fw035_profile.sql` | 共享本人资料契约、严格昵称/头像上传元数据、路由角色与强制改密白名单、可空头像存储键及前向迁移已通过机器门；未写入业务接口。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 

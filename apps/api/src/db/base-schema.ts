@@ -54,6 +54,7 @@ export const users = floorwalk.table(
     loginName: text('login_name').notNull(),
     passwordHash: text('password_hash').notNull(),
     displayName: text('display_name').notNull(),
+    avatarStorageKey: text('avatar_storage_key'),
     role: text('role').notNull(),
     siteId: uuid('site_id').references(() => sites.id),
     mustChangePassword: boolean('must_change_password')

@@ -1,0 +1,1 @@
+ALTER TABLE "floorwalk"."users" ADD COLUMN "avatar_storage_key" text;

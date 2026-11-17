@@ -10,6 +10,7 @@ import {
   selfCheckStatsResponseSchema,
 } from './stats.js';
 import {
+  currentUserSchema,
   siteSchema,
   loginNameSchema,
   organizationSummarySchema,
@@ -31,9 +32,12 @@ import {
 import {
   adminSiteSchema,
   adminUsersResponseSchema,
+  avatarUploadRequestSchema,
+  avatarUploadResponseSchema,
   changePasswordRequestSchema,
   createUserRequestSchema,
   resetUserPasswordRequestSchema,
+  updateMeRequestSchema,
   updateUserRequestSchema,
   userResponseSchema,
 } from './users.js';
@@ -587,9 +591,25 @@ export const apiRoutes = {
     path: '/api/me',
     roles: userRoles,
     requestSchema: null,
-    responseSchema: userSchema,
+    responseSchema: currentUserSchema,
     successStatus: 200,
     allowWhilePasswordChangeRequired: true,
+  },
+  updateMe: {
+    method: 'PATCH',
+    path: '/api/me',
+    roles: ['admin'],
+    requestSchema: updateMeRequestSchema,
+    responseSchema: userSchema,
+    successStatus: 200,
+  },
+  uploadAvatar: {
+    method: 'POST',
+    path: '/api/me/avatar',
+    roles: userRoles,
+    requestSchema: avatarUploadRequestSchema,
+    responseSchema: avatarUploadResponseSchema,
+    successStatus: 201,
   },
   createOrg: {
     method: 'POST',
