@@ -12,6 +12,7 @@ import { createPool } from '../db/client.js';
 import { runMigrations } from '../db/migrate.js';
 import { seedDatabase } from '../db/seed.js';
 import { clearFakeMailbox } from '../email/fake.js';
+import { createStorageSignedUrl } from '../storage/signed-url.js';
 import { TaskSchedulerService } from '../services/task-scheduler.js';
 import {
   apiRoutes,
@@ -426,7 +427,7 @@ describe('inspection contract API', () => {
   });
 
   it('publishes the complete route table under /api', () => {
-    expect(Object.keys(apiRoutes)).toHaveLength(50);
+    expect(Object.keys(apiRoutes)).toHaveLength(54);
     for (const route of Object.values(apiRoutes)) {
       expect(route.path.startsWith('/api/')).toBe(true);
       expect(route.responseSchema).toBeDefined();
@@ -1652,6 +1653,15 @@ describe('inspection contract API', () => {
       );
     await request(app.getHttpServer())
       .get('/storage/..%2Foutside.jpg')
+      .expect(403)
+      .expect(({ body }) =>
+        expect(errorResponseSchema.parse(body).code).toBe('FORBIDDEN'),
+      );
+    const signedTraversalUrl = new URL(
+      createStorageSignedUrl('../outside.jpg', 3600).url,
+    );
+    await request(app.getHttpServer())
+      .get(`${signedTraversalUrl.pathname}${signedTraversalUrl.search}`)
       .expect(400)
       .expect(({ body }) =>
         expect(errorResponseSchema.parse(body).code).toBe('VALIDATION_FAILED'),
@@ -2082,6 +2092,45 @@ describe('inspection contract API', () => {
         password: 'recovered-password',
       })
       .expect(204);
+    const notificationPool = createPool();
+    let routeNotificationId: string | undefined;
+    let listMyNotificationsResponse;
+    let countMyUnreadNotificationsResponse;
+    let markMyNotificationReadResponse;
+    let markAllMyNotificationsReadResponse;
+    try {
+      const inserted = await notificationPool.query<{ id: string }>(
+        `INSERT INTO floorwalk.notifications (org_id, user_id, type, payload_json)
+         SELECT org_id, id, 'task_overdue', $1::jsonb
+         FROM floorwalk.users WHERE login_name = 'hq@northbean.example'
+         RETURNING id`,
+        [JSON.stringify({ taskId: inspectionTaskId })],
+      );
+      routeNotificationId = inserted.rows[0].id;
+      listMyNotificationsResponse = await request(app.getHttpServer())
+        .get('/api/me/notifications')
+        .set('Cookie', hqCookie)
+        .expect(200);
+      countMyUnreadNotificationsResponse = await request(app.getHttpServer())
+        .get('/api/me/notifications/unread-count')
+        .set('Cookie', hqCookie)
+        .expect(200);
+      markMyNotificationReadResponse = await request(app.getHttpServer())
+        .post(`/api/me/notifications/${routeNotificationId}/read`)
+        .set('Cookie', hqCookie)
+        .expect(204);
+      markAllMyNotificationsReadResponse = await request(app.getHttpServer())
+        .post('/api/me/notifications/read-all')
+        .set('Cookie', hqCookie)
+        .expect(204);
+    } finally {
+      if (routeNotificationId)
+        await notificationPool.query(
+          'DELETE FROM floorwalk.notifications WHERE id = $1',
+          [routeNotificationId],
+        );
+      await notificationPool.end();
+    }
     const routeResponses = {
       createSession: login,
       deleteSession: deletedSession,
@@ -2105,6 +2154,10 @@ describe('inspection contract API', () => {
       listInspectionMessages: chatListResponse,
       createInspectionMessage: chatCreateResponse,
       getMessageImageUrl: chatImageUrlResponse,
+      listMyNotifications: listMyNotificationsResponse,
+      countMyUnreadNotifications: countMyUnreadNotificationsResponse,
+      markMyNotificationRead: markMyNotificationReadResponse,
+      markAllMyNotificationsRead: markAllMyNotificationsReadResponse,
       listInspectorInspections: recordListResponse,
       listAdminSites: adminSiteListResponse,
       createAdminSite: adminSiteCreateResponse,

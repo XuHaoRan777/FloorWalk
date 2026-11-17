@@ -25,7 +25,7 @@
 | Mobile 管理端，功能与 Web 相同                                                                               | 无                  | Mobile 目前只给店长                                                                                                                                      |
 | 巡检单聊天                                                                                                   | 有                  | [巡检单聊天](specs/chat.md)                                                                                                                              |
 | Mobile 本店记录                                                                                              | 有                  | [Mobile 店长巡检](specs/mobile-inspector.md)                                                                                                             |
-| 站内通知                                                                                                     | 无                  |                                                                                                                                                          |
+| 站内通知                                                                                                     | 有                  | [站内通知](specs/notifications.md)；七类事件、本人 API 收件箱和 Web 管理员入口已实现                                                                       |
 | 照片与头像存阿里云 OSS                                                                                       | 部分                | 存储驱动支持 OSS；当前头像未实现，[工程骨架](specs/workspace.md)                                                                                         |
 | 两端统一样式                                                                                                 | 部分                | FW-016 统一了 token 和组件；新页面精修在初版收尾                                                                                                         |
 | 演示数据与演示说明                                                                                           | 部分                | [巡检主链](specs/inspection.md)；Northbean 种子现含历史任务、逐条结果与判定记录；正式演示说明待定                                                        |
@@ -42,7 +42,6 @@
 | FW-033 | [Mobile 管理端（一）：配置](work/FW-033-mobile-admin-config/spec.md) | `verified` | FW-029 | 已交付，自动接力 FW-034，线尾统一归档（线二 4/9） |
 | FW-034 | [Mobile 管理端（二）：审核与看板](work/FW-034-mobile-admin-review/spec.md) | `verified` | FW-032、FW-033 | 已交付，自动接力 FW-035，线尾统一归档（线二 5/9） |
 | FW-035 | [个人中心（两端）](work/FW-035-profile/spec.md) | `verified` | FW-034 | 已交付，自动接力 FW-036，线尾统一归档（线二 6/9） |
-| FW-036 | [站内通知（后端 + Web 收件箱）](work/FW-036-notifications-backend/spec.md) | `approved` | FW-035 | 接力待开工（线二 7/9） |
 | FW-037 | [站内通知（Mobile 收件箱与角标）](work/FW-037-notifications-mobile/spec.md) | `approved` | FW-036 | 接力待开工（线二 8/9） |
 | FW-038 | [AI 真模型验收与提示词调优](work/FW-038-ai-real-model-acceptance/spec.md) | `approved` | FW-037 | 接力待开工（线二 9/9，线尾 A） |
 
@@ -104,3 +103,4 @@
 | FW-027 | [日程方案与门店日程安排](work/FW-027-schedules/spec.md)                             | 2026-11-12 | 本地 Promote 与接力线归档提交（见 git log）                |
 | FW-028 | [任务与条目状态机](work/FW-028-task-state-machine/spec.md)                          | 2026-11-12 | 本地 Promote 与接力线归档提交（见 git log）                |
 | FW-029 | [Mobile 店长端](work/FW-029-mobile-store-manager/spec.md)                           | 2026-11-12 | 本地 Promote 与接力线归档提交（见 git log）                |
+| FW-036 | [站内通知（后端 + Web 收件箱）](work/FW-036-notifications-backend/spec.md)         | 2026-11-17 | 本地 Promote 与接力线归档提交（见 git log）                |

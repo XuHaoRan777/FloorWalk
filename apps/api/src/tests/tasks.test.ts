@@ -111,6 +111,19 @@ describe('FW-028 task uploads', () => {
       );
   }
 
+  async function notificationRows(
+    type: string,
+    userId: string,
+    taskId?: string,
+  ) {
+    return pool.query(
+      `SELECT type, payload_json AS payload
+       FROM floorwalk.notifications WHERE org_id = $1 AND user_id = $2 AND type = $3
+         AND ($4::uuid IS NULL OR payload_json->>'taskId' = $4::text)`,
+      [orgId, userId, type, taskId ?? null],
+    );
+  }
+
   beforeAll(async () => {
     await runMigrations();
     pool = createPool();
@@ -234,6 +247,10 @@ describe('FW-028 task uploads', () => {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        await client.query(
+          'DELETE FROM floorwalk.notifications WHERE org_id = $1',
+          [orgId],
+        );
         await client.query(
           `DELETE FROM floorwalk.inspection_item_decisions WHERE inspection_item_id IN (
              SELECT item.id FROM floorwalk.inspection_items item
@@ -607,6 +624,12 @@ describe('FW-028 task uploads', () => {
       inspectionStatus: 'passed',
       decidedAt: '2026-11-09T12:00:00.000Z',
     });
+    expect(
+      (await notificationRows('inspection_overridden', managerId, taskId)).rows,
+    ).toHaveLength(2);
+    expect(
+      (await notificationRows('critical_item_failed', adminId, taskId)).rows,
+    ).toHaveLength(1);
     const audit = await pool.query<{
       actorId: string;
       previousResult: string | null;
@@ -681,6 +704,9 @@ describe('FW-028 task uploads', () => {
       incompleteCount: '3',
       firstResultCount: '3',
     });
+    expect(
+      (await notificationRows('task_overdue', adminId, taskId)).rows,
+    ).toHaveLength(1);
   });
 
   it('waits for rework until its conclusion or forces it to incomplete failure at one hour', async () => {
@@ -709,6 +735,17 @@ describe('FW-028 task uploads', () => {
       201,
     );
     expect(
+      (await notificationRows('item_rework', managerId, resolvedTaskId)).rows,
+    ).toHaveLength(1);
+    expect(
+      (await notificationRows('item_rework', secondManagerId, resolvedTaskId))
+        .rows,
+    ).toHaveLength(1);
+    expect(
+      (await notificationRows('item_rework', otherManagerId, resolvedTaskId))
+        .rows,
+    ).toHaveLength(0);
+    expect(
       reworked.body.items.find(
         (item: { id: string }) => item.id === firstItemId,
       ),
@@ -736,6 +773,19 @@ describe('FW-028 task uploads', () => {
       201,
     );
     expect(resolved.body.decidedAt).toBe('2026-11-09T12:30:00.000Z');
+    expect(
+      (await notificationRows('inspection_decided', managerId, resolvedTaskId))
+        .rows,
+    ).toHaveLength(1);
+    expect(
+      (
+        await notificationRows(
+          'inspection_decided',
+          secondManagerId,
+          resolvedTaskId,
+        )
+      ).rows,
+    ).toHaveLength(1);
 
     now = new Date('2026-11-09T10:30:00.000Z');
     const forcedTaskId = await createTask();
@@ -773,6 +823,10 @@ describe('FW-028 task uploads', () => {
       incomplete: true,
       firstResult: 'rework',
     });
+    expect(
+      (await notificationRows('inspection_decided', managerId, forcedTaskId))
+        .rows,
+    ).toHaveLength(1);
     await decide(forcedTaskId, forcedItemId, 'rework').expect(409);
   });
 
@@ -805,6 +859,12 @@ describe('FW-028 task uploads', () => {
       aiReviewStatus: 'manual',
       aiReason: null,
     });
+    expect(
+      (await notificationRows('manual_review_needed', adminId, taskId)).rows,
+    ).toHaveLength(1);
+    expect(
+      (await notificationRows('manual_review_needed', managerId, taskId)).rows,
+    ).toHaveLength(0);
     await decide(taskId, uploaded.body.id, 'pass').expect(201);
   });
 
@@ -965,6 +1025,11 @@ describe('FW-028 task uploads', () => {
         status: attempt === 4 ? 'manual' : 'pending',
         attempts: attempt,
       });
+      if (attempt === 4)
+        expect(
+          (await notificationRows('manual_review_needed', adminId, taskId))
+            .rows,
+        ).toHaveLength(1);
       if (attempt < 4) {
         const due = new Date(now.getTime() + 1_000 * 2 ** (attempt - 1));
         expect(jobs.rows[0].available).toEqual(due);
@@ -1174,6 +1239,13 @@ describe('FW-028 task uploads', () => {
       0,
     ).expect(201);
     await aiQueue.processPending();
+    expect(
+      (await notificationRows('item_rework', managerId, reworkTaskId)).rows,
+    ).toHaveLength(1);
+    expect(
+      (await notificationRows('item_rework', secondManagerId, reworkTaskId))
+        .rows,
+    ).toHaveLength(1);
     const decisions = new TaskDecisionService(pool);
     now = new Date('2026-11-09T12:00:00.000Z');
     await decisions.processDueTasks(now);

@@ -59,6 +59,12 @@ import {
   inspectorTodayTaskSchema,
   taskItemUploadMetadataSchema,
 } from './tasks.js';
+import {
+  notificationSchema,
+  notificationsQuerySchema,
+  notificationsResponseSchema,
+  unreadNotificationCountSchema,
+} from './notifications.js';
 
 export * from './identity.js';
 export * from './orgs.js';
@@ -69,6 +75,7 @@ export * from './schedules.js';
 export * from './tasks.js';
 export * from './stats.js';
 export * from './dashboard.js';
+export * from './notifications.js';
 
 export const inspectionStatuses = [
   'draft',
@@ -794,6 +801,38 @@ export const apiRoutes = {
     responseSchema: chatImageUrlResponseSchema,
     successStatus: 200,
   },
+  listMyNotifications: {
+    method: 'GET',
+    path: '/api/me/notifications',
+    roles: userRoles,
+    requestSchema: notificationsQuerySchema,
+    responseSchema: notificationsResponseSchema,
+    successStatus: 200,
+  },
+  countMyUnreadNotifications: {
+    method: 'GET',
+    path: '/api/me/notifications/unread-count',
+    roles: userRoles,
+    requestSchema: null,
+    responseSchema: unreadNotificationCountSchema,
+    successStatus: 200,
+  },
+  markMyNotificationRead: {
+    method: 'POST',
+    path: '/api/me/notifications/:id/read',
+    roles: userRoles,
+    requestSchema: null,
+    responseSchema: z.undefined(),
+    successStatus: 204,
+  },
+  markAllMyNotificationsRead: {
+    method: 'POST',
+    path: '/api/me/notifications/read-all',
+    roles: userRoles,
+    requestSchema: null,
+    responseSchema: z.undefined(),
+    successStatus: 204,
+  },
   listInspectorInspections: {
     method: 'GET',
     path: '/api/inspector/inspections',
@@ -1012,6 +1051,7 @@ export type ErrorResponse = z.infer<typeof errorResponseSchema>;
 export type EvidenceUploadRequest = z.infer<typeof evidenceUploadRequestSchema>;
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type ChatMessagesResponse = z.infer<typeof chatMessagesResponseSchema>;
+export type Notification = z.infer<typeof notificationSchema>;
 export type InspectorRecordsResponse = z.infer<
   typeof inspectorRecordsResponseSchema
 >;

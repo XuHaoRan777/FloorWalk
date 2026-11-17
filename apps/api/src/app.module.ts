@@ -12,6 +12,7 @@ import { TemplatesController } from './controllers/templates.controller.js';
 import { SchedulesController } from './controllers/schedules.controller.js';
 import { RecordsController } from './controllers/records.controller.js';
 import { ChatController } from './controllers/chat.controller.js';
+import { NotificationsController } from './controllers/notifications.controller.js';
 import { OrgsController } from './controllers/orgs.controller.js';
 import { UsersController } from './controllers/users.controller.js';
 import { VerificationController } from './controllers/verification.controller.js';
@@ -60,6 +61,7 @@ import {
     SchedulesController,
     RecordsController,
     ChatController,
+    NotificationsController,
     StorageController,
     OrgsController,
     UsersController,

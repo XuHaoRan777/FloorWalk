@@ -26,6 +26,16 @@
 
 ## 陷阱清单
 
+### Tailwind v4 max-w 尺寸被 spacing 同名 token 覆盖
+
+- 触发条件：Tailwind CSS 4.2.2 使用 `max-w-sm/md/lg/xl`，且 `@theme` 同时定义 `--spacing-sm/md/lg/xl` 与 `--container-sm/md/lg/xl`。
+- 现象：生成的 `.max-w-md` 使用 `max-width: var(--fw-space-md)`（16px），容器面板收缩或移出视口；只补 `--container-*` 后仍未恢复。
+- 根因：max-width utility 会优先解析同名 `--spacing-*`；Tailwind 不会因 `--container-*` 存在而覆盖已命中的 spacing token。
+- 规避方式：保留 spacing 尺寸语义，定义 `--container-xs` 至 `--container-7xl` 官方默认值，并用 `--max-width-*` 显式映射到对应 `--container-*`；不要通过页面 locator 或移除面板宽度约束掩盖。
+- 验证方式：检查构建 CSS 中 `.max-w-md` 解析到容器值，并运行 `FW-036` 的 `tests/web/notifications.spec.ts` 验证通知 Sheet 可见、可点击。
+- 失效条件：Tailwind 升级后 max-width 的主题解析优先级改变，或 spacing 与 container 命名不再冲突时重新核对。
+- 首次记录：`FW-036`
+
 ### 旧 Web 回归用例仍依赖邮箱登录与主管角色
 
 - 触发条件：运行 `pnpm exec playwright test --config=playwright.web.config.ts --workers=1`，而 `tests/web/chat.spec.ts`、`console.spec.ts`、`protocol.spec.ts`、`site-supervisors.spec.ts`、`ui-foundation.spec.ts` 尚未迁移到两层角色和登录名契约。

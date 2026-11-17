@@ -28,6 +28,7 @@ import {
   SidebarProvider,
 } from '@/components/ui/sidebar';
 import { readSession, type TaskReview } from '@/lib/api';
+import type { Notification } from '@libs/shared';
 import { DashboardView } from '@/components/console/dashboard-view';
 import { TodayView } from '@/components/console/today-view';
 import { ErrorBanner } from '@/components/console/error-banner';
@@ -42,6 +43,8 @@ import { SchedulesPage } from '@/components/console/schedules-page';
 import { SiteSchedulesPage } from '@/components/console/site-schedules-page';
 import { UsersPage } from '@/components/console/users-page';
 import { ProfilePage } from '@/components/console/profile-page';
+import { NotificationInbox } from '@/components/console/notification-inbox';
+import { NotificationTarget } from '@/components/console/notification-target';
 import { useConsoleSession } from '@/components/console/use-console-session';
 
 type ConsoleSection =
@@ -64,6 +67,8 @@ export function ConsolePage() {
     readSession()?.user.role === 'admin' ? 'dashboard' : 'queue',
   );
   const [selected, setSelected] = useState<TaskReview | null>(null);
+  const [selectedNotification, setSelectedNotification] =
+    useState<Notification | null>(null);
   const reviewQueue = useReviewQueue(
     !loading &&
       session?.user.role === 'admin' &&
@@ -246,11 +251,13 @@ export function ConsolePage() {
           <span className="text-sm text-muted-foreground">
             {roleLabel[user.role]} · {user.displayName}
           </span>
+          <div className="ml-auto">
+            <NotificationInbox onOpen={setSelectedNotification} />
+          </div>
           {isAdmin && (
             <Button
               variant="ghost"
               size="sm"
-              className="ml-auto"
               title={reviewQueue.error || undefined}
               onClick={() => {
                 setSection('queue');
@@ -267,12 +274,7 @@ export function ConsolePage() {
                   : reviewQueue.manualQueue.length}
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className={isAdmin ? undefined : 'ml-auto'}
-            onClick={logout}
-          >
+          <Button variant="ghost" size="sm" onClick={logout}>
             <LogOut aria-hidden="true" />
             退出登录
           </Button>
@@ -280,7 +282,14 @@ export function ConsolePage() {
         <Main id="main">
           <div className="fw-console-sheet">
             <ErrorBanner message={error} />
-            {section === 'profile' ? (
+            {selectedNotification ? (
+              <NotificationTarget
+                notification={selectedNotification}
+                canReview={isAdmin}
+                onBack={() => setSelectedNotification(null)}
+                onReviewed={reviewQueue.refresh}
+              />
+            ) : section === 'profile' ? (
               <ProfilePage onUserChange={updateUser} onLogout={logout} />
             ) : isAdmin && section === 'sites' ? (
               <SitesPage />

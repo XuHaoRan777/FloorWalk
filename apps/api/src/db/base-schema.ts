@@ -6,6 +6,7 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   pgSchema,
   text,
   timestamp,
@@ -67,6 +68,7 @@ export const users = floorwalk.table(
   (table) => [
     check('users_role_check', sql`${table.role} IN ('admin', 'store_manager')`),
     unique('users_org_login_name_unique').on(table.orgId, table.loginName),
+    unique('users_org_id_id_unique').on(table.orgId, table.id),
     uniqueIndex('users_one_admin_per_org')
       .on(table.orgId)
       .where(sql`${table.role} = 'admin'`),
@@ -137,6 +139,41 @@ export const emailVerifications = floorwalk.table(
       'email_verifications_recovery_token_check',
       sql`${table.recoveryTokenHash} IS NULL OR (${table.verifiedAt} IS NOT NULL AND ${table.purpose} = 'password_recovery')`,
     ),
+  ],
+);
+
+export const notifications = floorwalk.table(
+  'notifications',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    orgId: uuid('org_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    type: text('type').notNull(),
+    payloadJson: jsonb('payload_json')
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    createdAt: createdAt(),
+    readAt: timestamp('read_at', { withTimezone: true }),
+  },
+  (table) => [
+    foreignKey({
+      name: 'notifications_org_user_fk',
+      columns: [table.orgId, table.userId],
+      foreignColumns: [users.orgId, users.id],
+    }).onDelete('cascade'),
+    check(
+      'notifications_type_check',
+      sql`${table.type} IN ('item_rework', 'inspection_decided', 'inspection_overridden', 'critical_item_failed', 'task_overdue', 'manual_review_needed', 'chat_message')`,
+    ),
+    index('notifications_inbox_idx').on(
+      table.orgId,
+      table.userId,
+      table.createdAt,
+      table.id,
+    ),
+    index('notifications_unread_idx')
+      .on(table.orgId, table.userId, table.createdAt, table.id)
+      .where(sql`${table.readAt} IS NULL`),
   ],
 );
 

@@ -36,6 +36,7 @@ import {
   type UploadedImage,
 } from '../queries/inspection-queries.js';
 import { getStorageDriver } from '../storage/index.js';
+import { notifyChat } from '../services/notifications.js';
 
 type ChatRow = {
   id: string;
@@ -153,6 +154,7 @@ export class ChatController {
           file?.size ?? null,
         ],
       );
+      await notifyChat(client, id, request.user.id);
       const response = chatMessageSchema.parse(
         await this.toMessage({
           ...result.rows[0],

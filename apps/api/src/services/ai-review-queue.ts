@@ -15,6 +15,7 @@ import {
 } from './task-scheduler.js';
 import { getStorageDriver } from '../storage/index.js';
 import { TaskDecisionService } from './task-decisions.js';
+import { notifyItemResult, notifyManualReview } from './notifications.js';
 
 const maxAttempts = 4;
 const leaseMs = 75_000;
@@ -75,7 +76,10 @@ export class AiReviewQueueService implements OnModuleInit, OnModuleDestroy {
        WHERE inspection_item_id = $1 AND status IN ('pending', 'processing')`,
       [input.inspectionItemId],
     );
-    if (!input.aiEnabled) return;
+    if (!input.aiEnabled) {
+      await notifyManualReview(client, input.inspectionItemId);
+      return;
+    }
     await client.query(
       `INSERT INTO floorwalk.ai_review_jobs
          (inspection_item_id, uploaded_at, upload_version, status, available_at)
@@ -117,7 +121,7 @@ export class AiReviewQueueService implements OnModuleInit, OnModuleDestroy {
              OR item.uploaded_at IS DISTINCT FROM job.uploaded_at
              OR item.result <> 'pending')`,
       );
-      await client.query(
+      const disabled = await client.query<{ inspectionItemId: string }>(
         `UPDATE floorwalk.ai_review_jobs job SET status = 'manual'
          FROM floorwalk.inspection_items item
          JOIN floorwalk.inspections inspection ON inspection.id = item.inspection_id
@@ -125,14 +129,18 @@ export class AiReviewQueueService implements OnModuleInit, OnModuleDestroy {
          WHERE job.inspection_item_id = item.id
            AND job.upload_version = item.upload_version
            AND job.status IN ('pending', 'processing')
-           AND NOT template.ai_enabled`,
+           AND NOT template.ai_enabled
+         RETURNING job.inspection_item_id AS "inspectionItemId"`,
       );
-      await client.query(
+      const exhausted = await client.query<{ inspectionItemId: string }>(
         `UPDATE floorwalk.ai_review_jobs SET status = 'manual'
          WHERE status = 'processing' AND available_at <= $1
-           AND attempt_count >= $2`,
+           AND attempt_count >= $2
+         RETURNING inspection_item_id AS "inspectionItemId"`,
         [now, maxAttempts],
       );
+      for (const item of [...disabled.rows, ...exhausted.rows])
+        await notifyManualReview(client, item.inspectionItemId);
       const selected = await client.query<ReviewJob>(
         `SELECT job.id, job.inspection_item_id AS "inspectionItemId",
            inspection.task_id AS "taskId",
@@ -266,6 +274,8 @@ export class AiReviewQueueService implements OnModuleInit, OnModuleDestroy {
           job.attemptCount,
         ],
       );
+      if (applied.rowCount)
+        await notifyItemResult(client, job.inspectionItemId, result, reason);
       await client.query('COMMIT');
       completed = Boolean(applied.rowCount);
     } catch (error) {
@@ -312,6 +322,7 @@ export class AiReviewQueueService implements OnModuleInit, OnModuleDestroy {
            WHERE id = $1 AND upload_version = $2 AND result = 'pending'`,
           [job.inspectionItemId, job.uploadVersion, reason],
         );
+        await notifyManualReview(client, job.inspectionItemId);
       }
       if (!updated.rowCount) {
         await client.query(

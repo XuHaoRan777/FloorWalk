@@ -18,6 +18,7 @@ describe('inspection chat authorization', () => {
   let otherSiteInspectionId: string;
   let otherOrgInspectionId: string;
   let createdMessageId: string | undefined;
+  const createdNotificationIds: string[] = [];
 
   beforeAll(async () => {
     await runMigrations();
@@ -64,6 +65,11 @@ describe('inspection chat authorization', () => {
 
   afterAll(async () => {
     try {
+      if (createdNotificationIds.length)
+        await pool.query(
+          'DELETE FROM floorwalk.notifications WHERE id = ANY($1::uuid[])',
+          [createdNotificationIds],
+        );
       if (createdMessageId)
         await pool.query('DELETE FROM floorwalk.chat_messages WHERE id = $1', [
           createdMessageId,
@@ -97,6 +103,11 @@ describe('inspection chat authorization', () => {
   });
 
   it('allows the assigned inspector to send after the inspection is closed', async () => {
+    const notificationsBefore = await pool.query<{ id: string }>(
+      `SELECT id FROM floorwalk.notifications
+       WHERE type = 'chat_message' AND payload_json->>'inspectionId' = $1`,
+      [passedInspectionId],
+    );
     const response = await request(app.getHttpServer())
       .post(`/api/inspections/${passedInspectionId}/messages`)
       .set('Cookie', inspectorCookie)
@@ -110,11 +121,27 @@ describe('inspection chat authorization', () => {
       [createdMessageId, passedInspectionId],
     );
     expect(persisted.rows).toHaveLength(1);
+    const recipients = await pool.query<{ id: string; userId: string }>(
+      `SELECT id, user_id AS "userId" FROM floorwalk.notifications
+       WHERE type = 'chat_message' AND payload_json->>'inspectionId' = $1
+         AND id <> ALL($2::uuid[])`,
+      [passedInspectionId, notificationsBefore.rows.map((row) => row.id)],
+    );
+    createdNotificationIds.push(...recipients.rows.map((row) => row.id));
+    expect(recipients.rows.map((row) => row.userId)).not.toContain(
+      response.body.authorId,
+    );
+    expect(recipients.rows.length).toBeGreaterThan(0);
   });
 
   it('rolls back the message and removes its image when signing fails', async () => {
     const before = await pool.query(
       'SELECT id FROM floorwalk.chat_messages WHERE inspection_id = $1 ORDER BY id',
+      [passedInspectionId],
+    );
+    const notificationsBefore = await pool.query(
+      `SELECT id FROM floorwalk.notifications
+       WHERE type = 'chat_message' AND payload_json->>'inspectionId' = $1`,
       [passedInspectionId],
     );
     const signing = vi
@@ -139,6 +166,12 @@ describe('inspection chat authorization', () => {
         [passedInspectionId],
       );
       expect(after.rows).toEqual(before.rows);
+      const notificationsAfter = await pool.query(
+        `SELECT id FROM floorwalk.notifications
+         WHERE type = 'chat_message' AND payload_json->>'inspectionId' = $1`,
+        [passedInspectionId],
+      );
+      expect(notificationsAfter.rows).toEqual(notificationsBefore.rows);
     } finally {
       signing.mockRestore();
       deletion.mockRestore();

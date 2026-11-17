@@ -11,6 +11,7 @@ import {
 } from '@libs/shared';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_POOL } from '../db/pool.provider.js';
+import { notifyInspectionDecided, notifyItemResult } from './notifications.js';
 import {
   listReviewQueue,
   loadTaskReview,
@@ -124,6 +125,13 @@ export class TaskDecisionService {
           input.reason,
           input.now,
         ],
+      );
+      await notifyItemResult(
+        client,
+        input.itemId,
+        input.result,
+        input.reason,
+        previousResult !== null,
       );
 
       if (inspection.decidedAt) {
@@ -263,6 +271,7 @@ export class TaskDecisionService {
            WHERE id = $1`,
           [item.id, !item.uploadedAt || item.result === 'rework'],
         );
+        await notifyItemResult(client, item.id, 'fail', null);
       } else {
         await client.query(
           `UPDATE floorwalk.inspection_items
@@ -312,6 +321,13 @@ export class TaskDecisionService {
       `UPDATE floorwalk.inspections SET status = $2, score = $3, decided_at = $4
        WHERE id = $1 AND decided_at IS NULL`,
       [inspectionId, overallStatus, score, decidedAt],
+    );
+    await notifyInspectionDecided(
+      client,
+      task.id,
+      inspectionId,
+      overallStatus,
+      score,
     );
   }
 

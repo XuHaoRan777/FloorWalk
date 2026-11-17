@@ -13,6 +13,7 @@ import {
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_POOL } from '../db/pool.provider.js';
 import { TaskDecisionService } from './task-decisions.js';
+import { expireDueTasks as expireAndNotifyDueTasks } from './notifications.js';
 
 type Queryable = Pick<Pool, 'query'>;
 
@@ -99,12 +100,7 @@ export class TaskSchedulerService implements OnModuleInit, OnModuleDestroy {
   }
 
   async expireDueTasks(now = this.clock.now()) {
-    await this.pool.query(
-      `UPDATE floorwalk.inspection_tasks
-       SET status = 'overdue'
-       WHERE status IN ('not_started', 'in_progress') AND due_at <= $1`,
-      [now],
-    );
+    await expireAndNotifyDueTasks(this.pool, now);
   }
 
   async syncSiteDate(siteId: string, taskDate: string) {

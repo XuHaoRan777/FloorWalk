@@ -2,7 +2,7 @@
 
 本目录是项目唯一的"现在是什么"。每份文档写代码能观察到的行为、契约和缺口，不写目标或计划。**代码和这里不一致时，代码是事实，修这里。**
 
-当前已有 API 任务状态机、Mobile 店长今日任务与相机逐条上传、Web 管理员逐条审核，以及日程配置、邮箱验证码、HttpOnly 会话、巡检单聊天、门店与模板管理和 Mobile 本店任务记录。AI 审核、看板扩展和正式 Demo 说明见 [`../backlog.md`](../backlog.md)。产品目标与禁区见 [`../context/product.md`](../context/product.md)。
+当前已有 API 任务状态机、Mobile 店长今日任务与相机逐条上传、Web 管理员逐条审核，以及日程配置、邮箱验证码、HttpOnly 会话、巡检单聊天、站内通知、门店与模板管理和 Mobile 本店任务记录。AI 审核、看板扩展和正式 Demo 说明见 [`../backlog.md`](../backlog.md)。产品目标与禁区见 [`../context/product.md`](../context/product.md)。
 
 ## 索引
 
@@ -14,6 +14,7 @@
 | [Mobile 店长巡检](mobile-inspector.md) | 登录、今日任务、按需详情、相机逐项上传、聊天与记录      |
 | [Web 控制台](web-console.md)           | 管理员任务逐条审核、商家看板、管理入口与错误处理        |
 | [巡检单聊天](chat.md)                  | 权限、轮询分页、文字图片与失败重试                      |
+| [站内通知](notifications.md)           | 七类事件、收件人、本人收件箱 API 与 Web 通知入口         |
 | [门店与模板管理](admin.md)             | 多模板与 AI 设置、店长账号、门店停用和模板快照          |
 
 ## 两层内容，两种维护方式
