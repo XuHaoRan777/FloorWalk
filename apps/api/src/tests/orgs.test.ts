@@ -156,7 +156,7 @@ describe('organization registration (FW-019 AC-01)', () => {
       .get('/api/me')
       .set('Cookie', cookie)
       .expect(200);
-    expect(me.body).toEqual(user);
+    expect(me.body).toEqual({ ...user, site: null, avatarUrl: null });
     const login = await request(app.getHttpServer())
       .post('/api/auth/session')
       .send({ loginName: registration.email, password: registration.password })
@@ -227,11 +227,15 @@ describe('organization registration (FW-019 AC-01)', () => {
       .get('/api/me')
       .set('Cookie', originalCookie)
       .expect(200);
-    expect(originalMe.body).toEqual(originalUser);
+    expect(originalMe.body).toEqual({
+      ...originalUser,
+      site: null,
+      avatarUrl: null,
+    });
     const newMe = await request(app.getHttpServer())
       .get('/api/me')
       .set('Cookie', cookieFrom(response))
       .expect(200);
-    expect(newMe.body).toEqual(user);
+    expect(newMe.body).toEqual({ ...user, site: null, avatarUrl: null });
   });
 });

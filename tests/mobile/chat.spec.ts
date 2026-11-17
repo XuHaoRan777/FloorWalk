@@ -208,7 +208,7 @@ test('Expo Web chat pagination, polling, sending, validation and HQ read-only', 
   await page.evaluate(() => {
     Object.defineProperty(document, 'hasFocus', {
       configurable: true,
-      value: () => false,
+      value: Boolean.bind(null, false),
     });
     window.dispatchEvent(new Event('blur'));
   });
@@ -219,7 +219,7 @@ test('Expo Web chat pagination, polling, sending, validation and HQ read-only', 
   await page.evaluate(() => {
     Object.defineProperty(document, 'hasFocus', {
       configurable: true,
-      value: () => true,
+      value: Boolean.bind(null, true),
     });
     window.dispatchEvent(new Event('focus'));
   });

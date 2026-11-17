@@ -1,13 +1,11 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { createReadStream } from 'node:fs';
 import { mkdir, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { getJwtSecret } from '../config/auth-config.js';
+import {
+  createStorageSignedUrl,
+  verifyStorageSignedUrl,
+} from './signed-url.js';
 import type { StorageDriver } from './types.js';
 
 export class LocalStorageDriver implements StorageDriver {
@@ -90,40 +88,11 @@ export class LocalStorageDriver implements StorageDriver {
 
   async signedUrl(key: string, expiresInSeconds: number) {
     await this.target(key, false);
-    const base = (
-      process.env.API_PUBLIC_BASE_URL ??
-      `http://${process.env.HOST ?? '127.0.0.1'}:${process.env.PORT ?? '3018'}`
-    ).replace(/\/$/, '');
-    const expiresAt = Date.now() + expiresInSeconds * 1000;
-    const signature = this.signature(key, expiresAt);
-    return {
-      url: `${base}/storage/${encodeURIComponent(key)}?expires=${expiresAt}&signature=${signature}`,
-      expiresAt: new Date(expiresAt).toISOString(),
-    };
+    return createStorageSignedUrl(key, expiresInSeconds);
   }
 
   async verifySignedUrl(key: string, expires: unknown, signature: unknown) {
     await this.target(key, false);
-    const expiresAt = Number(expires);
-    const expected = Buffer.from(this.signature(key, expiresAt));
-    const provided =
-      typeof signature === 'string' ? Buffer.from(signature) : Buffer.alloc(0);
-    if (
-      !Number.isSafeInteger(expiresAt) ||
-      expiresAt <= Date.now() ||
-      provided.length !== expected.length ||
-      !timingSafeEqual(provided, expected)
-    ) {
-      throw new ForbiddenException({
-        code: 'FORBIDDEN',
-        message: '照片链接无效或已过期。',
-      });
-    }
-  }
-
-  private signature(key: string, expiresAt: number) {
-    return createHmac('sha256', getJwtSecret())
-      .update(`${key}.${expiresAt}`)
-      .digest('hex');
+    verifyStorageSignedUrl(key, expires, signature);
   }
 }

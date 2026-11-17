@@ -2,16 +2,22 @@ import {
   BadRequestException,
   Controller,
   Get,
+  Inject,
   Param,
   Req,
   Res,
   StreamableFile,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { LocalStorageDriver } from '../storage/index.js';
+import { verifyStorageSignedUrl } from '../storage/signed-url.js';
+import type { StorageDriver } from '../storage/types.js';
 
 @Controller()
 export class StorageController {
+  constructor(
+    @Inject('STORAGE_DRIVER') private readonly storage: StorageDriver,
+  ) {}
+
   @Get('storage/*key')
   async getFile(
     @Param('key') key: string | string[],
@@ -27,13 +33,12 @@ export class StorageController {
         message: '照片路径无效。',
       });
     }
-    const storage = new LocalStorageDriver();
-    await storage.verifySignedUrl(
+    verifyStorageSignedUrl(
       storageKey,
       request.query.expires,
       request.query.signature,
     );
-    const file = await storage.get(storageKey);
+    const file = await this.storage.get(storageKey);
     response.type(file.mime);
     return new StreamableFile(file.stream);
   }

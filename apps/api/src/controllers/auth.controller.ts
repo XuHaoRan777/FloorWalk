@@ -33,17 +33,14 @@ import {
   type AuthUser,
 } from '../auth/auth.js';
 import { type AuthedRequest } from '../queries/inspection-queries.js';
-import type { StorageDriver } from '../storage/types.js';
+import { createStorageSignedUrl } from '../storage/signed-url.js';
 
 const dummyPasswordHash =
   '$argon2id$v=19$m=65536,t=3,p=4$Ba6wlrKFzsrY3N1sAQcKbA$PB60152pm8Qtu2UQupk0i+KR+NP7Qg5Iyda+j4yWSpI';
 
 @Controller('api')
 export class AuthController {
-  constructor(
-    @Inject(DATABASE_POOL) private readonly pool: Pool,
-    @Inject('STORAGE_DRIVER') private readonly storage: StorageDriver,
-  ) {}
+  constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
 
   @Post(apiRoutePath(apiRoutes.createSession))
   async login(
@@ -206,7 +203,7 @@ export class AuthController {
           }
         : null,
       avatarUrl: row.avatar_storage_key
-        ? (await this.storage.signedUrl(row.avatar_storage_key, 3600)).url
+        ? createStorageSignedUrl(row.avatar_storage_key, 3600).url
         : null,
     });
   }

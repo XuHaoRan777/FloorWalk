@@ -29,6 +29,10 @@ const apiEnvironment = {
   STORAGE_DIR: `${projectRoot}/apps/api/.e2e/slot-${slot}/storage`,
   API_PUBLIC_BASE_URL: apiUrl,
   NODE_ENV: 'development',
+  CORS_ORIGINS: webUrl,
+  MAIL_DRIVER: 'fake',
+  AI_REVIEW_DRIVER: 'fake',
+  STORAGE_DRIVER: 'local',
   NO_PROXY: noProxy,
   no_proxy: noProxy,
 };
@@ -43,6 +47,7 @@ const webEnvironment = {
 export default defineConfig({
   testDir: './tests/csp',
   testMatch: '**/*.spec.ts',
+  workers: 1,
   timeout: 120_000,
   expect: { timeout: 15_000 },
   outputDir: `./tests/web-results/csp-slot-${slot}`,

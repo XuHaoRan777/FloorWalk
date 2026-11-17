@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Inject,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
   Patch,
@@ -127,9 +128,7 @@ export class ProfileController {
       await client.query('COMMIT');
       committed = true;
       if (row.avatarStorageKey)
-        await this.storage
-          .delete(row.avatarStorageKey)
-          .catch((error) => this.logger.warn('旧头像清理失败。', error));
+        await this.deletePreviousAvatar(row.avatarStorageKey);
       return avatarUploadResponseSchema.parse({ storageKey });
     } catch (error) {
       if (!committed) {
@@ -140,6 +139,21 @@ export class ProfileController {
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  private async deletePreviousAvatar(storageKey: string) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await this.storage.delete(storageKey);
+        return;
+      } catch {
+        if (attempt < 2) continue;
+        this.logger.error({ event: 'avatar_cleanup_failed', storageKey });
+        throw new InternalServerErrorException({
+          message: '头像更新未能完成，请稍后重试。',
+        });
+      }
     }
   }
 

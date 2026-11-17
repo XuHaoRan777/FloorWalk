@@ -220,9 +220,10 @@ async function createFixture(page: Page) {
             ],
           );
           if (input.job && uploadedAt) {
+            // Keep this display fixture leased while the live AI worker runs.
             await pool.query(
-              `INSERT INTO floorwalk.ai_review_jobs (inspection_item_id, uploaded_at, upload_version, status, attempt_count)
-               VALUES ($1, $2, 1, $3, 4)`,
+              `INSERT INTO floorwalk.ai_review_jobs (inspection_item_id, uploaded_at, upload_version, status, attempt_count, available_at)
+               VALUES ($1, $2, 1, $3, 4, now() + interval '5 minutes')`,
               [itemId, uploadedAt, input.job],
             );
           }
