@@ -139,6 +139,10 @@ async function clearSlot(pool: Pool) {
 }
 
 async function loadLegacy(pool: Pool, data: Snapshot) {
+  // The legacy index permitted only one current template across all merchants.
+  const legacyCurrentTemplateId =
+    data.rows.templates.find((row) => row.is_current === true)?.id ??
+    data.rows.templates.find((row) => row.is_current === undefined)?.id;
   for (const migration of migrations.slice(0, 3)) {
     for (const sql of migration.sql) await pool.query(sql);
   }
@@ -169,7 +173,7 @@ async function loadLegacy(pool: Pool, data: Snapshot) {
               : column === 'photo_required'
                 ? (row.photo_required ?? Number(row.min_photo_count) > 0)
                 : column === 'is_current'
-                  ? (row.is_current ?? true)
+                  ? row.id === legacyCurrentTemplateId
                   : row[column],
       );
       await pool.query(

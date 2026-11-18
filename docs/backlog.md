@@ -43,7 +43,7 @@
 | FW-034 | [Mobile 管理端（二）：审核与看板](work/FW-034-mobile-admin-review/spec.md) | `verified` | FW-032、FW-033 | 已交付，自动接力 FW-035，线尾统一归档（线二 5/9） |
 | FW-035 | [个人中心（两端）](work/FW-035-profile/spec.md) | `verified` | FW-034 | 已交付，自动接力 FW-036，线尾统一归档（线二 6/9） |
 | FW-037 | [站内通知（Mobile 收件箱与角标）](work/FW-037-notifications-mobile/spec.md) | `verified` | FW-036 | Mobile 通知与原生验收完成；接力保持 active，交付 FW-038 |
-| FW-038 | [AI 真模型验收与提示词调优](work/FW-038-ai-real-model-acceptance/spec.md) | `approved` | FW-037 | 接力待开工（线二 9/9，线尾 A） |
+| FW-038 | [AI 真模型验收与提示词调优](work/FW-038-ai-real-model-acceptance/spec.md) | `in_progress` | FW-037 | AC-01/03/04 完成；AC-02 E2E 已跑，真实调用 10/30；清晰 3°C 合成图实际判 rework，等待人工验收（线二 9/9，线尾 A） |
 
 ## 待开单元（未批准，按建议顺序）
 
@@ -69,6 +69,7 @@
 
 | 单元 / 任务 | 需要你测的 | 交接位置 |
 | ----------- | ---------- | -------- |
+| FW-038 | 真人走一遍 Mobile 店长端上传体验，确认 AI 结论文字对店员是否够用 | [交接](work/FW-038-ai-real-model-acceptance/plan.md#交接) |
 
 ## 已归档
 

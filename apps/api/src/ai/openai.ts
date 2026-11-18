@@ -6,6 +6,7 @@ import {
 import OpenAI from 'openai';
 import type { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/chat/completions';
 import { buildReviewMessages } from './prompt.js';
+import { reserveConfiguredFw038Call } from './request-budget.js';
 import type { AiReviewer } from './types.js';
 
 export type OpenAiClient = (
@@ -112,6 +113,7 @@ export class OpenAiReviewer implements AiReviewer {
   ): Promise<AiReviewResult> {
     const messages = await buildReviewMessages(input, signal);
     signal.throwIfAborted();
+    await reserveConfiguredFw038Call();
     const response = await this.client(
       {
         model: this.model,

@@ -1,3 +1,5 @@
+import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import OpenAI from 'openai';
 import { Test } from '@nestjs/testing';
@@ -10,6 +12,7 @@ import { OpenAiReviewer, type OpenAiClient } from './openai.js';
 import { AppModule } from '../app.module.js';
 import { DATABASE_POOL } from '../db/pool.provider.js';
 import { getAiReviewer } from './index.js';
+import { readFw038CallCount } from './request-budget.js';
 
 const input: AiReviewInput = {
   reviewPrompt: '照片应当清晰。',
@@ -40,6 +43,7 @@ function response(value: unknown) {
 beforeEach(() => {
   vi.stubEnv('OPENAI_API_KEY', '<secret>');
   vi.stubEnv('OPENAI_MODEL', 'test-vision');
+  vi.stubEnv('FW_AI_CALL_BUDGET_FILE', '');
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -119,6 +123,40 @@ describe('OpenAI 审核输出', () => {
       kind: 'needs_human',
       reason: 'AI 返回的检查项编号不匹配，请人工审核。',
     });
+  });
+
+  it('共享预算文件在 API 适配器边界阻止第 31 次请求', async () => {
+    const evidenceDir = path.resolve(
+      import.meta.dirname,
+      '../../../../docs/work/FW-038-ai-real-model-acceptance/evidence',
+    );
+    const reportPath = path.join(evidenceDir, '.fw038-adapter-budget-test.md');
+    const claimPrefix = `${path.basename(reportPath)}.call-`;
+    await mkdir(evidenceDir, { recursive: true });
+    await writeFile(
+      reportPath,
+      `${'<!-- FW-038 real model call -->\n'.repeat(29)}`,
+    );
+    vi.stubEnv('FW_AI_CALL_BUDGET_FILE', reportPath);
+    const client = vi.fn<OpenAiClient>().mockResolvedValue(response(output));
+    try {
+      const reviewer = new OpenAiReviewer(client);
+      expect(await reviewer.review(input)).toEqual(output);
+      expect(await reviewer.review(input)).toEqual({
+        kind: 'needs_human',
+        reason: 'AI 调用失败，请人工审核。',
+      });
+      expect(client).toHaveBeenCalledOnce();
+      expect(await readFw038CallCount(reportPath)).toBe(30);
+    } finally {
+      const files = await readdir(evidenceDir);
+      await Promise.all(
+        files
+          .filter((file) => file.startsWith(claimPrefix))
+          .map((file) => unlink(path.join(evidenceDir, file))),
+      );
+      await unlink(reportPath).catch(() => undefined);
+    }
   });
 });
 
