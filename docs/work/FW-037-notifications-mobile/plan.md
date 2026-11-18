@@ -5,10 +5,10 @@
 ## 当前状态
 
 - 工作单元状态：`verified`
-- 归档状态：`active`
+- 归档状态：`archived`
 - 当前任务：无（T01～T05 已完成）
 - 阻塞：无
-- 下一步：Mobile 两端通知入口、分组分页、已读导航与原生流程已交付；接力中间单元保持 active，下游为 FW-038，线尾统一 Promote 与归档
+- 下一步：无；已随 FW-030～FW-038 接力线按序归档。
 
 Preflight（2026-11-17）：上游 FW-036 已归档，提交 `886f910` 在当前 `master`；依赖 `docs/specs/notifications.md`、`apps/api/src/controllers/notifications.controller.ts`、`packages/shared/src/contract/notifications.ts` 均存在，Mobile 不改后端 API。改动限 `apps/mobile/` 与 `tests/mobile/`；通知已有数据由本人 API 隔离，本次不预统计或改写既有数据。
 

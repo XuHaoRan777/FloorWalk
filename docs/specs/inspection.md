@@ -1,6 +1,6 @@
 # 巡检主链
 
-代码（归档时再生成）：共享契约 `packages/shared/src/contract/`；API 认证、注册、验证码与找回密码、巡检/任务、上传、逐条审核、看板、聊天、门店/模板/AI 标准、日程与记录分别在 `apps/api/src/auth/auth.ts`、`apps/api/src/controllers/auth.controller.ts`、`apps/api/src/controllers/orgs.controller.ts`、`apps/api/src/controllers/verification.controller.ts`、`apps/api/src/controllers/password-recovery.controller.ts`、`apps/api/src/controllers/inspection.controller.ts`、`apps/api/src/controllers/evidence.controller.ts`、`apps/api/src/controllers/task-review.controller.ts`、`apps/api/src/controllers/dashboard.controller.ts`、`apps/api/src/controllers/chat.controller.ts`、`apps/api/src/controllers/admin.controller.ts`、`apps/api/src/controllers/templates.controller.ts`、`apps/api/src/controllers/ai-standards.controller.ts`、`apps/api/src/controllers/schedules.controller.ts`、`apps/api/src/controllers/records.controller.ts`、`apps/api/src/queries/inspection-queries.ts`；任务排程与日程持久化在 `apps/api/src/services/task-scheduler.ts`、`apps/api/src/services/schedule-persistence.ts`；数据库定义与迁移在 `apps/api/src/db/`、`apps/api/drizzle/`；Web 控制台在 `apps/web/src/pages/console.tsx`、`apps/web/src/components/console/`、`apps/web/src/lib/api/`；Mobile 页面与聊天组件在 `apps/mobile/app/`、`apps/mobile/components/mobile/`、`apps/mobile/lib/api/`。
+代码（归档时再生成）：共享契约 `packages/shared/src/contract/`；API 认证、注册、验证码与找回密码、本人资料、巡检/任务、上传、逐条审核、看板、聊天、通知、门店/模板/AI 标准、日程与记录分别在 `apps/api/src/auth/auth.ts`、`apps/api/src/controllers/auth.controller.ts`、`apps/api/src/controllers/orgs.controller.ts`、`apps/api/src/controllers/verification.controller.ts`、`apps/api/src/controllers/password-recovery.controller.ts`、`apps/api/src/controllers/users.controller.ts`、`apps/api/src/controllers/inspection.controller.ts`、`apps/api/src/controllers/evidence.controller.ts`、`apps/api/src/controllers/task-review.controller.ts`、`apps/api/src/controllers/dashboard.controller.ts`、`apps/api/src/controllers/chat.controller.ts`、`apps/api/src/controllers/notifications.controller.ts`、`apps/api/src/controllers/admin.controller.ts`、`apps/api/src/controllers/templates.controller.ts`、`apps/api/src/controllers/ai-standards.controller.ts`、`apps/api/src/controllers/schedules.controller.ts`、`apps/api/src/controllers/records.controller.ts`、`apps/api/src/queries/inspection-queries.ts`；AI 提示词拼装、模型适配与请求额度管理在 `apps/api/src/ai/prompt.ts`、`apps/api/src/ai/openai.ts`、`apps/api/src/ai/request-budget.ts`；任务排程与日程持久化在 `apps/api/src/services/task-scheduler.ts`、`apps/api/src/services/schedule-persistence.ts`；数据库定义与迁移在 `apps/api/src/db/`、`apps/api/drizzle/`；Web 控制台在 `apps/web/src/pages/console.tsx`、`apps/web/src/components/console/`、`apps/web/src/lib/api/`；Mobile 页面与聊天组件在 `apps/mobile/app/`、`apps/mobile/components/mobile/`、`apps/mobile/lib/api/`。
 
 ## 契约与权限
 
@@ -15,6 +15,12 @@
 店长在任务开始前 1 小时起可以上传。截止后未上传的条目不能补传；已打回的条目可在截止后 1 小时内重传。每次上传包含自评、备注及本次照片；照片整组覆盖旧照片，同一条目以最后一次上传为准，并记录提交店长与服务端时间。照片数为 0 时备注必填；照片数须达到模板最低张数。所有条目首次上传后任务变为 `submitted`；截止未交齐的任务变为 `overdue`。
 
 启用 AI 的模板在上传事务内按条目及上传版本入队，后台异步给出通过、打回或属实不合格；打回与不合格必须附 1～500 字理由。打回不限制次数。失败按 1、2、4 秒退避重试，含首次最多调用 4 次，耗尽后转「待人工」。重传取消旧版本尚未开始的任务，已开始的旧调用也不能覆盖新版本；管理员手工判定后，后台调用不能覆盖其结论。关闭 AI 的模板上传时不创建审核任务，直接显示「待人工」，由管理员逐条判定。管理员任务详情返回当前上传版本的 AI 审核状态及理由。
+
+AI 在应用检查项的业务标准前，先评估照片证据是否足以支持判断：画面须清晰可辨、关键对象完整入镜、光线足以看清相关细节。证据缺失、遮挡、模糊或无法确认时，只能判为打回，并在理由中具体说明缺少或无法辨认的证据。只有证据充足且结果明确，才可按管理员标准与验收要点判为通过或属实不合格；该通用约束不改变管理员填写的业务尺度。
+
+## 本人资料
+
+`GET /api/me` 按当前会话返回本人资料和有效期一小时的头像链接。`PATCH /api/me` 只允许管理员更新本人的昵称，长度为 1～30 字；店长调用返回 403。`POST /api/me/avatar` 仅操作当前用户，接受 JPEG 或 PNG，最大 2 MB；新头像成功保存后替换旧头像并清理旧对象。头像读写不接受指定其他用户的 ID。
 
 管理员逐条判为通过、打回或不合格。未上传条目不能提前判；截止时尚未判定的已上传条目自动判不合格，未上传条目自动判不合格并标记「未完成」。截止后 1 小时仍打回的条目强制判不合格并标记「未完成」。存在打回项时，系统等待它们有结论；无打回项则在截止时判定，最晚截止后 1 小时强制判定。分数为通过条目数除以总条目数乘 100，四舍五入取整。任一严重项不合格，或不合格条目达到总数一半，整单不通过。判定后管理员仍可逐条改判，系统重算分数和整单结论，并记录操作人、时间、原结论和新结论。每条保存首次自评及首次判定，用于计算自检准确率。
 
@@ -34,7 +40,9 @@ AI 结论沿用上述判定时间规则：无打回历史的任务在截止时�
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `POST /api/auth/session`                          | 登录名与密码登录；多商家同名时先返回候选商家，选择后再次登录                              |
 | `DELETE /api/auth/session`                        | 撤销当前会话并清除 cookie；未登录也返回 204                                               |
-| `GET /api/me`                                     | 当前用户                                                                                  |
+| `GET /api/me`                                     | 当前用户资料、角色、门店与有效期一小时的头像链接                                          |
+| `PATCH /api/me`                                   | 当前 admin 更新本人昵称                                                                  |
+| `POST /api/me/avatar`                             | 当前用户上传 JPEG/PNG 头像（≤2 MB）并返回头像存储键                                      |
 | `POST /api/auth/registration-code`                | 请求注册邮箱验证码                                                                        |
 | `POST /api/orgs`                                  | 验证邮箱后创建商家及首个 admin，并建立会话                                               |
 | `POST /api/auth/password-recovery-code`            | 请求管理员找回密码验证码；不泄露邮箱是否对应管理员                                       |
@@ -50,6 +58,7 @@ AI 结论沿用上述判定时间规则：无打回历史的任务在截止时�
 | `GET /api/tasks/:taskId/review`                   | 任务、巡检结果、逐条上传人与时间、照片及结论                                              |
 | `POST /api/tasks/:taskId/items/:itemId/decision`  | 商家管理员逐条判定或改判；响应更新后的整单分数与结论                                      |
 | `GET /api/dashboard/sites`                        | 各店按 `decided_at` 最近的巡检分数                                                        |
+| `GET /api/dashboard/period?period=week\|month`    | 商家管理员读取本周或本月的任务、分数与各维度统计                                          |
 | `GET /api/stats/self-check`                       | 仅管理员；`scope=site\|manager`、`id`、`from`、`to` 必填，返回样本数、一致数及自检准确率 |
 | `GET /storage/*key`                               | 由当前存储驱动按 `storageKey` 返回照片；本地驱动拒绝越出 `STORAGE_DIR` 的路径             |
 | `GET /api/inspections/:id/messages`               | 按消息序号读取聊天；`after` 与 `before` 互斥，不带游标读最近消息；默认 50 条，最多 100 条 |
@@ -80,7 +89,7 @@ schema 为 `floorwalk`。主键通常为 uuid；消息序号为 bigint。各实�
 | `organizations`             | `name`、`timezone`                                                                                                                                                  |
 | `email_verifications`       | `email`、`purpose`、`code_hash`、`attempt_count`、`requested_at`、`expires_at`、`verified_at`、`recovery_token_hash`、`consumed_at`                                |
 | `sites`                     | `org_id`、`code`（商家内唯一）、`name`、`deactivated_at`（空表示启用）                                                                                              |
-| `users`                     | `org_id`、`login_name`（商家内唯一）、`password_hash`（argon2）、`display_name`、`role`、`site_id`（店长必填）、`must_change_password`、`disabled_at`、`created_by` |
+| `users`                     | `org_id`、`login_name`（商家内唯一）、`password_hash`（argon2）、`display_name`、`avatar_storage_key`、`role`、`site_id`（店长必填）、`must_change_password`、`disabled_at`、`created_by` |
 | `ai_review_standards`       | `org_id`、`name`（商家内唯一）、`prompt`                                                                                                                           |
 | `templates`                 | `org_id`、`name`（商家内唯一）、`ai_enabled`、`ai_standard_id`                                                                                                      |
 | `template_items`            | `template_id`、`position`（组合唯一）、`title`、`min_photo_count`、`acceptance_criteria`、`critical`                                                                |
@@ -131,3 +140,7 @@ Northbean 有 12 家门店 `NB-001`～`NB-012`，每店至少一位店长，`NB-
 | 2026-11-11 | FW-028 增加按日程生成的巡检任务、店长逐条上传与管理员逐条判定/改判；删除整单写接口，并允许系统为从未上传任务补建 `inspector_id` 为空的巡检记录。              |
 | 2026-11-11 | FW-024～FW-029 收敛为 admin 与 store_manager 两层角色，增加邮箱验证码与日程契约，并接入按需任务详情、Mobile 逐项操作和调店后的参与记录可见性。 |
 | 2026-11-17 | FW-030 接入逐条异步 AI 审核、退避重试与待人工，保留首传信息并提供管理员自检准确率接口；AI 与人工结论沿用任务判定时间规则。 |
+| 2026-11-18 | FW-031 完成管理员逐条审核与改判，审计改判前后结论并返回重算后的分数和整单结论。 |
+| 2026-11-18 | FW-032 增加管理员今日视图与按周/月查询的看板统计接口。 |
+| 2026-11-18 | FW-035 增加本人头像上传和管理员昵称更新接口；本人资料只通过当前会话读写。 |
+| 2026-11-18 | FW-038（用户要求）在 AI 系统提示中加入通用证据充分性评估；证据不足只能打回并说明缺失，证据充足且结果明确才可通过或属实不合格，不改变管理员业务标准。 |

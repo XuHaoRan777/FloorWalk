@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- 工作单元状态：`in_progress`
-- 归档状态：`active`
-- 当前任务：等待用户人工验收（T06 最终代码审查和机器门已完成）
-- 当前结论：AC-01 基线探针、AC-03 对照、AC-04 校准及 AC-02 E2E 已记录；真实模型调用累计 10/30 次。AC-02 清晰 3°C 合成图实际判为 rework（预期 pass），作为偏差交人工确认。
-- 下一步：等待用户真人走查 Mobile 店长上传体验及 AI 结论文案；用户确认后再 Promote 与归档。
+- 工作单元状态：`verified`
+- 归档状态：`archived`
+- 当前任务：无；T01～T06、最终代码审查、机器门及用户人工验收均通过
+- 当前结论：AC-01 基线探针、AC-03 对照、AC-04 校准及 AC-02 E2E 已记录；真实模型调用累计 10/30 次。AC-02 清晰 3°C 合成图实际判为 rework（预期 pass），用户已确认整体测试没问题并通过人工验收；该差异保留为验收偏差。
+- 下一步：无；本地 `evidence/` 已清理，通用证据准则已 Promote 至 `docs/specs/inspection.md`「巡检规则」，接力线已归档。
 
 API：AC-04 修改 `apps/api/src/ai` 的提示词拼装与对应单测；沿用现有 OpenAI smoke 测试生成三张图片并将图片证据留在本单元 `evidence/`，每次 smoke 上传的存储对象在样本结束后清理。AC-02 使用既有开发演示数据，不重建数据库或种子。
 
@@ -35,8 +35,8 @@ API：AC-04 修改 `apps/api/src/ai` 的提示词拼装与对应单测；沿用�
 | T02  | passed | `node --env-file=.env.development node_modules/vitest/vitest.mjs run src/ai/openai.smoke.test.ts`（工作目录 `apps/api`，`AI_REVIEW_DRIVER=openai`） | `docs/work/FW-038-ai-real-model-acceptance/evidence/model-probe.md` | 3 次真实请求，额度 3/30。3°C 为 pass、12°C 为 fail、模糊 3°C 误判为 pass；用户明确判 AC-01 基线探针已完成，并要求把模糊证据判断交由 AC-04 解决。首个 package wrapper 尝试在 Vitest 启动前因缺 `FW_SLOT` 退出，未产生请求。 |
 | T03  | passed | `rg -n 'AI 定' docs/context/product.md`; 只读规格与实现对照                                                                                       | `docs/work/FW-038-ai-real-model-acceptance/plan.md`                 | 共 17 处匹配，其中第 5 行是标签定义，实际 16 条具体决策；对照相关 specs 与实现，16 条均符合预期。                                                                                                                                              |
 | T04  | passed | PowerShell 设置 `FW_AI_SMOKE=1`、`FW_AI_PROBE_LABEL='AC-04 第一轮'`、`AI_REVIEW_DRIVER=openai` 后运行同一 Vitest smoke 文件 | `docs/work/FW-038-ai-real-model-acceptance/evidence/model-probe.md` | 第一轮 3 次调用，额度从 3/30 增至 6/30；3°C 清晰 pass、12°C 清晰 fail、3°C 模糊 rework。适配器单测、API 类型检查与 lint 通过。 |
-| T05  | passed | 管理员与店长 API 操作；截止后 1 小时由调度器自动判定；管理员 `POST /api/tasks/:taskId/items/:itemId/decision` 改判；读取任务审核与 `/api/dashboard/sites` | `docs/work/FW-038-ai-real-model-acceptance/evidence/ac02-e2e.md`; `docs/work/FW-038-ai-real-model-acceptance/evidence/model-probe.md` | 4 次真实审核，累计 10/30；12°C 与两张模糊图符合预期。清晰 3°C 实际 rework（预期 pass），理由指向合成图无法证明真实冷柜环境；自动判定 0 分/failed，玻璃改判 pass 后为 50 分/failed，看板同步 50。 |
-| T06  | passed | API 全套测试（175 passed / 5 skipped）；定向测试（27 passed / 3 skipped）；API typecheck、lint、build；`pnpm format:check`；`python scripts/validate_docs.py`；`git diff --check`；独立 Subagent 按 `docs/howto/final-review.md` 审查完整差异 | `apps/api/src/ai/prompt.ts`; `apps/api/src/ai/request-budget.ts`; `docs/howto/final-review.md` | 机器门和独立最终审查通过；额度保护器需在 API 进程设置 `FW_AI_CALL_BUDGET_FILE` 才启用，本次真实调用由证据账本人工核计为 10/30。工作单元仍等待人工验收。 |
+| T05  | passed | 管理员与店长 API 操作；截止后 1 小时由调度器自动判定；管理员 `POST /api/tasks/:taskId/items/:itemId/decision` 改判；读取任务审核与 `/api/dashboard/sites`；用户人工验收：“测试没问题，归档提交推送” | `docs/work/FW-038-ai-real-model-acceptance/evidence/ac02-e2e.md`; `docs/work/FW-038-ai-real-model-acceptance/evidence/model-probe.md`; `docs/work/FW-038-ai-real-model-acceptance/plan.md` | 4 次真实审核，累计 10/30；12°C 与两张模糊图符合预期。清晰 3°C 实际 rework（预期 pass），理由指向合成图无法证明真实冷柜环境；自动判定 0 分/failed，玻璃改判 pass 后为 50 分/failed，看板同步 50。用户于 2026-11-18 确认测试没问题，AC-02 人工验收通过。 |
+| T06  | passed | API 全套测试（175 passed / 5 skipped）；定向测试（27 passed / 3 skipped）；API typecheck、lint、build；`pnpm format:check`；`python scripts/validate_docs.py`；`git diff --check`；独立 Subagent 按 `docs/howto/final-review.md` 审查完整差异 | `apps/api/src/ai/prompt.ts`; `apps/api/src/ai/request-budget.ts`; `docs/howto/final-review.md` | 机器门和独立最终审查通过；额度保护器需在 API 进程设置 `FW_AI_CALL_BUDGET_FILE` 才启用，本次真实调用由证据账本人工核计为 10/30。用户于 2026-11-18 确认人工验收通过；本地 evidence 清理仍待完成。 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。evidence/ 不入库，artifact 只写代码格式的路径。 -->
 
@@ -45,7 +45,7 @@ API：AC-04 修改 `apps/api/src/ai` 的提示词拼装与对应单测；沿用�
 <!-- 方式 A 机器门过后写这两行，方式 B 删掉本节。不写逐条验收脚本。第一行写实现与讨论时说定的不同之处（AC 改动、没做的、做法变了的），没有写"无"；第二行在讨论时的功能点之外，只列机器验不了的（真钱、真机、真回调），没有写"无"。 -->
 
 - 和讨论时不一样的：AC-04 在适配器系统提示中增加通用证据评估准则；AC-02 新建模板“FW-038 AC-02 冷柜与陈列 2026-11-18”，选用“通用”AI 标准并建两项，种子模板与种子 AI 标准未改。清晰 3°C 合成图实际判 rework（预期 pass）；因无截止时间改写 API，用 `floorwalk` 角色将本次任务截止时间回拨后由常驻调度器执行自动判定。
-- 需要你测的：真人走一遍 Mobile 店长端的上传体验，确认 AI 结论文字对店员理解是否够用。
+- 需要你测的：真人走一遍 Mobile 店长端的上传体验，确认 AI 结论文字对店员理解是否够用。用户于 2026-11-18 确认：“测试没问题，归档提交推送”；人工验收通过。
 
 ## 回修
 

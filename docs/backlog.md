@@ -13,20 +13,20 @@
 | 两层角色：一商家一个管理员、一店多店长、店长只属一店、调店                                                   | 有                  | [巡检主链](specs/inspection.md)、[门店与模板管理](specs/admin.md)；数据库保证每商家一个管理员、店长绑定单店，管理员可调店                                |
 | 账号：管理员建店长并设昵称，登录名为邮箱或手机号，跨商家同名登录后选商家；初始密码强制修改、重置、停用即吊销 | 部分                | [巡检主链](specs/inspection.md)、[Web 控制台](specs/web-console.md)；有强制改密、重置、停用与跨商家同名选择，登录名按通用文本接受，未限制为邮箱或手机号  |
 | 会话滑动续期                                                                                                 | 有                  | 闲置超过 7 天失效，[巡检主链](specs/inspection.md)                                                                                                       |
-| 个人中心（头像、改密码，管理员改昵称）                                                                       | 无                  | Mobile「我的」只能看账号与门店                                                                                                                           |
+| 个人中心（头像、改密码，管理员改昵称）                                                                       | 有                  | [Mobile 店长巡检](specs/mobile-inspector.md)、[Mobile 管理端](specs/mobile-admin.md)、[Web 控制台](specs/web-console.md)；两端资料、头像与改密入口已实现，管理员可改昵称 |
 | 门店管理、停用、分配店长                                                                                     | 有                  | [门店与模板管理](specs/admin.md)；账号创建或调店时绑定门店                                                                                               |
 | 多模板，检查项含严重项、最少张数（0 不拍）、验收要点                                                         | 有                  | [门店与模板管理](specs/admin.md)；每个日程任务选择所用模板                                                                                               |
 | AI 审核标准库、模板开关 AI、三套快捷配置                                                                     | 有                  | [门店与模板管理](specs/admin.md)、[巡检主链](specs/inspection.md)；模板已接入逐条审核引擎                                                                  |
 | 日程方案、门店日程安排（选用、跳过日期区间）、每日生成任务                                                   | 有                  | [日程方案与门店安排](specs/schedules.md)；任务生成由巡检主链同步                                                                                         |
 | 今日任务、只能相机拍、时间窗与宽限、多人逐条上传与覆盖、逐项自评                                             | 有                  | [巡检主链](specs/inspection.md)、[Mobile 店长巡检](specs/mobile-inspector.md)；今日任务、相机上传/重传、自评和调店后参与记录可见均已实现                  |
-| AI 逐条审核（通过、打回、属实不合格、失败转人工）                                                            | 有                  | [巡检主链](specs/inspection.md)；假模型与异步队列已取证，真实门店图片效果待 FW-038                                                                         |
-| 判定与分数：判定时间、分数、整单结论、改判、关闭 AI 时人工审                                                 | 部分                | [巡检主链](specs/inspection.md)、[Web 控制台](specs/web-console.md)；AI 已接入既有判定规则，审核界面待 FW-031                                               |
-| 今日视图与看板（完成率、逾期、自检准确率、分数；门店、店长、日期）                                           | 部分                | [Web 控制台](specs/web-console.md)、[巡检主链](specs/inspection.md)；页面只有最近分数，自检准确率只读接口已实现                                              |
-| Mobile 管理端，功能与 Web 相同                                                                               | 无                  | Mobile 目前只给店长                                                                                                                                      |
+| AI 逐条审核（通过、打回、属实不合格、失败转人工）                                                            | 有                  | [巡检主链](specs/inspection.md)；真模型合成样本与 Mobile 店长端上传体验已验收，真实门店照片样本仍未覆盖                                                       |
+| 判定与分数：判定时间、分数、整单结论、改判、关闭 AI 时人工审                                                 | 有                  | [巡检主链](specs/inspection.md)、[Web 控制台](specs/web-console.md)、[Mobile 管理端](specs/mobile-admin.md)；两端管理员均可逐条判定与改判                      |
+| 今日视图与看板（完成率、逾期、自检准确率、分数；门店、店长、日期）                                           | 有                  | [Web 控制台](specs/web-console.md)、[Mobile 管理端](specs/mobile-admin.md)；今日视图和周/月看板均已实现                                                       |
+| Mobile 管理端，功能与 Web 相同                                                                               | 有                  | [Mobile 管理端](specs/mobile-admin.md)；配置、审核、今日视图、看板、个人资料与通知入口已实现                                                               |
 | 巡检单聊天                                                                                                   | 有                  | [巡检单聊天](specs/chat.md)                                                                                                                              |
 | Mobile 本店记录                                                                                              | 有                  | [Mobile 店长巡检](specs/mobile-inspector.md)                                                                                                             |
-| 站内通知                                                                                                     | 有                  | [站内通知](specs/notifications.md)；七类事件、本人 API 收件箱和 Web 管理员入口已实现                                                                       |
-| 照片与头像存阿里云 OSS                                                                                       | 部分                | 存储驱动支持 OSS；当前头像未实现，[工程骨架](specs/workspace.md)                                                                                         |
+| 站内通知                                                                                                     | 有                  | [站内通知](specs/notifications.md)；七类事件、本人 API 收件箱及 Web/Mobile 管理员和店长入口已实现                                                        |
+| 照片与头像存阿里云 OSS                                                                                       | 部分                | 存储驱动支持 OSS；当前配置使用本地存储，[工程骨架](specs/workspace.md)                                                                                  |
 | 两端统一样式                                                                                                 | 部分                | FW-016 统一了 token 和组件；新页面精修在初版收尾                                                                                                         |
 | 演示数据与演示说明                                                                                           | 部分                | [巡检主链](specs/inspection.md)；Northbean 种子现含历史任务、逐条结果与判定记录；正式演示说明待定                                                        |
 
@@ -36,14 +36,6 @@
 
 | ID | 工作单元 | 状态 | 依赖 | 下一步 |
 | --- | --- | --- | --- | --- |
-| FW-030 | [AI 逐条审核](work/FW-030-ai-review/spec.md) | `verified` | FW-028 | 已交付，自动接力 FW-031，线尾统一归档（线二 1/9） |
-| FW-031 | [管理员审核与改判（Web）](work/FW-031-admin-review-web/spec.md) | `verified` | FW-030 | 已交付，自动接力 FW-032，线尾统一归档（线二 2/9） |
-| FW-032 | [今日视图与看板（Web）](work/FW-032-dashboard-web/spec.md) | `verified` | FW-031 | 已交付，自动接力 FW-033，线尾统一归档（线二 3/9） |
-| FW-033 | [Mobile 管理端（一）：配置](work/FW-033-mobile-admin-config/spec.md) | `verified` | FW-029 | 已交付，自动接力 FW-034，线尾统一归档（线二 4/9） |
-| FW-034 | [Mobile 管理端（二）：审核与看板](work/FW-034-mobile-admin-review/spec.md) | `verified` | FW-032、FW-033 | 已交付，自动接力 FW-035，线尾统一归档（线二 5/9） |
-| FW-035 | [个人中心（两端）](work/FW-035-profile/spec.md) | `verified` | FW-034 | 已交付，自动接力 FW-036，线尾统一归档（线二 6/9） |
-| FW-037 | [站内通知（Mobile 收件箱与角标）](work/FW-037-notifications-mobile/spec.md) | `verified` | FW-036 | Mobile 通知与原生验收完成；接力保持 active，交付 FW-038 |
-| FW-038 | [AI 真模型验收与提示词调优](work/FW-038-ai-real-model-acceptance/spec.md) | `in_progress` | FW-037 | AC-01/03/04 完成；AC-02 E2E 已跑，真实调用 10/30；清晰 3°C 合成图实际判 rework，等待人工验收（线二 9/9，线尾 A） |
 
 ## 待开单元（未批准，按建议顺序）
 
@@ -51,17 +43,9 @@
 
 | 顺序 | 目标                                                                                                                                                                                    | 前置 | 类型             |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ---------------- |
-| 1 | 已开 FW-030：AI 逐条审核：模型探针（图片输入、结构化输出、能否拉签名链接）先出报告，再做异步执行、假模型、三种结论、重试与失败转人工、自检准确率。报告不进 AC，用户可以异步看，明显不行就叫停 | —   | 线二 · B         |
-| 2 | 已开 FW-031：管理员审核（Web）：关闭 AI 模板的人工审与打回、AI 失败转人工、改判及记录、待我处理                                                                                          | 1   | 线二 · B         |
-| 3 | 已开 FW-032：今日视图与看板（Web）                                                                                                                                                       | 2   | 线二 · B         |
-| 4 | 已开 FW-033：Mobile 管理端（一）：账号、门店、模板与 AI 标准、日程，与 Web 相同，原生模拟器取证                                                                                           | 3   | 线二 · B         |
-| 5 | 已开 FW-034：Mobile 管理端（二）：审核、改判、今日视图、看板                                                                                                                             | 4   | 线二 · B         |
-| 6 | 已开 FW-035：个人中心（两端）：头像、改密码，管理员改昵称                                                                                                                                | 5   | 线二 · B         |
-| 7 | 已开 FW-036：站内通知（两端）：基线「通知」表里的事件，含聊天新消息                                                                                                                       | 6   | 线二 · B         |
-| 8 | 已开 FW-037：接真模型，调审核提示词，用户走一遍 AI 的效果，顺带看 AI 定的条目                                                                                                             | 7   | 线二 · A（线尾） |
-| 9 | 已开 FW-038：用真实邮件走一遍注册验证和找回密码                                                                                                                                           | 8   | 单独 · A         |
-| 10   | 样式精修：在 FW-016 的 token 和组件上统一打磨全部新页面，顺带看 AI 定的条目                                                                                                  | 9   | 单独 · A         |
-| 11   | 演示：数据和说明，内容到时再定（基线「演示」待定，定之前不开单）                                                                                                             | 10  | 待定             |
+| 1 | 用真实邮件走一遍注册验证和找回密码 | — | 单独 · A |
+| 2 | 样式精修：在 FW-016 的 token 和组件上统一打磨全部新页面，顺带看 AI 定的条目 | 1 | 单独 · A |
+| 3 | 演示：数据和说明，内容到时再定（基线「演示」待定，定之前不开单） | 2 | 待定 |
 
 ## 待人工验收
 
@@ -69,7 +53,6 @@
 
 | 单元 / 任务 | 需要你测的 | 交接位置 |
 | ----------- | ---------- | -------- |
-| FW-038 | 真人走一遍 Mobile 店长端上传体验，确认 AI 结论文字对店员是否够用 | [交接](work/FW-038-ai-real-model-acceptance/plan.md#交接) |
 
 ## 已归档
 
@@ -104,4 +87,12 @@
 | FW-027 | [日程方案与门店日程安排](work/FW-027-schedules/spec.md)                             | 2026-11-12 | 本地 Promote 与接力线归档提交（见 git log）                |
 | FW-028 | [任务与条目状态机](work/FW-028-task-state-machine/spec.md)                          | 2026-11-12 | 本地 Promote 与接力线归档提交（见 git log）                |
 | FW-029 | [Mobile 店长端](work/FW-029-mobile-store-manager/spec.md)                           | 2026-11-12 | 本地 Promote 与接力线归档提交（见 git log）                |
-| FW-036 | [站内通知（后端 + Web 收件箱）](work/FW-036-notifications-backend/spec.md)         | 2026-11-17 | 本地 Promote 与接力线归档提交（见 git log）                |
+| FW-030 | [AI 逐条审核](work/FW-030-ai-review/spec.md)                                       | 2026-11-18 | FW-030～FW-038 接力线 Promote 与归档提交（见 git log）     |
+| FW-031 | [管理员审核与改判（Web）](work/FW-031-admin-review-web/spec.md)                   | 2026-11-18 | FW-030～FW-038 接力线 Promote 与归档提交（见 git log）     |
+| FW-032 | [今日视图与看板（Web）](work/FW-032-dashboard-web/spec.md)                        | 2026-11-18 | FW-030～FW-038 接力线 Promote 与归档提交（见 git log）     |
+| FW-033 | [Mobile 管理端（一）：配置](work/FW-033-mobile-admin-config/spec.md)              | 2026-11-18 | FW-030～FW-038 接力线 Promote 与归档提交（见 git log）     |
+| FW-034 | [Mobile 管理端（二）：审核与看板](work/FW-034-mobile-admin-review/spec.md)        | 2026-11-18 | FW-030～FW-038 接力线 Promote 与归档提交（见 git log）     |
+| FW-035 | [个人中心（两端）](work/FW-035-profile/spec.md)                                   | 2026-11-18 | FW-030～FW-038 接力线 Promote 与归档提交（见 git log）     |
+| FW-036 | [站内通知（后端 + Web 收件箱）](work/FW-036-notifications-backend/spec.md)        | 2026-11-17 | 本地 Promote 与接力线归档提交（见 git log）                |
+| FW-037 | [站内通知（Mobile 收件箱与角标）](work/FW-037-notifications-mobile/spec.md)       | 2026-11-18 | FW-030～FW-038 接力线 Promote 与归档提交（见 git log）     |
+| FW-038 | [AI 真模型验收与提示词调优](work/FW-038-ai-real-model-acceptance/spec.md)         | 2026-11-18 | FW-030～FW-038 接力线 Promote 与归档提交（见 git log）     |
