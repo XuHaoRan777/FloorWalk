@@ -36,7 +36,6 @@
 
 | ID | 工作单元 | 状态 | 依赖 | 下一步 |
 | --- | --- | --- | --- | --- |
-| FW-040 | [Web 窄屏适配](work/FW-040-web-narrow-viewport/spec.md) | `in_progress` | 无 | 等待 AC-05 人工验收；确认后 Promote 与归档（单独 · A） |
 
 ## 待开单元（未批准，按建议顺序）
 
@@ -53,7 +52,6 @@
 
 | 单元 / 任务 | 需要你测的 | 交接位置 |
 | ----------- | ---------- | -------- |
-| FW-040 / AC-05 | 查看 15 个页面状态的前后截图，在 768、1024、1440 下确认无遮挡、主操作可见可点 | [`work/FW-040-web-narrow-viewport/plan.md`](work/FW-040-web-narrow-viewport/plan.md)「交接」 |
 
 ## 已归档
 
@@ -98,3 +96,4 @@
 | FW-037 | [站内通知（Mobile 收件箱与角标）](work/FW-037-notifications-mobile/spec.md)       | 2026-11-18 | FW-030～FW-038 接力线 Promote 与归档提交（见 git log）     |
 | FW-038 | [AI 真模型验收与提示词调优](work/FW-038-ai-real-model-acceptance/spec.md)         | 2026-11-18 | FW-030～FW-038 接力线 Promote 与归档提交（见 git log）     |
 | FW-039 | [真实邮件验收](work/FW-039-real-email-acceptance/spec.md)                          | 2026-11-19 | 真实注册与找回验收、Promote、额度修正、审查及归档提交（见 git log） |
+| FW-040 | [Web 窄屏适配](work/FW-040-web-narrow-viewport/spec.md)                            | 2026-11-19 | `e4bdb40` 实现提交；归档提交（见 git log）                    |

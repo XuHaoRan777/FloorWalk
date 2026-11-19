@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- 工作单元状态：`in_progress`
-- 归档状态：`active`
-- 当前任务：T05
-- 阻塞：AC-05 等待用户逐页确认无遮挡和主操作可见可点
-- 下一步：等待 AC-05 人工验收；用户确认后按归档流程 Promote 并收尾
+- 工作单元状态：`verified`
+- 归档状态：`archived`
+- 当前任务：无
+- 阻塞：无
+- 下一步：归档完成
 
 Preflight：改动范围为 `apps/web/src/` 与 `tests/web/`，不动 schema、API、业务数据或共享 token。`local-pg18` 正常运行，3018、3019、3020 空闲；截图与 e2e 使用隔离的 `floorwalk_e2e_1`。
 
@@ -20,7 +20,7 @@ Preflight：改动范围为 `apps/web/src/` 与 `tests/web/`，不动 schema、A
 | T02 | 提高侧栏收起断点并验证抽屉焦点、Esc 与关闭按钮 | `done` | AC-01、AC-06；视口检查及键盘交互证据 |
 | T03 | 在六个目标页面状态复核表格或表单的窄屏布局，按证据调整难用的表格 | `done` | AC-02、AC-03；计划记录滚动距离和每页处理方式 |
 | T04 | 收敛窄屏顶栏身份显示 | `done` | AC-04；768px 布局与身份文本证据 |
-| T05 | 同步 Web 窄屏行为规格，并复核 15 个页面状态在 768、1024、1440 下的页面溢出、遮挡与主操作 | `blocked` | AC-05 等待人工验收；页面尺寸证据、改动后截图 |
+| T05 | 同步 Web 窄屏行为规格，并复核 15 个页面状态在 768、1024、1440 下的页面溢出、遮挡与主操作 | `done` | AC-05 人工验收通过；页面尺寸证据、改动后截图 |
 | T06 | 运行全量机器门并完成最终代码审查 | `done` | AC-07；验证命令结果与独立审查结论 |
 
 <!-- 状态：pending / in_progress / blocked / done。批准时不超过 8 行，最后一项是"最终代码审查"。
@@ -37,7 +37,7 @@ Preflight：改动范围为 `apps/web/src/` 与 `tests/web/`，不动 schema、A
 | T03 | `passed` | `$env:FW_SLOT='1'; $env:FW040_WIDTHS='768,1024'; pnpm e2e -- --config=playwright.web.config.ts tests/web/fw040-responsive.spec.ts --grep "15 个 Web 页面状态"` | `docs/work/FW-040-web-narrow-viewport/evidence/after-breakpoint/` | AC-02：看板门店、店长榜、日期趋势及门店表在 768/1024 均无需横滚；账号表需 82px/90px；模板页无表格。15 个页面状态均无页面级横向溢出。 |
 | T03 | `passed` | `$env:FW_SLOT='1'; $env:FW040_WIDTHS='768,1024'; pnpm e2e -- --config=playwright.web.config.ts tests/web/fw040-responsive.spec.ts` | `docs/work/FW-040-web-narrow-viewport/evidence/after-table/` | AC-03：账号表采用横向滚动并固定首列，测试将滚动 40px 后确认首列仍贴住容器左缘；其余实际表格在两档均无需横滚。 |
 | T04 | `passed` | `pnpm --filter @apps/web typecheck`; `FW_SLOT=1 pnpm e2e -- --config=playwright.web.config.ts tests/web/fw040-responsive.spec.ts --grep "FW-040 AC-04"` | `tests/web/fw040-responsive.spec.ts` | 768、1023 下身份保持一行；长名称按省略号截断、完整名称保留在 title，元素未超出顶栏。 |
-| T05 | `blocked` | `$env:FW_SLOT='1'; $env:FW040_WIDTHS='768,1024,1440'; pnpm e2e -- --config=playwright.web.config.ts tests/web/fw040-responsive.spec.ts` | `docs/work/FW-040-web-narrow-viewport/evidence/after/` | AC-05 机器部分通过，45 张截图对应页面均无页面级横向溢出；需用户逐页确认内容无遗漏遮挡、主操作可见可点后才可改为 passed。 |
+| T05 | `passed` | `$env:FW_SLOT='1'; $env:FW040_WIDTHS='768,1024,1440'; pnpm e2e -- --config=playwright.web.config.ts tests/web/fw040-responsive.spec.ts` | `docs/work/FW-040-web-narrow-viewport/evidence/after/` | AC-05 机器部分通过，45 张截图对应页面均无页面级横向溢出；用户 2026-11-19 回复“没问题”，确认 15 个页面状态无遮挡且主操作可见可点。 |
 | T06 | `passed` | `pnpm typecheck`; `pnpm lint`; `pnpm format:check`; `pnpm build`; `FW_SLOT=1 pnpm --filter @apps/api test`; `FW_SLOT=1 pnpm e2e -- --config=playwright.web.config.ts` | `tests/web/fw040-responsive.spec.ts` | AC-07 全量机器门通过；API 183 项通过、5 项跳过；Web 38 项通过、1 项跳过。构建有 Web chunk 体积提示，命令成功。 |
 | T06 | `passed` | `独立 Subagent 最终代码审查` | `docs/howto/final-review.md` | 新会话 / 独立 Subagent；七个失败域均无发现。AC-05 按方式 A 交由用户验收。 |
 
@@ -56,6 +56,7 @@ Preflight：改动范围为 `apps/web/src/` 与 `tests/web/`，不动 schema、A
 
 | 日期 | 反馈 | 改动 | 提交 |
 | --- | --- | --- | --- |
+| 2026-11-19 | 初次交付（方式 A 交接） | Web 窄屏布局、抽屉焦点、顶栏身份与账号表首列固定 | `e4bdb40` |
 
 ## 决策与偏差
 
