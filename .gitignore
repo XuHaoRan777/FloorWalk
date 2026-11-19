@@ -181,6 +181,10 @@ coverage/
 .lsp.json
 nul
 
+# 取证截图与 oil-ui-pro 过程文件只留本地，不入库
+evidence/
+.oil-ui/
+
 # Local docker image exports from deploy/deploy.ps1
 /errand-*.tar
 /deploy/errand-*.tar*
