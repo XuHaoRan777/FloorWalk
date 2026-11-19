@@ -212,7 +212,7 @@ export function UsersPage() {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="fw-data-table min-w-[48rem]">
+          <table className="fw-data-table fw-users-table min-w-[48rem]">
             <thead>
               <tr>
                 <th>昵称</th>

@@ -36,7 +36,7 @@
 
 | ID | 工作单元 | 状态 | 依赖 | 下一步 |
 | --- | --- | --- | --- | --- |
-| FW-040 | [Web 窄屏适配](work/FW-040-web-narrow-viewport/spec.md) | `approved` | 无 | 待开工（单独 · A） |
+| FW-040 | [Web 窄屏适配](work/FW-040-web-narrow-viewport/spec.md) | `in_progress` | 无 | 等待 AC-05 人工验收；确认后 Promote 与归档（单独 · A） |
 
 ## 待开单元（未批准，按建议顺序）
 
@@ -53,6 +53,7 @@
 
 | 单元 / 任务 | 需要你测的 | 交接位置 |
 | ----------- | ---------- | -------- |
+| FW-040 / AC-05 | 查看 15 个页面状态的前后截图，在 768、1024、1440 下确认无遮挡、主操作可见可点 | [`work/FW-040-web-narrow-viewport/plan.md`](work/FW-040-web-narrow-viewport/plan.md)「交接」 |
 
 ## 已归档
 

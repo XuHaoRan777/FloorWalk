@@ -248,7 +248,11 @@ export function ConsolePage() {
       </Sidebar>
       <SidebarInset className="@container/content">
         <Header>
-          <span className="text-sm text-muted-foreground">
+          <span
+            data-slot="console-identity"
+            className="min-w-0 truncate whitespace-nowrap text-sm text-muted-foreground"
+            title={`${roleLabel[user.role]} · ${user.displayName}`}
+          >
             {roleLabel[user.role]} · {user.displayName}
           </span>
           <div className="ml-auto">
