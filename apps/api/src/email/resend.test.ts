@@ -13,6 +13,7 @@ describe('Resend email sender', () => {
         templateId: 'verification-code',
       },
       fetcher,
+      async () => 1,
     );
 
     await sender.sendVerificationCode({
@@ -64,6 +65,7 @@ describe('Resend email sender', () => {
         templateId: 'template',
       },
       fetcher,
+      async () => 1,
     );
     await expect(
       sender.sendVerificationCode({

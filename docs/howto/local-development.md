@@ -70,6 +70,18 @@ Mobile 本机首次生产导出在资源输出阶段出现 Windows `0xC0000005`�
 
 ## 启动与端口
 
+Agent 启停常驻进程必须使用项目脚本；主目录 API 先构建 shared 与 API，再依次运行：
+
+```powershell
+pnpm --filter @libs/shared build
+pnpm --filter @apps/api build
+node scripts/dev/proc.mjs start api --local
+node scripts/dev/proc.mjs start web --local
+node scripts/dev/proc.mjs status
+```
+
+本地受管入口固定使用 API 3018、Web 3019 与 loopback；API 只接受 floorwalk 角色和 floorwalk 开发库，不覆盖本地存储配置。修改 API 代码后重新构建并用脚本 stop/start。收尾分别运行 `node scripts/dev/proc.mjs stop web --local`、`node scripts/dev/proc.mjs stop api --local`。参数与槽位隔离见 [开发环境](../context/dev-environment.md#环境)。以下 `pnpm dev` 等前台命令仅供用户手动运行。
+
 默认检查 3018、3019、3020 是否空闲；若修改环境文件，应检查修改后的端口。Web dev 与 preview 默认共用 3019，启动其中一个前先停止另一个。不要停止归属不明的进程。
 
 ```powershell
@@ -101,6 +113,21 @@ SDK 58 的 Router 依赖 `NativeComponentRegistry`，字体资源依赖 `AssetRe
 
 构建后的 API：`pnpm --filter @apps/api start`，同样占用 3018，先结束开发 API。
 构建后的 Web：`pnpm --filter @apps/web preview`，访问 `http://127.0.0.1:3019/` 与 `/console`。
+
+## 交互式真实邮件测试
+
+在仓库根目录运行（先完成 shared 构建；正常运行时加载 API 开发配置，不输出配置值）：
+
+```powershell
+pnpm --filter @libs/shared build
+node --env-file=apps/api/.env.development --import=tsx scripts/test-email.mjs
+```
+
+按提示输入收件邮箱，再输入“测试”确认；其他输入或 Ctrl+C 取消。每次只发送一封，使用现有 Resend 发送器和已配置模板，显示 HTTP 状态与消息 ID，不输出测试码、密钥或服务商错误正文。无需启动 API/Web，不访问数据库，邮件中的测试码不能用于注册或找回密码；它只验证发信链路，不替代真实注册验证码 API 验收。请求成功后仍需人工检查收件箱或垃圾邮件。
+
+FW-039 总预算为 5 次；交互脚本和本地开发 API 的 Resend 发送共用 `.run/fw039-email-attempt-1` 至 `-5` 独占额度标记。取消不占用，发送失败或结果未知保留额度，不自动重试，不删除标记来绕过预算。仅 `NODE_ENV=development` 的 Resend 发送受此单元额度限制。
+
+脚本离线测试：`python -m unittest discover -s scripts/tests -p test_email_smoke.py`。测试仅使用 mock，不访问 Resend、不消耗额度、不写数据库或真实额度标记。
 
 ## 运行判据
 

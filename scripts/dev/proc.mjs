@@ -1,4 +1,4 @@
-// Starts, stops and reports long-running dev processes for one test slot.
+// Starts, stops and reports local or test-slot dev processes.
 // Executors (Codex, Claude Code, ...) call only this script for resident
 // processes; PID files and logs live in the ignored .run/ directory.
 import { spawn, spawnSync } from 'node:child_process';
@@ -17,25 +17,64 @@ const isWindows = process.platform === 'win32';
 // Ports follow the slot rule in docs/howto/parallel.md: API 31N0, Metro 31N2.
 const services = {
   api: {
-    port: (slot) => 3100 + slot * 10,
+    port: (slot) => (slot === undefined ? 3018 : 3100 + slot * 10),
     cwd: path.join(root, 'apps/api'),
-    args: () => ['--env-file=.env.development', 'dist/main.js'],
+    args: (slot) => [
+      '--env-file=.env.development',
+      'dist/main.js',
+      ...(slot === undefined ? ['--loopback'] : []),
+    ],
     env: (slot) => {
-      process.loadEnvFile(path.join(root, 'apps/api/.env.development'));
-      const databaseUrl = new URL(process.env.DATABASE_URL ?? '');
-      if (decodeURIComponent(databaseUrl.username) !== 'floorwalk')
+      let databaseUrl;
+      let username;
+      let database;
+      try {
+        process.loadEnvFile(path.join(root, 'apps/api/.env.development'));
+        databaseUrl = new URL(process.env.DATABASE_URL ?? '');
+        username = decodeURIComponent(databaseUrl.username);
+        database = decodeURIComponent(databaseUrl.pathname);
+      } catch {
+        fail('无法加载 API 开发配置或解析 DATABASE_URL，请检查文件和 URL 格式。');
+      }
+      if (!['postgres:', 'postgresql:'].includes(databaseUrl.protocol))
+        fail('DATABASE_URL 必须使用 PostgreSQL 协议。');
+      if (username !== 'floorwalk')
         fail('api 只允许使用 floorwalk 数据库角色。');
-      databaseUrl.pathname = `/floorwalk_e2e_${slot}`;
+      const local = slot === undefined;
+      if (local && database !== '/floorwalk')
+        fail('api --local 只允许使用 floorwalk 开发库。');
+      if (!local) databaseUrl.pathname = `/floorwalk_e2e_${slot}`;
+      const port = services.api.port(slot);
       return {
-        FW_SLOT: String(slot),
-        PORT: String(3100 + slot * 10),
+        ...(!local
+          ? {
+              FW_SLOT: String(slot),
+              STORAGE_DIR: path.join(root, `apps/api/.e2e/slot-${slot}/storage`),
+            }
+          : {}),
+        PORT: String(port),
         HOST: '127.0.0.1',
         NODE_ENV: 'development',
         DATABASE_URL: databaseUrl.toString(),
-        STORAGE_DIR: path.join(root, `apps/api/.e2e/slot-${slot}/storage`),
-        API_PUBLIC_BASE_URL: `http://127.0.0.1:${3100 + slot * 10}`,
+        API_PUBLIC_BASE_URL: `http://127.0.0.1:${port}`,
       };
     },
+    readyTimeoutMs: 30_000,
+  },
+  web: {
+    port: () => 3019,
+    cwd: path.join(root, 'apps/web'),
+    args: () => [
+      'node_modules/vite/bin/vite.js',
+      '--mode',
+      'development',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      '3019',
+      '--strictPort',
+    ],
+    env: () => ({ PORT: '3019', NODE_ENV: 'development' }),
     readyTimeoutMs: 30_000,
   },
   metro: {
@@ -66,25 +105,41 @@ function fail(message) {
 function parseArgs(argv) {
   const [command, name, ...rest] = argv;
   let slot;
+  let local = false;
   for (let i = 0; i < rest.length; i += 1) {
-    if (rest[i] === '--slot') slot = Number(rest[(i += 1)]);
-    else fail(`未知参数 ${rest[i]}`);
+    if (rest[i] === '--slot') {
+      if (slot !== undefined) fail('--slot 不可重复。');
+      slot = Number(rest[(i += 1)]);
+    } else if (rest[i] === '--local') {
+      if (local) fail('--local 不可重复。');
+      local = true;
+    } else fail(`未知参数 ${rest[i]}`);
   }
   if (!['start', 'stop', 'status'].includes(command ?? '')) {
     fail(
-      '用法：node scripts/dev/proc.mjs start|stop <服务> --slot N；status [<服务> --slot N]',
+      '用法：node scripts/dev/proc.mjs start|stop <服务> --local|--slot N；status [<服务> --local|--slot N]',
     );
   }
   if (command === 'status' && name === undefined) return { command };
   if (!services[name])
     fail(`未知服务 ${name}；可用：${Object.keys(services).join('、')}`);
+  if (local && slot !== undefined) fail('--local 与 --slot 不可同时使用。');
+  if (local) {
+    if (name === 'metro') fail('metro 只支持 --slot N。');
+    return { command, name };
+  }
+  if (name === 'web') fail('web 只支持 --local。');
   if (!Number.isInteger(slot) || slot < 1 || slot > 3)
     fail('--slot 必须是 1、2 或 3。');
   return { command, name, slot };
 }
 
+const recordStem = (name, slot) =>
+  slot === undefined ? `${name}-local` : `${name}-slot-${slot}`;
+const targetLabel = (slot) =>
+  slot === undefined ? 'local' : `slot=${slot}`;
 const recordPath = (name, slot) =>
-  path.join(runDir, `${name}-slot-${slot}.json`);
+  path.join(runDir, `${recordStem(name, slot)}.json`);
 
 function readRecord(name, slot) {
   const file = recordPath(name, slot);
@@ -141,7 +196,7 @@ async function start(name, slot) {
   const port = service.port(slot);
   const existing = readRecord(name, slot);
   if (existing && isAlive(existing.pid)) {
-    fail(`${name} 槽位 ${slot} 已在运行（PID ${existing.pid}）；先 stop。`);
+    fail(`${name} ${targetLabel(slot)} 已在运行（PID ${existing.pid}）；先 stop。`);
   }
   if (await isListening(port)) {
     fail(
@@ -150,7 +205,7 @@ async function start(name, slot) {
   }
   const serviceEnv = service.env(slot);
   fs.mkdirSync(runDir, { recursive: true });
-  const logFile = path.join(runDir, `${name}-slot-${slot}.log`);
+  const logFile = path.join(runDir, `${recordStem(name, slot)}.log`);
   const log = fs.openSync(logFile, 'w');
   const child = spawn(process.execPath, service.args(slot), {
     cwd: service.cwd,
@@ -178,8 +233,10 @@ async function start(name, slot) {
   while (Date.now() < deadline) {
     if (await isListening(port)) {
       console.log(
-        `started ${name} slot=${slot} pid=${child.pid} port=${port} log=${record.log}` +
-          (name === 'api' ? ` database=floorwalk_e2e_${slot}` : ''),
+        `started ${name} ${targetLabel(slot)} pid=${child.pid} port=${port} log=${record.log}` +
+          (name === 'api'
+            ? ` database=${slot === undefined ? 'floorwalk' : `floorwalk_e2e_${slot}`}`
+            : ''),
       );
       return;
     }
@@ -215,10 +272,10 @@ async function stop(name, slot) {
     const port = services[name].port(slot);
     if (await isListening(port)) {
       fail(
-        `没有 ${name} 槽位 ${slot} 的登记，但端口 ${port} 在监听（PID ${listeningOwners(port).join(',') || '未知'}），不处理。`,
+        `没有 ${name} ${targetLabel(slot)} 的登记，但端口 ${port} 在监听（PID ${listeningOwners(port).join(',') || '未知'}），不处理。`,
       );
     }
-    console.log(`stopped ${name} slot=${slot} (未在运行)`);
+    console.log(`stopped ${name} ${targetLabel(slot)} (未在运行)`);
     return;
   }
   await stopTree(record.pid);
@@ -232,14 +289,18 @@ async function stop(name, slot) {
     );
   }
   console.log(
-    `stopped ${name} slot=${slot} pid=${record.pid} port=${record.port} released`,
+    `stopped ${name} ${targetLabel(slot)} pid=${record.pid} port=${record.port} released`,
   );
 }
 
 async function status(name, slot) {
   const targets = name
     ? [[name, slot]]
-    : Object.keys(services).flatMap((n) => [1, 2, 3].map((s) => [n, s]));
+    : [
+        ['api', undefined],
+        ['web', undefined],
+        ...['api', 'metro'].flatMap((n) => [1, 2, 3].map((s) => [n, s])),
+      ];
   for (const [n, s] of targets) {
     const record = readRecord(n, s);
     const port = services[n].port(s);
@@ -247,7 +308,7 @@ async function status(name, slot) {
     if (!record && !listening && name === undefined) continue;
     const alive = record ? isAlive(record.pid) : false;
     console.log(
-      `${n} slot=${s} port=${port} listening=${listening} registered=${Boolean(record)}` +
+      `${n} ${targetLabel(s)} port=${port} listening=${listening} registered=${Boolean(record)}` +
         (record ? ` pid=${record.pid} alive=${alive}` : '') +
         (listening && !record
           ? ` owner=${listeningOwners(port).join(',') || '未知'}`

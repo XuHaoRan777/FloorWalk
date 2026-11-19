@@ -9,7 +9,7 @@
 - 本地 API 端口 `3018`；Web dev `127.0.0.1:3019`；Web preview `127.0.0.1:3019`（与 dev 择一启动）；Metro 默认 LAN 模式、端口 `3020`，供同一局域网真机扫码。`pnpm dev` 下 API 监听所有网卡，Mobile 使用 Expo Metro 主机名访问 API，供同一 Wi-Fi 真机使用；e2e 槽位仍使用 loopback。
 - 数据库：本机 Docker 容器 `local-pg18`（PostgreSQL 18），宿主端口 `5433`；角色 `floorwalk`（非超级用户，不能建库），库 `floorwalk`（开发）和 `floorwalk_e2e_1`～`floorwalk_e2e_3`（e2e 槽位，见 [并行组](../howto/parallel.md)）。schema `floorwalk` 由版本化迁移建立，含组织、门店、账号、主管指派及巡检业务表，可由种子重建。无邮件服务或部署环境。
 - 开发 Agent：Codex 桌面版，权限用完全访问（2026-10-23 用户决定），没有沙箱，边界见 [`AGENTS.md`](../../AGENTS.md) 第 12 节。并行单元的对话工作位置选「新建本地工作树」，Codex 建工作树时按 [`.worktreeinclude`](../../.worktreeinclude) 复制各端 env 文件。
-- 起停脚本（AGENTS.md 第 12 节）：`node scripts/dev/proc.mjs start|stop <服务> --slot N`，`status` 列出在跑的；支持 `api`（槽位端口 31N0）和 `metro`（31N2，环境变量写在脚本里）。PID 和日志在忽略目录 `.run/`；只停自己登记的进程树，端口被别的进程占用时只报告。2026-11-01 在 Claude Code 和 Codex 本地对话都实测通过（[试行记录](../parallel-trial.md)）。
+- 起停脚本（AGENTS.md 第 12 节）：`node scripts/dev/proc.mjs start|stop <服务> --slot N` 支持 `api`（31N0）和 `metro`（31N2）；`start|stop api|web --local` 支持主目录 API（3018，构建产物、loopback、仅 floorwalk 角色与开发库）和 Web（3019，Vite development）。`--local` 与 `--slot` 互斥；`status` 列出本地及槽位中登记或监听的服务。PID 和日志在忽略目录 `.run/`，本地与槽位分别登记；只停自己登记的进程树，端口被别的进程占用时只报告。槽位于 2026-11-01 在 Claude Code 和 Codex 本地对话实测通过（[试行记录](../parallel-trial.md)）。
 - 测试槽位（[并行组](../howto/parallel.md)）：槽位 1～3，库 `floorwalk_e2e_N`，存储目录 `apps/api/.e2e/slot-N/storage`，端口 API `31N0`、Web `31N1`、Metro `31N2`；开发端口 3018～3020 留给主目录。线上单元不跑 `pnpm e2e:slots`、`pnpm dev`；收组时 3018～3020、3110～3132 无监听、`proc.mjs status` 为空、模拟器已关、`adb reverse --list` 为空。UI 套件 `workers` 为 1，图片断言用 `naturalWidth`（g02）。新工作树按 `.worktreeinclude` 复制 env（Codex）；Claude 的工作树在 `.claude/worktrees/`（已忽略），env 要手动放入。
 - 只读参考仓库：`F:\react_project\Gift2CashApp`；本轮未读取或复制其源码。
 
@@ -26,7 +26,7 @@
 - 属性注释：每个键上方一行 `# 凭据：是|否；缺失：启动失败|用默认值|功能关闭；<一句说明>`（校验器 `env-attr`）。
 - 新增、改名、删除一个键，同次同步所属模板（含属性注释）、消费层引用、点名它的 AC（`env-dead-key`、`env-missing-key`）。
 - 同一键被不同解析器读取时，引号、空格、`#` 的处理可能不同；值含这些字符时由用户在各层验证，Agent 不读取或打印值。
-- 本地缺键检查：`python scripts/validate_docs.py --env-keys`，只打印键名。当前仅同步检查工具，尚未登记 `env-group` / `env-local`，此命令会提示没有可检查配置，不能据此声称各端配置齐全。各端模板属性与引用需在获得相应维护授权后对账登记；本次未读取或修改环境文件。
+- 本地缺键检查：`python scripts/validate_docs.py --env-keys`，只打印键名。FW-039 已用 `env-local` 登记 API 开发配置，检查相对同名模板的必填键是否存在，不检查值；其他端及生产配置未登记，不能据此声称各端配置齐全。各端模板属性与引用仍待对账后登记 `env-group`；本单元未读取配置值，收尾按 AC-05 追加 `MAIL_DRIVER=fake` 覆盖。
 - 已启用 `env-untracked on`：普通文档校验检查真实 `.env*` 未被 Git 跟踪（`.example` 除外），不读取其内容。
 
 API 本地开发默认监听所有网卡，e2e 槽位仍监听 loopback；Mobile 未显式配置 API 地址时用 Expo Metro 主机名访问同机 API。模型探针验证图片输入与 JSON schema；本地签名 URL 无法由模型端读取时，适配器读取照片字节并转 JPEG data URL，长边压至 1280、质量 80。模型与存储驱动行为见 [工程骨架](../specs/workspace.md)；环境变量的加载、公开变量边界、重启和重新构建要求见 [本地开发说明](../howto/local-development.md#环境文件与生效时机)。

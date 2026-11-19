@@ -5,6 +5,7 @@ import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-option
 import { NestFactory } from '@nestjs/core';
 import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module.js';
+import { getApiListenHost } from './config/api-host.js';
 import { getJwtSecret } from './config/auth-config.js';
 import { getAllowedOrigins } from './config/cors-config.js';
 import { HttpErrorFilter } from './filters/http-exception.filter.js';
@@ -17,14 +18,7 @@ async function bootstrap() {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('PORT 必须是 1 到 65535 之间的整数。');
   }
-  const configuredHost = process.env.HOST;
-  const isLocalDevelopment =
-    process.env.NODE_ENV === 'development' && !process.env.FW_SLOT;
-  const host =
-    isLocalDevelopment &&
-    (!configuredHost || ['127.0.0.1', 'localhost'].includes(configuredHost))
-      ? '0.0.0.0'
-      : (configuredHost ?? '127.0.0.1');
+  const host = getApiListenHost();
   if (host.length === 0) {
     throw new Error('HOST 不能为空。');
   }
