@@ -5,7 +5,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test, type Page } from '@playwright/test';
 
-const evidence = path.resolve('docs/work/FW-016-ui-foundation/evidence');
+const evidence = path.resolve('tests/web-results/ui-foundation');
 
 async function keyboardAudit(page: Page, screen: string) {
   await page.mouse.click(1, 1);
@@ -55,7 +55,7 @@ async function login(page: Page) {
 async function capture(page: Page, screen: string) {
   await page.evaluate(() => document.fonts.ready);
   await page.mouse.move(0, 0);
-  for (const width of [1440, 768, 390]) {
+  for (const width of [1440, 1024, 768]) {
     await page.setViewportSize({ width, height: 900 });
     if (screen === 'sites') {
       const bounds = await page.locator('.fw-site-form').evaluate((form) => {
@@ -85,7 +85,7 @@ async function capture(page: Page, screen: string) {
   await page.setViewportSize({ width: 1440, height: 900 });
 }
 
-test('FW-016 AC-05 登录后五屏三宽截图', async ({ page }) => {
+test('FW-041 AC-07 登录后五屏三宽截图', async ({ page }) => {
   await mkdir(evidence, { recursive: true });
   await page.goto('/');
   await expect(page.getByLabel('登录名')).toBeVisible();
@@ -137,7 +137,7 @@ test('FW-016 AC-05 登录后五屏三宽截图', async ({ page }) => {
     JSON.stringify(
       {
         screens: ['queue', 'review', 'sites', 'templates', 'dashboard'],
-        widths: [1440, 768, 390],
+        widths: [1440, 1024, 768],
         data: 'floorwalk_e2e 槽位内已有演示种子；审核详情会触发既有开始审核动作，下次槽位重置清理。',
       },
       null,

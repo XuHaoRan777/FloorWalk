@@ -15,7 +15,7 @@ export function DashboardTrend({
   const series = [
     {
       name: '完成率',
-      color: 'var(--primary)',
+      color: 'var(--fw-chart-1)',
       value: (day: (typeof dates)[number]) =>
         day.metrics.completionRate === null
           ? null
@@ -23,7 +23,7 @@ export function DashboardTrend({
     },
     {
       name: '平均分',
-      color: 'var(--muted-foreground)',
+      color: 'var(--fw-chart-2)',
       value: (day: (typeof dates)[number]) => day.metrics.averageScore,
     },
   ];
@@ -41,7 +41,7 @@ export function DashboardTrend({
           </span>
         ))}
       </div>
-      <div className="rounded-md border bg-card p-4">
+      <div className="fw-dashboard-trend-card">
         <svg
           viewBox="0 0 720 270"
           role="img"
@@ -61,13 +61,13 @@ export function DashboardTrend({
                 x2="692"
                 y1={y(value)}
                 y2={y(value)}
-                stroke="var(--border)"
+                stroke="var(--fw-rule)"
               />
               <text
                 x="40"
                 y={y(value) + 4}
                 textAnchor="end"
-                fill="var(--muted-foreground)"
+                fill="var(--fw-muted-foreground)"
                 fontSize="12"
               >
                 {value}
@@ -110,7 +110,7 @@ export function DashboardTrend({
                 x={x(index)}
                 y="248"
                 textAnchor="middle"
-                fill="var(--muted-foreground)"
+                fill="var(--fw-muted-foreground)"
                 fontSize="12"
               >
                 {day.date.slice(5)}
@@ -119,36 +119,38 @@ export function DashboardTrend({
           )}
         </svg>
       </div>
-      <div className="mt-4 overflow-x-auto">
-        <table className="fw-data-table min-w-[32rem]">
-          <caption className="sr-only">每日任务与分数统计</caption>
-          <thead>
-            <tr>
-              <th>日期</th>
-              <th className="text-right">已完成/应完成</th>
-              <th className="text-right">完成率</th>
-              <th className="text-right">逾期</th>
-              <th className="text-right">平均分</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dates.map(({ date, metrics }) => (
-              <tr key={date}>
-                <td className="tabular-nums">{date}</td>
-                <td className="text-right tabular-nums">
-                  {metrics.completed}/{metrics.expected}
-                </td>
-                <td className="text-right tabular-nums">
-                  {percentage(metrics.completionRate)}
-                </td>
-                <td className="text-right tabular-nums">{metrics.overdue}</td>
-                <td className="text-right tabular-nums">
-                  {scoreLabel(metrics.averageScore)}
-                </td>
+      <div className="fw-dashboard-table fw-dashboard-trend-table">
+        <div className="overflow-x-auto">
+          <table className="fw-data-table min-w-[32rem]">
+            <caption className="sr-only">每日任务与分数统计</caption>
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th className="text-right">已完成/应完成</th>
+                <th className="text-right">完成率</th>
+                <th className="text-right">逾期</th>
+                <th className="text-right">平均分</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {dates.map(({ date, metrics }) => (
+                <tr key={date}>
+                  <td className="tabular-nums">{date}</td>
+                  <td className="text-right tabular-nums">
+                    {metrics.completed}/{metrics.expected}
+                  </td>
+                  <td className="text-right tabular-nums">
+                    {percentage(metrics.completionRate)}
+                  </td>
+                  <td className="text-right tabular-nums">{metrics.overdue}</td>
+                  <td className="text-right tabular-nums">
+                    {scoreLabel(metrics.averageScore)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );

@@ -1,33 +1,6 @@
 @import '../../../../packages/tokens/tokens.css';
 
 @font-face {
-  font-family: 'IBM Plex Sans';
-  src: url('../../../mobile/node_modules/@expo-google-fonts/ibm-plex-sans/400Regular/IBMPlexSans_400Regular.ttf')
-    format('truetype');
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'IBM Plex Sans';
-  src: url('../../../mobile/node_modules/@expo-google-fonts/ibm-plex-sans/500Medium/IBMPlexSans_500Medium.ttf')
-    format('truetype');
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'IBM Plex Sans';
-  src: url('../../../mobile/node_modules/@expo-google-fonts/ibm-plex-sans/600SemiBold/IBMPlexSans_600SemiBold.ttf')
-    format('truetype');
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-}
-
-@font-face {
   font-family: 'IBM Plex Mono';
   src: url('../../../mobile/node_modules/@expo-google-fonts/ibm-plex-mono/400Regular/IBMPlexMono_400Regular.ttf')
     format('truetype');
@@ -37,6 +10,13 @@
 }
 
 @theme inline {
+  --font-sans: var(--fw-font-web-sans);
+  --font-display: var(--fw-font-web-sans);
+  --color-destructive-foreground: var(--fw-destructive-foreground);
+  --color-success: var(--fw-success);
+  --color-success-foreground: var(--fw-success-foreground);
+  --color-warning-foreground: var(--fw-warning-foreground);
+  --color-overlay: var(--fw-overlay);
   --radius-sm: var(--fw-radius-control);
   --radius-md: var(--fw-radius-control);
   --radius-lg: var(--fw-radius-card);

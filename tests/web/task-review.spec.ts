@@ -279,7 +279,7 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
     await pool.query(
       `UPDATE floorwalk.inspection_tasks
        SET starts_at = now() - interval '3 hours',
-         due_at = now() - interval '2 hours' WHERE id = $1`,
+         due_at = now() - interval '1 minute' WHERE id = $1`,
       [taskId],
     );
     await secondItem.getByRole('button', { name: '通过' }).click();
@@ -295,6 +295,11 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
       .filter({ hasText: site.name });
     await expect(decidedRow).toContainText('100 分');
     await decidedRow.click();
+    await pool.query(
+      `UPDATE floorwalk.inspection_tasks
+       SET due_at = now() - interval '2 hours' WHERE id = $1`,
+      [taskId],
+    );
     await secondItem.getByRole('button', { name: '不合格' }).click();
     await expect(summary).toContainText('50 分');
     await expect(summary).toContainText('不合格');

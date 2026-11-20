@@ -41,8 +41,10 @@ export function TemplatesPage() {
   const [isNew, setIsNew] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [itemsUpdating, setItemsUpdating] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const editingDisabled = busy || itemsUpdating;
   const select = useCallback((template: AdminTemplate) => {
     setSelectedId(template.id);
     setName(template.name);
@@ -145,7 +147,11 @@ export function TemplatesPage() {
     }
   };
   return (
-    <section className="space-y-5" aria-busy={busy || loading}>
+    <section
+      className="fw-templates-page"
+      aria-busy={editingDisabled || loading}
+      aria-label="巡检模板编辑"
+    >
       <div className="fw-page-heading">
         <div>
           <p className="fw-page-eyebrow">巡检配置</p>
@@ -156,25 +162,32 @@ export function TemplatesPage() {
             variant="outline"
             size="sm"
             onClick={load}
-            disabled={loading || busy}
+            disabled={loading || editingDisabled}
           >
             <RotateCcw aria-hidden="true" />
             刷新
           </Button>
-          <Button size="sm" onClick={startNew} disabled={loading || busy}>
+          <Button
+            size="sm"
+            onClick={startNew}
+            disabled={loading || editingDisabled}
+          >
             <Plus aria-hidden="true" />
             新建模板
           </Button>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 border-y py-3">
-        <span className="mr-1 text-sm text-muted-foreground">快捷配置</span>
+      <div className="fw-template-quick-config">
+        <span className="fw-template-quick-config__label">
+          <ClipboardList aria-hidden="true" />
+          快捷配置
+        </span>
         {quickOptions.map(([kind, label]) => (
           <Button
             key={kind}
             variant="outline"
             size="sm"
-            disabled={loading || busy}
+            disabled={loading || editingDisabled}
             onClick={() => void quickSetup(kind)}
           >
             {label}
@@ -184,121 +197,131 @@ export function TemplatesPage() {
       <div id="template-error">
         <ErrorBanner message={error} />
       </div>
-      <p role="status" className="text-sm text-muted-foreground">
-        {busy ? '正在保存配置…' : notice}
-      </p>
+      {(busy || notice) && (
+        <p role="status" className="fw-template-notice" aria-live="polite">
+          {busy ? '正在保存配置…' : notice}
+        </p>
+      )}
       {loading ? (
         <p className="fw-state" role="status">
           <LoaderCircle className="animate-spin" aria-hidden="true" />
           正在加载模板…
         </p>
       ) : (
-        <>
-          {templates.length === 0 && !isNew && !error && (
-            <div className="fw-state">
-              <ClipboardList aria-hidden="true" />
-              <p>暂无模板，可新建或使用快捷配置。</p>
+        <div className="fw-template-workspace">
+          <aside className="fw-template-list" aria-label="模板列表">
+            <div className="fw-template-list__header">
+              <h2>已有模板</h2>
+              <span>{templates.length} 个</span>
+            </div>
+            {templates.length === 0 && !isNew && !error ? (
+              <p className="fw-template-list__empty">
+                暂无模板，可新建或使用快捷配置。
+              </p>
+            ) : (
+              <div className="fw-template-list__items">
+                {templates.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    disabled={editingDisabled}
+                    aria-pressed={selectedId === template.id && !isNew}
+                    onClick={() => select(template)}
+                    className="fw-template-list__item"
+                  >
+                    <span>{template.name}</span>
+                    <span>{template.items.length} 项</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </aside>
+          {(selectedId || isNew) && (
+            <div className="fw-template-editor">
+              <form
+                className="fw-template-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!editingDisabled) void save();
+                }}
+                aria-describedby={error ? 'template-error' : undefined}
+              >
+                <fieldset disabled={editingDisabled}>
+                  <label className="grid gap-1.5 text-sm font-medium">
+                    模板名称
+                    <input
+                      className="rounded-md border bg-background px-3 font-normal"
+                      required
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                    />
+                  </label>
+                  <div className="fw-template-ai-settings">
+                    <label className="fw-template-ai-toggle">
+                      <input
+                        type="checkbox"
+                        checked={aiEnabled}
+                        onChange={(event) => setAiEnabled(event.target.checked)}
+                      />
+                      启用 AI
+                    </label>
+                    <div className="grid gap-1.5 text-sm font-medium">
+                      <label htmlFor="template-ai-standard">AI 审核标准</label>
+                      <select
+                        id="template-ai-standard"
+                        className="w-full min-w-0 rounded-md border bg-background px-3 font-normal"
+                        value={aiStandardId}
+                        required={aiEnabled}
+                        onChange={(event) =>
+                          setAiStandardId(event.target.value)
+                        }
+                        aria-describedby="ai-standard-help"
+                      >
+                        <option value="">不选择标准</option>
+                        {standards.map((standard) => (
+                          <option key={standard.id} value={standard.id}>
+                            {standard.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <p id="ai-standard-help" className="fw-template-ai-help">
+                    {standards.length
+                      ? '启用 AI 时必须选择审核标准，关闭时可不选。'
+                      : '暂无审核标准，请先到「AI 审核标准」创建，或使用上方快捷配置。'}
+                  </p>
+                  <TemplateItemsEditor
+                    items={items}
+                    onChange={setItems}
+                    onTransitionPendingChange={setItemsUpdating}
+                  />
+                  <div className="fw-template-actions">
+                    <Button type="submit">
+                      <Save aria-hidden="true" />
+                      {isNew ? '创建模板' : '保存修改'}
+                    </Button>
+                    {isNew && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => {
+                          if (templates[0]) select(templates[0]);
+                          else {
+                            setIsNew(false);
+                            setSelectedId(null);
+                          }
+                        }}
+                      >
+                        取消
+                      </Button>
+                    )}
+                  </div>
+                </fieldset>
+              </form>
             </div>
           )}
-          <div className="divide-y border-b">
-            {templates.map((template) => (
-              <button
-                key={template.id}
-                type="button"
-                disabled={busy}
-                aria-pressed={selectedId === template.id && !isNew}
-                onClick={() => select(template)}
-                className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-3 text-left hover:bg-muted/50 aria-pressed:bg-muted/70 disabled:opacity-60"
-              >
-                <span className="min-w-0 flex-1 font-medium">
-                  {template.name}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {template.items.length} 项
-                </span>
-              </button>
-            ))}
-          </div>
-          {(selectedId || isNew) && (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void save();
-              }}
-              aria-describedby={error ? 'template-error' : undefined}
-            >
-              <fieldset disabled={busy} className="space-y-5 pt-1">
-                <label className="grid gap-1.5 text-sm font-medium">
-                  模板名称
-                  <input
-                    className="h-9 rounded-md border bg-background px-3 font-normal"
-                    required
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                  />
-                </label>
-                <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-end">
-                  <label className="flex h-9 items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={aiEnabled}
-                      onChange={(event) => setAiEnabled(event.target.checked)}
-                    />
-                    启用 AI
-                  </label>
-                  <div className="grid gap-1.5 text-sm font-medium">
-                    <label htmlFor="template-ai-standard">AI 审核标准</label>
-                    <select
-                      id="template-ai-standard"
-                      className="h-9 min-w-0 rounded-md border bg-background px-3 font-normal"
-                      value={aiStandardId}
-                      required={aiEnabled}
-                      onChange={(event) => setAiStandardId(event.target.value)}
-                      aria-describedby="ai-standard-help"
-                    >
-                      <option value="">不选择标准</option>
-                      {standards.map((standard) => (
-                        <option key={standard.id} value={standard.id}>
-                          {standard.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <p
-                  id="ai-standard-help"
-                  className="text-sm text-muted-foreground"
-                >
-                  {standards.length
-                    ? '启用 AI 时必须选择审核标准，关闭时可不选。'
-                    : '暂无审核标准，请先到「AI 审核标准」创建，或使用上方快捷配置。'}
-                </p>
-                <TemplateItemsEditor items={items} onChange={setItems} />
-                <div className="flex gap-2 border-t pt-4">
-                  <Button type="submit">
-                    <Save aria-hidden="true" />
-                    {isNew ? '创建模板' : '保存修改'}
-                  </Button>
-                  {isNew && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => {
-                        if (templates[0]) select(templates[0]);
-                        else {
-                          setIsNew(false);
-                          setSelectedId(null);
-                        }
-                      }}
-                    >
-                      取消
-                    </Button>
-                  )}
-                </div>
-              </fieldset>
-            </form>
-          )}
-        </>
+        </div>
       )}
     </section>
   );

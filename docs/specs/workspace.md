@@ -22,11 +22,11 @@ AI 审核由 `AI_REVIEW_DRIVER` 选择 `fake` 或 `openai`，缺省为 `fake`。
 
 ## Web 页面壳
 
-独立 Web 的 `/` 是公开首页占位；`/console` 为商家管理员显示任务审核队列与详情、门店看板和管理入口，登录与审核行为见 [Web 控制台](web-console.md)。两页可相互导航，支持直接访问和刷新，控制台侧边栏可开关。开发及构建后 preview 已验证，上游许可与来源见 [本地开发说明](../howto/local-development.md#上游来源)。
+独立 Web 的 `/` 为登录页，另有 `/register`、`/forgot-password` 和 `/change-password` 表单路由，以及 `/_design-samples` 样式展示路由。`/console` 为商家管理员显示总部看板、今日视图、任务审核与管理分区，登录与审核行为见 [Web 控制台](web-console.md)。注册路由支持直接访问和刷新，控制台侧边栏可开关。上游许可与来源见 [本地开发说明](../howto/local-development.md#上游来源)。
 
 ## 共享设计系统
 
-Web 控制台与 Mobile 店长端统一使用 Framed sheet 视觉方向。颜色、字体、字号、间距、圆角与阴影的唯一来源为 [`packages/tokens/tokens.css`](../../packages/tokens/tokens.css)；Web Tailwind 主题和 Mobile NativeWind 主题从该文件消费。Web Tailwind `@theme` 保留用于 `max-w-*` 的 container/max-width token 家族；若与 spacing 等家族存在相同后缀，需显式映射 max-width 到 container，避免容器宽度 class 被间距值覆盖。NativeWind 无法在 React Native 静态样式中直接解析的字号映射、圆角与间距由 `packages/tokens/generate-native.mjs` 生成 `packages/tokens/native.json`，不得手改生成文件；维护命令见[本地开发说明](../howto/local-development.md#设计-token)。
+Web 控制台采用方向 01「钴蓝运营台」，浅色底、单一商家主题。视觉取值和组件用法见[Web 控制台设计基线](../context/design.md)；共享 CSS token 的唯一来源为 [`packages/tokens/tokens.css`](../../packages/tokens/tokens.css)，Web Tailwind 主题从中消费。Mobile 页面样式由各自组件维护，不随本次 Web 重做；Native 字体、圆角与间距映射仍由 `packages/tokens/generate-native.mjs` 生成 `packages/tokens/native.json`，不得手改生成文件；维护命令见[本地开发说明](../howto/local-development.md#设计-token)。Web Tailwind `@theme` 保留用于 `max-w-*` 的 container/max-width token 家族；若与 spacing 等家族存在相同后缀，需显式映射 max-width 到 container，避免容器宽度 class 被间距值覆盖。
 
 ## Mobile 运行
 
@@ -70,3 +70,4 @@ Web 控制台与 Mobile 店长端统一使用 Framed sheet 视觉方向。颜色
 | 2026-11-12 | Mobile 升级至 Expo SDK 58（Expo 58.0.24、Router 58.0.31、React 19.3.0、React Native 0.88.1），补齐 SDK 58 类型兼容，并修复 NativeWind 包装层缺少 NativeComponentRegistry、AssetRegistry 导致的原生启动错误与白屏；2026-11-16 用户确认原生真机复测通过，未采集设备系统版本。 |
 | 2026-11-17 | FW-030 以 `AI_REVIEW_DRIVER` 选择逐条审核驱动；默认假模型无外部请求，OpenAI 凭据和模型名仅在启用兼容驱动时必填。 |
 | 2026-11-17 | FW-036 增加通知 API 与表；补齐 Tailwind v4 container/max-width 主题映射，避免共享面板宽度 class 被同名 spacing token 覆盖。 |
+| 2026-11-20 | FW-041 将 Web 控制台设计基线更新为方向 01「钴蓝运营台」，完成总部看板与模板编辑样板页；Mobile 页面样式不在本单元范围。 |

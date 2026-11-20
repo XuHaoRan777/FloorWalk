@@ -6,9 +6,8 @@ import { URL } from 'node:url';
 // Keep 16 in sync with NativeWind's inlineRem in apps/mobile/metro.config.cjs.
 const remSize = 16;
 const source = await readFile(new URL('./tokens.css', import.meta.url), 'utf8');
-const lightTheme = source.slice(0, source.indexOf(':root.dark'));
 const values = new Map(
-  [...lightTheme.matchAll(/--fw-([\w-]+):\s*([^;]+);/g)].map((match) => [
+  [...source.matchAll(/--fw-([\w-]+):\s*([^;]+);/g)].map((match) => [
     match[1],
     match[2].trim(),
   ]),

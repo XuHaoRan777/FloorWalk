@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ClipboardCheck, LayoutDashboard, RotateCcw } from 'lucide-react';
+import {
+  ChartNoAxesCombined,
+  CircleCheckBig,
+  ClipboardCheck,
+  Clock3,
+  LayoutDashboard,
+  RotateCcw,
+  ScanLine,
+} from 'lucide-react';
 import type {
   DashboardPeriod,
   DashboardPeriodResponse,
@@ -24,6 +32,7 @@ type DashboardData = {
   managerChecks: Record<string, SelfCheckStatsResponse>;
   latestSites: Record<string, DashboardSite>;
   accuracy: number | null;
+  accuracySampleCount: number;
 };
 
 export function DashboardView({ onQueue }: { onQueue: () => void }) {
@@ -90,6 +99,7 @@ export function DashboardView({ onQueue }: { onQueue: () => void }) {
               latestSites.map((entry) => [entry.site.id, entry]),
             ),
             accuracy: counts.samples ? counts.matching / counts.samples : null,
+            accuracySampleCount: counts.samples,
           });
       } catch (reason) {
         if (active) setError(getErrorMessage(reason));
@@ -104,7 +114,7 @@ export function DashboardView({ onQueue }: { onQueue: () => void }) {
   }, [period, revision]);
   const periodLabel = period === 'week' ? '本周' : '本月';
   return (
-    <>
+    <div className="fw-dashboard">
       <div className="fw-page-heading">
         <div>
           <p className="fw-page-eyebrow">门店巡检概况</p>
@@ -126,8 +136,8 @@ export function DashboardView({ onQueue }: { onQueue: () => void }) {
           </Button>
         </div>
       </div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div role="group" aria-label="统计周期" className="flex gap-2">
+      <div className="fw-dashboard-toolbar">
+        <div role="group" aria-label="统计周期" className="fw-dashboard-period">
           {(['week', 'month'] as const).map((value) => (
             <Button
               key={value}
@@ -166,27 +176,55 @@ export function DashboardView({ onQueue }: { onQueue: () => void }) {
         </>
       ) : (
         <>
-          <dl
-            aria-label="看板指标"
-            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-          >
+          <dl aria-label="看板指标" className="fw-dashboard-metrics">
             {(
               [
-                ['完成率', percentage(data.summary.overall.completionRate)],
-                ['逾期任务', String(data.summary.overall.overdue)],
-                ['自检准确率', percentage(data.accuracy)],
-                ['平均分', scoreLabel(data.summary.overall.averageScore)],
+                {
+                  label: '完成率',
+                  value: percentage(data.summary.overall.completionRate),
+                  detail: `${data.summary.overall.completed} / ${data.summary.overall.expected} 项按时交齐`,
+                  icon: CircleCheckBig,
+                  tone: 'success',
+                },
+                {
+                  label: '逾期任务',
+                  value: String(data.summary.overall.overdue),
+                  detail: '本周期已过截止时间',
+                  icon: Clock3,
+                  tone: 'warning',
+                },
+                {
+                  label: '自检准确率',
+                  value: percentage(data.accuracy),
+                  detail: `${data.accuracySampleCount} 个判定样本`,
+                  icon: ScanLine,
+                  tone: 'accent',
+                },
+                {
+                  label: '平均分',
+                  value: scoreLabel(data.summary.overall.averageScore),
+                  detail: '仅计已判定任务',
+                  icon: ChartNoAxesCombined,
+                  tone: 'primary',
+                },
               ] as const
-            ).map(([label, value]) => (
-              <div key={label} className="rounded-md border bg-card p-4">
-                <dt className="text-sm text-muted-foreground">{label}</dt>
-                <dd className="mt-2 text-2xl font-semibold tabular-nums">
-                  {value}
-                </dd>
+            ).map(({ label, value, detail, icon: Icon, tone }) => (
+              <div
+                key={`${label}-${value}`}
+                className={`fw-dashboard-metric fw-dashboard-metric--${tone}`}
+              >
+                <dt>
+                  <span className="fw-dashboard-metric__icon">
+                    <Icon aria-hidden="true" />
+                  </span>
+                  <span>{label}</span>
+                </dt>
+                <dd>{value}</dd>
+                <span className="fw-dashboard-metric__detail">{detail}</span>
               </div>
             ))}
           </dl>
-          <p className="mb-6 mt-3 text-sm text-muted-foreground">
+          <p className="fw-dashboard-summary">
             {periodLabel}应完成 {data.summary.overall.expected}{' '}
             项任务，截止前交齐 {data.summary.overall.completed}{' '}
             项。应完成数为本期已生成的任务；平均分仅计已判定任务。无样本以「—」显示。
@@ -194,7 +232,7 @@ export function DashboardView({ onQueue }: { onQueue: () => void }) {
           <div
             role="group"
             aria-label="统计维度"
-            className="mb-4 flex flex-wrap gap-2"
+            className="fw-dashboard-dimensions"
           >
             {(
               [
@@ -214,60 +252,63 @@ export function DashboardView({ onQueue }: { onQueue: () => void }) {
               </Button>
             ))}
           </div>
-          {dimension === 'site' ? (
-            <DashboardSiteTable
-              sites={data.summary.sites}
-              checks={data.siteChecks}
-              latestSites={data.latestSites}
-              showMetrics
-            />
-          ) : dimension === 'manager' ? (
-            <section aria-label="店长排行榜">
-              <p className="mb-3 text-sm text-muted-foreground">
-                按提交条目数排序。提交数和通过率按当前上传人统计，通过率只计已判定条目；自检准确率归首次上传人。
-              </p>
-              {data.summary.managers.length === 0 ? (
-                <p className="fw-state">{periodLabel}暂无店长提交</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="fw-data-table min-w-[32rem]">
-                    <thead>
-                      <tr>
-                        <th>排名</th>
-                        <th>店长</th>
-                        <th className="text-right">提交条目数</th>
-                        <th className="text-right">通过率</th>
-                        <th className="text-right">自检准确率</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.summary.managers.map((manager, index) => (
-                        <tr key={manager.id}>
-                          <td className="tabular-nums">{index + 1}</td>
-                          <td>{manager.displayName}</td>
-                          <td className="text-right tabular-nums">
-                            {manager.submittedItems}
-                          </td>
-                          <td className="text-right tabular-nums">
-                            {percentage(manager.passRate)}
-                          </td>
-                          <td className="text-right tabular-nums">
-                            {percentage(
-                              data.managerChecks[manager.id]?.accuracy ?? null,
-                            )}
-                          </td>
+          <div className="fw-dashboard-dimension-content" key={dimension}>
+            {dimension === 'site' ? (
+              <DashboardSiteTable
+                sites={data.summary.sites}
+                checks={data.siteChecks}
+                latestSites={data.latestSites}
+                showMetrics
+              />
+            ) : dimension === 'manager' ? (
+              <section aria-label="店长排行榜" className="fw-dashboard-table">
+                <p className="fw-dashboard-table__note">
+                  按提交条目数排序。提交数和通过率按当前上传人统计，通过率只计已判定条目；自检准确率归首次上传人。
+                </p>
+                {data.summary.managers.length === 0 ? (
+                  <p className="fw-state">{periodLabel}暂无店长提交</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="fw-data-table min-w-[32rem]">
+                      <thead>
+                        <tr>
+                          <th>排名</th>
+                          <th>店长</th>
+                          <th className="text-right">提交条目数</th>
+                          <th className="text-right">通过率</th>
+                          <th className="text-right">自检准确率</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          ) : (
-            <DashboardTrend dates={data.summary.dates} />
-          )}
+                      </thead>
+                      <tbody>
+                        {data.summary.managers.map((manager, index) => (
+                          <tr key={manager.id}>
+                            <td className="tabular-nums">{index + 1}</td>
+                            <td>{manager.displayName}</td>
+                            <td className="text-right tabular-nums">
+                              {manager.submittedItems}
+                            </td>
+                            <td className="text-right tabular-nums">
+                              {percentage(manager.passRate)}
+                            </td>
+                            <td className="text-right tabular-nums">
+                              {percentage(
+                                data.managerChecks[manager.id]?.accuracy ??
+                                  null,
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            ) : (
+              <DashboardTrend dates={data.summary.dates} />
+            )}
+          </div>
         </>
       )}
-    </>
+    </div>
   );
 }

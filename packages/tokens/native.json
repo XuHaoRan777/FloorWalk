@@ -10,9 +10,9 @@
     }
   },
   "radius": {
-    "control": 6,
-    "card": 8,
-    "sheet": 16
+    "control": 5,
+    "card": 7,
+    "sheet": 8
   },
   "space": {
     "unit": 4,

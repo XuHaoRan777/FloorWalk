@@ -27,10 +27,15 @@ export function ConfirmDeleteDialog({
       onOpenChange={(next) => !busy && onOpenChange(next)}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
+        <Dialog.Overlay
+          data-radix-dialog-overlay=""
+          className="fixed inset-0 z-50 bg-overlay data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:duration-100 data-[state=open]:duration-100"
+        />
         <Dialog.Content
           role="alertdialog"
+          data-radix-dialog-content=""
           className="fixed top-1/2 left-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-lg border bg-background p-6 shadow-lg"
+          data-slot="confirm-delete-content"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             cancel.current?.focus();

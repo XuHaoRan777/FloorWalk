@@ -6,6 +6,9 @@ const evidenceDirectory = process.env.FW040_EVIDENCE_DIR
   ? path.resolve(process.env.FW040_EVIDENCE_DIR)
   : path.resolve('tests/web-results/fw040-responsive');
 const widths = (process.env.FW040_WIDTHS ?? '768,1440').split(',').map(Number);
+const baselineDirectory = process.env.FW041_EVIDENCE_DIR
+  ? path.resolve(process.env.FW041_EVIDENCE_DIR)
+  : null;
 
 type Observation = {
   screen: string;
@@ -98,6 +101,32 @@ async function inspectScreen(
       { screen, width },
     );
     observations.push(observation);
+    if (screen === 'dashboard-sites' && width === 1440) {
+      const rows = page
+        .getByRole('region', { name: '门店统计' })
+        .locator('tbody tr');
+      await expect(rows).toHaveCount(12);
+      const lastRow = await rows.last().boundingBox();
+      expect(lastRow, '第 12 家门店应有可见位置').not.toBeNull();
+      expect(
+        lastRow!.y + lastRow!.height,
+        '1440 × 900 首屏应完整显示 12 家门店',
+      ).toBeLessThanOrEqual(900);
+    }
+    if (screen === 'templates') {
+      const saveButton = page.getByRole('button', {
+        name: '保存修改',
+        exact: true,
+      });
+      await expect(saveButton).toBeVisible();
+      const saveBounds = await saveButton.boundingBox();
+      expect(saveBounds, '模板保存操作应有可见位置').not.toBeNull();
+      expect(
+        saveBounds!.y,
+        `${width}px 首屏应显示保存操作`,
+      ).toBeGreaterThanOrEqual(0);
+      expect(saveBounds!.y + saveBounds!.height).toBeLessThanOrEqual(900);
+    }
     if (screen === 'users') {
       const firstColumnSticky = await page.evaluate(() => {
         const table = document.querySelector('.fw-users-table');
@@ -125,27 +154,65 @@ async function inspectScreen(
       observation.firstColumnSticky = firstColumnSticky;
       expect(firstColumnSticky, `账号表 ${width}px 首列应固定`).toBe(true);
     }
-    await page.screenshot({
-      path: path.join(evidenceDirectory, `${screen}-${width}.png`),
-      fullPage: true,
-      animations: 'disabled',
-    });
+    if (baselineDirectory && width === 1440) {
+      await page.screenshot({
+        path: path.join(baselineDirectory, `${screen}.png`),
+        fullPage: true,
+        animations: 'disabled',
+      });
+    } else if (!baselineDirectory) {
+      await page.screenshot({
+        path: path.join(evidenceDirectory, `${screen}-${width}.png`),
+        fullPage: true,
+        animations: 'disabled',
+      });
+      if (screen === 'dashboard-sites' || screen === 'templates') {
+        await page.screenshot({
+          path: path.join(evidenceDirectory, `${screen}-${width}-viewport.png`),
+          fullPage: false,
+          animations: 'disabled',
+        });
+      }
+    }
   }
 }
 
-test('FW-040 AC-05/08 15 个 Web 页面状态响应式检查与截图', async ({ page }) => {
+test('FW-040 AC-05/08 与 FW-041 AC-07 Web 页面宽度和改版前截图', async ({
+  page,
+}) => {
   await mkdir(evidenceDirectory, { recursive: true });
+  if (baselineDirectory) await mkdir(baselineDirectory, { recursive: true });
   const observations: Observation[] = [];
 
   await page.goto('/');
   await expect(page.getByLabel('登录名')).toBeVisible();
   await inspectScreen(page, 'login', observations);
 
+  await page.goto('/forgot-password');
+  await expect(
+    page.getByRole('heading', { name: '找回管理员密码' }),
+  ).toBeVisible();
+  await inspectScreen(page, 'forgot-password', observations);
+
+  await page.goto('/change-password');
+  await expect(page.getByRole('heading', { name: '修改密码' })).toBeVisible();
+  await inspectScreen(page, 'change-password', observations);
+
   await page.goto('/register');
   await expect(page.locator('h1').first()).toBeVisible();
   await inspectScreen(page, 'register', observations);
 
+  await page.goto('/_design-samples');
+  await expect(page.getByRole('heading', { name: '审核队列' })).toBeVisible();
+  await inspectScreen(page, 'design-samples', observations);
+
+  await page.goto('/_fw041_not_found');
+  await expect(page.getByRole('heading', { name: '页面不存在' })).toBeVisible();
+  await inspectScreen(page, 'not-found', observations);
+
   await loginAsAdmin(page);
+  await expect(page.getByText('正在加载看板…')).toHaveCount(0);
+  await inspectScreen(page, 'console-default', observations);
 
   await openSection(page, '审核队列');
   await expect(page.getByText('正在加载审核队列…')).toHaveCount(0);
@@ -215,9 +282,9 @@ test('FW-040 AC-05/08 15 个 Web 页面状态响应式检查与截图', async ({
   await inspectScreen(page, 'notifications', observations);
 
   console.log(
-    `FW-040 responsive observations\n${JSON.stringify(observations, null, 2)}`,
+    `FW-040/FW-041 responsive observations\n${JSON.stringify(observations, null, 2)}`,
   );
-  expect(observations).toHaveLength(15 * widths.length);
+  expect(observations).toHaveLength(20 * widths.length);
   expect(
     observations.filter((observation) => observation.documentOverflow > 0),
   ).toEqual([]);

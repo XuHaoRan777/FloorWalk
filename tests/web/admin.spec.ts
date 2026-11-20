@@ -167,7 +167,46 @@ test('FW-026 模板检查项编辑与排序匹配 API', async ({ page }) => {
     has: page.getByLabel('检查项 1 标题'),
   });
   await firstItem.getByLabel('严重项').check();
+  await page.evaluate(() => {
+    const transitionDocument = document as Document & {
+      resumeTemplateItemsTransition?: () => void;
+    };
+    const startViewTransition = document.startViewTransition.bind(document);
+    const updateReady = new Promise<void>((resolve) => {
+      transitionDocument.resumeTemplateItemsTransition = () => {
+        document.startViewTransition = startViewTransition;
+        delete transitionDocument.resumeTemplateItemsTransition;
+        resolve();
+      };
+    });
+    document.startViewTransition = (update) =>
+      startViewTransition(async () => {
+        await updateReady;
+        if (typeof update === 'function') await update();
+      });
+  });
   await page.getByRole('button', { name: '添加检查项' }).click();
+  await expect(page.getByLabel('检查项 1 标题')).toBeDisabled();
+  await expect(page.getByLabel('检查项 2 标题')).toHaveCount(0);
+  for (const name of ['添加检查项', '新建模板', '创建模板', '刷新']) {
+    await expect(
+      page.getByRole('button', { name, exact: true }),
+    ).toBeDisabled();
+  }
+  for (const template of initialTemplates) {
+    await expect(
+      page.getByRole('button', {
+        name: `${template.name} ${template.items.length} 项`,
+        exact: true,
+      }),
+    ).toBeDisabled();
+  }
+  await page.evaluate(() => {
+    const transitionDocument = document as Document & {
+      resumeTemplateItemsTransition?: () => void;
+    };
+    transitionDocument.resumeTemplateItemsTransition?.();
+  });
   await page.getByLabel('检查项 2 标题').fill('新顺序第二项');
   await page.getByRole('button', { name: '检查项 2 上移' }).click();
   await expect(page.getByLabel('检查项 1 标题')).toHaveValue('新顺序第二项');
