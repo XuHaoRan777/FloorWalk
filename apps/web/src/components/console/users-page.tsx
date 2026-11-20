@@ -132,7 +132,7 @@ export function UsersPage() {
   };
 
   return (
-    <section className="space-y-6">
+    <section className="min-w-0 space-y-6">
       <div className="fw-page-heading flex-wrap">
         <div>
           <p className="fw-page-eyebrow">人员与权限</p>
@@ -146,12 +146,12 @@ export function UsersPage() {
       <ErrorBanner message={error} />
       <form
         onSubmit={create}
-        className="grid gap-3 border-y py-4 lg:grid-cols-2"
+        className="grid min-w-0 gap-3 rounded-md border bg-card p-4 shadow-xs lg:grid-cols-2"
       >
         <label className="grid gap-1.5 text-sm font-medium">
           昵称
           <input
-            className="h-9 rounded-md border bg-background px-3 font-normal"
+            className="h-9 min-w-0 rounded-md border bg-background px-3 font-normal"
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
             required
@@ -160,7 +160,7 @@ export function UsersPage() {
         <label className="grid gap-1.5 text-sm font-medium">
           登录名（手机号或邮箱）
           <input
-            className="h-9 rounded-md border bg-background px-3 font-normal"
+            className="h-9 min-w-0 rounded-md border bg-background px-3 font-normal"
             value={loginName}
             onChange={(event) => setLoginName(event.target.value)}
             required
@@ -169,7 +169,7 @@ export function UsersPage() {
         <label className="grid gap-1.5 text-sm font-medium">
           门店
           <select
-            className="h-9 rounded-md border bg-background px-3 font-normal"
+            className="h-9 min-w-0 rounded-md border bg-background px-3 font-normal"
             value={siteId}
             onChange={(event) => setSiteId(event.target.value)}
             required
@@ -184,7 +184,7 @@ export function UsersPage() {
         <label className="grid gap-1.5 text-sm font-medium">
           初始密码
           <input
-            className="h-9 rounded-md border bg-background px-3 font-normal"
+            className="h-9 min-w-0 rounded-md border bg-background px-3 font-normal"
             type="password"
             minLength={8}
             autoComplete="new-password"
@@ -211,7 +211,7 @@ export function UsersPage() {
           <p>暂无账号</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="min-w-0 overflow-x-auto rounded-md border bg-card shadow-xs">
           <table className="fw-data-table fw-users-table min-w-[48rem]">
             <thead>
               <tr>
@@ -235,16 +235,22 @@ export function UsersPage() {
                         onChange={(event) => setEditingName(event.target.value)}
                       />
                     ) : (
-                      user.displayName
+                      <span className="block max-w-48 break-all">
+                        {user.displayName}
+                      </span>
                     )}
                   </td>
-                  <td>{user.loginName}</td>
+                  <td>
+                    <span className="block max-w-56 break-all">
+                      {user.loginName}
+                    </span>
+                  </td>
                   <td>{roleLabel[user.role]}</td>
                   <td>
                     {editingId === user.id && user.role === 'store_manager' ? (
                       <select
                         aria-label={`门店 ${user.loginName}`}
-                        className="h-8 rounded-md border bg-background px-2"
+                        className="h-8 min-w-0 rounded-md border bg-background px-2"
                         value={editingSiteId}
                         onChange={(event) =>
                           setEditingSiteId(event.target.value)
@@ -257,22 +263,33 @@ export function UsersPage() {
                         ))}
                       </select>
                     ) : user.site ? (
-                      `${user.site.code} · ${user.site.name}`
+                      <span className="block max-w-56 break-all">
+                        {user.site.code} · {user.site.name}
+                      </span>
                     ) : (
                       '—'
                     )}
                   </td>
                   <td>
-                    {user.disabled ? (
-                      <span className="text-destructive">已停用</span>
-                    ) : user.mustChangePassword ? (
-                      '待首次改密'
-                    ) : (
-                      '启用'
-                    )}
+                    <span
+                      className="fw-dashboard-status whitespace-nowrap"
+                      data-status={
+                        user.disabled
+                          ? 'failed'
+                          : user.mustChangePassword
+                            ? 'rework'
+                            : 'passed'
+                      }
+                    >
+                      {user.disabled
+                        ? '已停用'
+                        : user.mustChangePassword
+                          ? '待首次改密'
+                          : '启用'}
+                    </span>
                   </td>
                   <td>
-                    <div className="flex justify-end gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
                       {editingId === user.id ? (
                         <>
                           <Button

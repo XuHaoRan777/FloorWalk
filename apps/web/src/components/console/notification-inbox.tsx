@@ -179,19 +179,25 @@ export function NotificationInbox({
                 <li key={notification.id}>
                   <button
                     type="button"
-                    className="flex w-full gap-3 py-4 text-left hover:bg-muted/60 disabled:opacity-60"
+                    className="flex w-full min-w-0 gap-3 px-2 py-4 text-left hover:bg-muted/60 disabled:opacity-60"
                     disabled={busy}
                     onClick={() => void openNotification(notification)}
                   >
-                    <span
-                      className={`mt-1 size-2 shrink-0 rounded-full ${notification.readAt ? 'bg-muted' : 'bg-primary'}`}
-                      aria-hidden="true"
-                    />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium">
-                        {labels[notification.type]}
+                      <span className="flex min-w-0 items-start justify-between gap-3">
+                        <span className="min-w-0 break-all text-sm font-medium">
+                          {labels[notification.type]}
+                        </span>
+                        <span
+                          className="fw-dashboard-status shrink-0 whitespace-nowrap"
+                          data-status={
+                            notification.readAt ? 'draft' : 'submitted'
+                          }
+                        >
+                          {notification.readAt ? '已读' : '未读'}
+                        </span>
                       </span>
-                      <span className="mt-1 block text-sm text-muted-foreground">
+                      <span className="mt-1 block break-all text-sm text-muted-foreground">
                         {describe(notification)}
                       </span>
                       <time

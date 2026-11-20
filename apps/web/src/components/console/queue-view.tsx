@@ -8,7 +8,7 @@ import type { TaskReview } from '@libs/shared';
 import { Button } from '@/components/ui/button';
 import { ErrorBanner } from './error-banner';
 import { formatTime } from './helpers';
-import { StatusPill } from './status-pill';
+import { statusLabel } from './labels';
 
 export function QueueView({
   canReview,
@@ -53,16 +53,22 @@ export function QueueView({
             )
             .join('；');
 
+          const status =
+            task.inspectionStatus ??
+            (task.status === 'overdue' ? 'failed' : 'draft');
+
           return (
             <button
               type="button"
               key={task.id}
               onClick={() => onSelect(task)}
-              className="fw-list-row grid w-full gap-3 py-4 text-left transition-colors hover:bg-raised sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
+              className="fw-list-row grid min-w-0 w-full gap-3 py-4 text-left transition-colors hover:bg-raised xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:items-center"
             >
               <span className="min-w-0">
-                <span className="block font-medium">{task.site.name}</span>
-                <span className="mt-1 block text-xs text-muted-foreground">
+                <span className="block break-all font-medium">
+                  {task.site.name}
+                </span>
+                <span className="mt-1 block break-all text-xs text-muted-foreground">
                   <span className="font-mono">{task.site.code}</span>
                   {' · '}
                   {task.templateName}
@@ -73,23 +79,23 @@ export function QueueView({
                     : ` · 判定于 ${formatTime(task.decidedAt)}`}
                 </span>
                 {manual && (
-                  <span className="mt-2 block line-clamp-2 text-sm text-muted-foreground">
+                  <span className="mt-2 block break-all text-sm text-muted-foreground">
                     理由：{reasons}
                   </span>
                 )}
               </span>
-              <span className="flex items-center gap-3 text-sm">
-                <span>
+              <span className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+                <span className="whitespace-nowrap">
                   {task.score === null ? '待判定' : `${task.score} 分`}
                 </span>
-                <StatusPill
-                  status={
-                    task.inspectionStatus ??
-                    (task.status === 'overdue' ? 'failed' : 'draft')
-                  }
-                />
+                <span
+                  className="fw-dashboard-status whitespace-nowrap"
+                  data-status={status}
+                >
+                  {statusLabel[status]}
+                </span>
               </span>
-              <span className="inline-flex items-center gap-1 text-sm text-accent">
+              <span className="inline-flex items-center gap-1 text-sm text-accent xl:justify-self-end">
                 {canReview ? '查看任务' : '查看详情'}
                 <ArrowRight className="size-4" aria-hidden="true" />
               </span>
@@ -101,7 +107,7 @@ export function QueueView({
   }
 
   return (
-    <>
+    <div className="fw-dashboard min-w-0">
       <div className="fw-page-heading">
         <div>
           <p className="fw-page-eyebrow">待人工任务与今日判定</p>
@@ -130,7 +136,10 @@ export function QueueView({
         </div>
       ) : (
         <div className="space-y-8">
-          <section className="space-y-3" aria-labelledby="manual-queue-heading">
+          <section
+            className="min-w-0 space-y-3"
+            aria-labelledby="manual-queue-heading"
+          >
             <div className="flex items-center justify-between gap-3">
               <h2 id="manual-queue-heading" className="fw-section-title">
                 待人工
@@ -142,7 +151,7 @@ export function QueueView({
             {renderTasks(manualQueue, true)}
           </section>
           <section
-            className="space-y-3"
+            className="min-w-0 space-y-3"
             aria-labelledby="decided-queue-heading"
           >
             <h2 id="decided-queue-heading" className="fw-section-title">
@@ -152,6 +161,6 @@ export function QueueView({
           </section>
         </div>
       )}
-    </>
+    </div>
   );
 }

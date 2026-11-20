@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays, RotateCcw } from 'lucide-react';
+import {
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  RotateCcw,
+} from 'lucide-react';
 import type { AdminTodayResponse, TaskReview } from '@libs/shared';
 import { getAdminToday, getTaskReview } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -12,6 +18,13 @@ const taskStatusLabel = {
   submitted: '已提交',
   overdue: '逾期',
 };
+
+const taskStatusTone = {
+  not_started: 'draft',
+  in_progress: 'in_review',
+  submitted: 'submitted',
+  overdue: 'failed',
+} as const;
 
 export function TodayView({
   manualQueue,
@@ -65,7 +78,7 @@ export function TodayView({
       hour12: false,
     }).format(new Date(value));
   return (
-    <>
+    <div className="fw-dashboard min-w-0">
       <div className="fw-page-heading">
         <div>
           <p className="fw-page-eyebrow">{data?.date ?? '今日任务'}</p>
@@ -94,20 +107,45 @@ export function TodayView({
           <>
             <dl
               aria-label="今日汇总"
-              className="mb-6 grid gap-4 sm:grid-cols-3"
+              className="grid min-w-0 grid-cols-2 gap-2 xl:grid-cols-3"
             >
               {(
                 [
-                  ['应完成', data.summary.expected],
-                  ['已完成', data.summary.completed],
-                  ['逾期', data.summary.overdue],
+                  {
+                    label: '应完成',
+                    value: data.summary.expected,
+                    detail: '各店今日排定任务',
+                    icon: ClipboardList,
+                    tone: 'primary',
+                  },
+                  {
+                    label: '已完成',
+                    value: data.summary.completed,
+                    detail: '按时交齐的任务',
+                    icon: CheckCircle2,
+                    tone: 'success',
+                  },
+                  {
+                    label: '逾期',
+                    value: data.summary.overdue,
+                    detail: '已过截止时间',
+                    icon: Clock3,
+                    tone: 'warning',
+                  },
                 ] as const
-              ).map(([label, value]) => (
-                <div key={label} className="rounded-md border bg-card p-4">
-                  <dt className="text-sm text-muted-foreground">{label}</dt>
-                  <dd className="mt-2 text-2xl font-semibold tabular-nums">
-                    {value}
-                  </dd>
+              ).map(({ label, value, detail, icon: Icon, tone }) => (
+                <div
+                  key={label}
+                  className={`fw-dashboard-metric fw-dashboard-metric--${tone}`}
+                >
+                  <dt>
+                    <span className="fw-dashboard-metric__icon">
+                      <Icon aria-hidden="true" />
+                    </span>
+                    <span>{label}</span>
+                  </dt>
+                  <dd>{value}</dd>
+                  <span className="fw-dashboard-metric__detail">{detail}</span>
                 </div>
               ))}
             </dl>
@@ -116,15 +154,18 @@ export function TodayView({
               {warnings.length === 0 ? (
                 <p className="text-sm text-muted-foreground">今日暂无警告</p>
               ) : (
-                <ul className="divide-y rounded-md border">
+                <ul className="divide-y overflow-hidden rounded-md border bg-card">
                   {warnings.map((task) => (
                     <li
                       key={task.id}
-                      className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm"
+                      className="flex min-w-0 flex-wrap items-center justify-between gap-2 p-3 text-sm"
                     >
-                      <span>
+                      <span className="min-w-0 flex-1 break-all">
                         {task.site.name} · {task.templateName} ·{' '}
-                        <strong className="text-destructive">
+                        <strong
+                          className="fw-dashboard-status"
+                          data-status="failed"
+                        >
                           {[
                             task.criticalFailure && '严重项不合格',
                             task.status === 'overdue' && '任务逾期',
@@ -146,7 +187,7 @@ export function TodayView({
                 </ul>
               )}
             </section>
-            <section aria-label="各店今日任务">
+            <section aria-label="各店今日任务" className="min-w-0">
               <h2 className="fw-section-title mb-3">各店今日任务</h2>
               {data.tasks.length === 0 ? (
                 <div className="fw-state">
@@ -154,40 +195,53 @@ export function TodayView({
                   <p>今日无任务</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="fw-data-table">
-                    <thead>
-                      <tr>
-                        <th>门店</th>
-                        <th>模板</th>
-                        <th>时间窗</th>
-                        <th>状态</th>
-                        <th className="text-right">分数</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.tasks.map((task) => (
-                        <tr key={task.id}>
-                          <td>
-                            {task.site.name}
-                            {!task.site.active && (
-                              <span className="ml-2 text-muted-foreground">
-                                已停用
-                              </span>
-                            )}
-                          </td>
-                          <td>{task.templateName}</td>
-                          <td className="whitespace-nowrap">
-                            {time(task.startsAt)}–{time(task.dueAt)}
-                          </td>
-                          <td>{taskStatusLabel[task.status]}</td>
-                          <td className="text-right tabular-nums">
-                            {task.score === null ? '—' : `${task.score} 分`}
-                          </td>
+                <div className="fw-dashboard-table min-w-0">
+                  <div className="overflow-x-auto">
+                    <table className="fw-data-table min-w-[40rem]">
+                      <thead>
+                        <tr>
+                          <th>门店</th>
+                          <th>模板</th>
+                          <th>时间窗</th>
+                          <th>状态</th>
+                          <th className="text-right">分数</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {data.tasks.map((task) => (
+                          <tr key={task.id}>
+                            <td className="max-w-56 break-all">
+                              <span className="font-medium">
+                                {task.site.name}
+                              </span>
+                              {!task.site.active && (
+                                <span className="ml-2 text-muted-foreground">
+                                  已停用
+                                </span>
+                              )}
+                            </td>
+                            <td className="max-w-56 break-all">
+                              {task.templateName}
+                            </td>
+                            <td className="whitespace-nowrap">
+                              {time(task.startsAt)}–{time(task.dueAt)}
+                            </td>
+                            <td>
+                              <span
+                                className="fw-dashboard-status whitespace-nowrap"
+                                data-status={taskStatusTone[task.status]}
+                              >
+                                {taskStatusLabel[task.status]}
+                              </span>
+                            </td>
+                            <td className="text-right tabular-nums">
+                              {task.score === null ? '—' : `${task.score} 分`}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </section>
@@ -204,13 +258,13 @@ export function TodayView({
         ) : manualQueue.length === 0 ? (
           <p className="text-sm text-muted-foreground">暂无待人工审核任务</p>
         ) : (
-          <ul className="divide-y rounded-md border">
+          <ul className="divide-y overflow-hidden rounded-md border bg-card">
             {manualQueue.map((task) => (
               <li
                 key={task.id}
-                className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm"
+                className="flex min-w-0 flex-wrap items-center justify-between gap-2 p-3 text-sm"
               >
-                <span>
+                <span className="min-w-0 flex-1 break-all">
                   {task.site.name} · {task.templateName} · {task.taskDate}
                 </span>
                 <Button
@@ -225,6 +279,6 @@ export function TodayView({
           </ul>
         )}
       </section>
-    </>
+    </div>
   );
 }

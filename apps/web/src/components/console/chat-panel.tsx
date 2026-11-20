@@ -235,7 +235,7 @@ export function ChatPanel({
       <ol
         ref={list}
         aria-label="聊天消息"
-        className="max-h-80 space-y-3 overflow-y-auto border-y border-rule py-3"
+        className="max-h-80 min-w-0 space-y-3 overflow-y-auto border-y border-rule py-3"
       >
         {loading && (
           <li className="fw-state min-h-16 border-0 py-2" role="status">
@@ -253,14 +253,16 @@ export function ChatPanel({
           <li
             key={message.id}
             data-message-id={message.id}
-            className="border-l-2 pl-3 text-sm"
+            className="min-w-0 border-l-2 pl-3 text-sm"
           >
-            <p className="font-medium">
+            <p className="break-all font-medium">
               {message.displayName} · {roleLabels[message.role]} ·{' '}
               {formatTime(message.createdAt)}
             </p>
             {message.body && (
-              <p className="mt-1 whitespace-pre-wrap">{message.body}</p>
+              <p className="mt-1 whitespace-pre-wrap break-all">
+                {message.body}
+              </p>
             )}
             {message.imageUrl && (
               <img

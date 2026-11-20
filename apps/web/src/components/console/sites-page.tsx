@@ -103,7 +103,10 @@ export function SitesPage() {
         </Button>
       </div>
       <ErrorBanner message={error} />
-      <form onSubmit={create} className="fw-site-form grid gap-3 border-y py-4">
+      <form
+        onSubmit={create}
+        className="fw-site-form grid min-w-0 gap-3 rounded-md border bg-card p-4 shadow-xs"
+      >
         <label className="grid gap-1.5 text-sm font-medium">
           门店编码
           <input
@@ -138,7 +141,7 @@ export function SitesPage() {
           <p>暂无门店</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="min-w-0 overflow-x-auto rounded-md border bg-card shadow-xs">
           <table className="fw-data-table min-w-[42rem]">
             <thead>
               <tr>
@@ -152,7 +155,9 @@ export function SitesPage() {
             <tbody>
               {sites.map((site) => (
                 <tr key={site.id}>
-                  <td className="font-mono text-xs">{site.code}</td>
+                  <td className="max-w-32 break-all font-mono text-xs">
+                    {site.code}
+                  </td>
                   <td>
                     {editingId === site.id ? (
                       <input
@@ -162,27 +167,32 @@ export function SitesPage() {
                         onChange={(event) => setEditingName(event.target.value)}
                       />
                     ) : (
-                      <span className="font-medium">{site.name}</span>
-                    )}
-                  </td>
-                  <td>
-                    {site.active ? (
-                      <span className="text-success">启用</span>
-                    ) : (
-                      <span className="font-medium text-destructive">
-                        已停用
+                      <span className="block max-w-64 break-all font-medium">
+                        {site.name}
                       </span>
                     )}
                   </td>
                   <td>
-                    {site.storeManagers.length > 0
-                      ? site.storeManagers
+                    <span
+                      className="fw-dashboard-status whitespace-nowrap"
+                      data-status={site.active ? 'passed' : 'failed'}
+                    >
+                      {site.active ? '启用' : '已停用'}
+                    </span>
+                  </td>
+                  <td className="max-w-64">
+                    {site.storeManagers.length > 0 ? (
+                      <span className="block break-all">
+                        {site.storeManagers
                           .map((manager) => manager.displayName)
-                          .join('、')
-                      : '暂无店长'}
+                          .join('、')}
+                      </span>
+                    ) : (
+                      '暂无店长'
+                    )}
                   </td>
                   <td>
-                    <div className="flex justify-end gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
                       {editingId === site.id ? (
                         <>
                           <Button

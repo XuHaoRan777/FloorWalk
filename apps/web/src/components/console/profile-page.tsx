@@ -104,7 +104,7 @@ export function ProfilePage({
 
   return (
     <section
-      className="max-w-2xl space-y-6"
+      className="max-w-2xl min-w-0 space-y-6"
       aria-busy={loading || busy !== null}
     >
       <div className="fw-page-heading">
@@ -115,7 +115,7 @@ export function ProfilePage({
       </div>
       <ErrorBanner message={error} />
       {message && (
-        <p role="status" className="text-sm text-muted-foreground">
+        <p role="status" className="text-sm text-success">
           {message}
         </p>
       )}
@@ -125,7 +125,7 @@ export function ProfilePage({
         </p>
       ) : user ? (
         <>
-          <div className="flex flex-wrap items-center gap-5 border-y py-5">
+          <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-4 border-y py-5">
             {user.avatarUrl ? (
               <img
                 src={user.avatarUrl}
@@ -141,7 +141,7 @@ export function ProfilePage({
                 <UserRound className="size-8" aria-hidden="true" />
               </div>
             )}
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <input
                 ref={imageInput}
                 type="file"
@@ -181,11 +181,14 @@ export function ProfilePage({
             </div>
           </div>
           {user.role === 'admin' ? (
-            <form onSubmit={saveName} className="grid gap-3">
+            <form
+              onSubmit={saveName}
+              className="grid min-w-0 gap-3 rounded-md border bg-card p-4 shadow-xs"
+            >
               <label className="grid gap-1.5 text-sm font-medium">
                 昵称
                 <input
-                  className="h-10 rounded-md border bg-background px-3 font-normal"
+                  className="h-10 min-w-0 rounded-md border bg-background px-3 font-normal"
                   value={displayName}
                   onChange={(event) => {
                     setDisplayName(event.target.value);
@@ -221,24 +224,24 @@ export function ProfilePage({
               </Button>
             </form>
           ) : (
-            <dl className="grid gap-2 text-sm">
+            <dl className="grid min-w-0 gap-2 text-sm">
               <dt className="text-muted-foreground">昵称</dt>
-              <dd className="break-words">{user.displayName}</dd>
+              <dd className="break-all">{user.displayName}</dd>
             </dl>
           )}
-          <dl className="grid gap-4 border-y py-5 text-sm sm:grid-cols-2">
-            <div className="space-y-1">
+          <dl className="grid min-w-0 gap-4 border-y py-5 text-sm sm:grid-cols-2">
+            <div className="min-w-0 space-y-1">
               <dt className="text-muted-foreground">登录名（只读）</dt>
               <dd className="break-all">{user.loginName}</dd>
             </div>
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               <dt className="text-muted-foreground">角色</dt>
               <dd>{roleLabel[user.role]}</dd>
             </div>
             {user.role === 'store_manager' && (
-              <div className="space-y-1 sm:col-span-2">
+              <div className="min-w-0 space-y-1 sm:col-span-2">
                 <dt className="text-muted-foreground">门店</dt>
-                <dd>
+                <dd className="break-all">
                   {user.site
                     ? `${user.site.code} · ${user.site.name}`
                     : '未分配门店'}
