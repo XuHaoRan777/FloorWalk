@@ -11,15 +11,25 @@ import { DesignSamplesPage } from './pages/design-samples';
 import { RegisterPage } from './pages/register';
 import { ChangePasswordPage } from './pages/change-password';
 import { ForgotPasswordPage } from './pages/forgot-password';
+import { Button } from './components/ui/button';
+import { ArrowRight, FileQuestion } from 'lucide-react';
 
 const rootRoute = createRootRoute({
   component: Outlet,
   notFoundComponent: () => (
-    <main className="mx-auto max-w-3xl space-y-4 p-8">
-      <h1 className="text-balance text-2xl font-semibold">页面不存在</h1>
-      <Link to="/" className="underline">
-        返回首页
-      </Link>
+    <main className="fw-not-found">
+      <section className="fw-not-found__content">
+        <p className="fw-not-found__code">404</p>
+        <FileQuestion className="fw-not-found__icon" aria-hidden="true" />
+        <h1>页面不存在</h1>
+        <p>检查地址，或返回工作台继续管理门店巡检。</p>
+        <Button asChild>
+          <Link to="/">
+            返回首页
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </Button>
+      </section>
     </main>
   ),
 });

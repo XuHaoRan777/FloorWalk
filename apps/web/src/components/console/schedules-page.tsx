@@ -190,7 +190,7 @@ export function SchedulesPage() {
                 <label className="grid gap-1.5 text-sm font-medium">
                   方案名称
                   <input
-                    className="h-9 rounded-md border bg-background px-3 font-normal"
+                    className="h-9 min-w-0 rounded-md border bg-background px-3 font-normal"
                     required
                     value={name}
                     onChange={(event) => setName(event.target.value)}

@@ -126,7 +126,7 @@ export function AiStandardsPage() {
                   disabled={busy}
                   aria-pressed={selectedId === standard.id && !isNew}
                   onClick={() => select(standard)}
-                  className="w-full px-3 py-3 text-left font-medium hover:bg-muted/50 aria-pressed:bg-muted/70 disabled:opacity-60"
+                  className="min-w-0 w-full break-words px-3 py-3 text-left font-medium hover:bg-muted/50 aria-pressed:bg-muted/70 disabled:opacity-60"
                 >
                   {standard.name}
                 </button>
@@ -148,7 +148,7 @@ export function AiStandardsPage() {
                     required
                     aria-invalid={Boolean(error && !name.trim())}
                     aria-describedby={error ? 'standard-error' : undefined}
-                    className="h-9 rounded-md border bg-background px-3 font-normal"
+                    className="h-9 min-w-0 rounded-md border bg-background px-3 font-normal"
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                   />
@@ -160,7 +160,7 @@ export function AiStandardsPage() {
                     required
                     maxLength={4000}
                     aria-describedby="standard-prompt-help"
-                    className="w-full rounded-md border bg-background px-3 py-2 font-normal"
+                    className="min-w-0 w-full rounded-md border bg-background px-3 py-2 font-normal"
                     value={prompt}
                     onChange={(event) => setPrompt(event.target.value)}
                   />

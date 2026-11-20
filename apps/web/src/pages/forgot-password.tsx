@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
+import { AuthFrame } from '@/components/layout/auth-frame';
 import { ErrorBanner } from '@/components/console/error-banner';
 import { getErrorMessage } from '@/components/console/helpers';
 import {
@@ -101,137 +102,140 @@ export function ForgotPasswordPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-lg space-y-6 p-6 sm:p-8">
-      <div className="fw-page-heading">
-        <h1>找回管理员密码</h1>
-        <p>通过管理员邮箱验证码设置新密码。</p>
-      </div>
-      <ErrorBanner message={error} />
+    <AuthFrame
+      title="找回管理员密码"
+      description={<p>通过管理员邮箱验证码设置新密码。</p>}
+    >
+      <div className="grid gap-4">
+        <ErrorBanner message={error} />
 
-      {step === 'request' && (
-        <form onSubmit={requestCode} className="grid gap-4">
-          <label className="grid gap-1.5 text-sm font-medium">
-            管理员邮箱
-            <input
-              className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              type="email"
-              autoComplete="username"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-            />
-          </label>
-          <Button type="submit" disabled={busy}>
-            {busy ? '正在发送…' : '发送验证码'}
-          </Button>
-        </form>
-      )}
-
-      {step === 'verify' && (
-        <form onSubmit={verifyCode} className="grid gap-4">
-          <p role="status" className="text-sm text-muted-foreground">
-            {notice}
-          </p>
-          <label className="grid gap-1.5 text-sm font-medium">
-            验证码
-            <input
-              className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              autoComplete="one-time-code"
-              inputMode="numeric"
-              pattern="[0-9]{6}"
-              maxLength={6}
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              required
-            />
-          </label>
-          <Button type="submit" disabled={busy}>
-            {busy ? '正在验证…' : '验证并继续'}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy || coolingDown}
-            onClick={() => {
-              setStep('request');
-              setCode('');
-            }}
-          >
-            {coolingDown ? `${cooldown} 秒后可重新发送` : '更换邮箱或重新发送'}
-          </Button>
-        </form>
-      )}
-
-      {step === 'reset' && (
-        <form onSubmit={changePassword} className="grid gap-4">
-          {organizations.length > 1 ? (
+        {step === 'request' && (
+          <form onSubmit={requestCode} className="grid gap-4">
             <label className="grid gap-1.5 text-sm font-medium">
-              选择商家
-              <select
-                className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                value={orgId}
-                onChange={(event) => setOrgId(event.target.value)}
+              管理员邮箱
+              <input
+                className="h-10 min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
                 required
-              >
-                <option value="">请选择商家</option>
-                {organizations.map((organization) => (
-                  <option key={organization.id} value={organization.id}>
-                    {organization.name}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              商家：{organizations[0]?.name}
-            </p>
-          )}
-          <label className="grid gap-1.5 text-sm font-medium">
-            新密码
-            <input
-              className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            确认新密码
-            <input
-              className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              required
-            />
-          </label>
-          <Button type="submit" disabled={busy || !orgId}>
-            {busy ? '正在保存…' : '设置新密码'}
-          </Button>
-        </form>
-      )}
+            <Button type="submit" disabled={busy}>
+              {busy ? '正在发送…' : '发送验证码'}
+            </Button>
+          </form>
+        )}
 
-      {step === 'done' && (
-        <div className="grid gap-4">
-          <p role="status" className="text-sm text-muted-foreground">
-            密码已更新，请使用新密码登录。
-          </p>
-          <Button asChild>
+        {step === 'verify' && (
+          <form onSubmit={verifyCode} className="grid gap-4">
+            <p role="status" className="text-sm text-muted-foreground">
+              {notice}
+            </p>
+            <label className="grid gap-1.5 text-sm font-medium">
+              验证码
+              <input
+                className="h-10 min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                autoComplete="one-time-code"
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                required
+              />
+            </label>
+            <Button type="submit" disabled={busy}>
+              {busy ? '正在验证…' : '验证并继续'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || coolingDown}
+              onClick={() => {
+                setStep('request');
+                setCode('');
+              }}
+            >
+              {coolingDown
+                ? `${cooldown} 秒后可重新发送`
+                : '更换邮箱或重新发送'}
+            </Button>
+          </form>
+        )}
+
+        {step === 'reset' && (
+          <form onSubmit={changePassword} className="grid gap-4">
+            {organizations.length > 1 ? (
+              <label className="grid gap-1.5 text-sm font-medium">
+                选择商家
+                <select
+                  className="h-10 min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={orgId}
+                  onChange={(event) => setOrgId(event.target.value)}
+                  required
+                >
+                  <option value="">请选择商家</option>
+                  {organizations.map((organization) => (
+                    <option key={organization.id} value={organization.id}>
+                      {organization.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                商家：{organizations[0]?.name}
+              </p>
+            )}
+            <label className="grid gap-1.5 text-sm font-medium">
+              新密码
+              <input
+                className="h-10 min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium">
+              确认新密码
+              <input
+                className="h-10 min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                required
+              />
+            </label>
+            <Button type="submit" disabled={busy || !orgId}>
+              {busy ? '正在保存…' : '设置新密码'}
+            </Button>
+          </form>
+        )}
+
+        {step === 'done' && (
+          <div className="grid gap-4">
+            <p role="status" className="text-sm text-muted-foreground">
+              密码已更新，请使用新密码登录。
+            </p>
+            <Button asChild>
+              <Link to="/">返回登录</Link>
+            </Button>
+          </div>
+        )}
+
+        {step !== 'done' && (
+          <Button variant="outline" asChild>
             <Link to="/">返回登录</Link>
           </Button>
-        </div>
-      )}
-
-      {step !== 'done' && (
-        <Button variant="outline" asChild>
-          <Link to="/">返回登录</Link>
-        </Button>
-      )}
-    </main>
+        )}
+      </div>
+    </AuthFrame>
   );
 }

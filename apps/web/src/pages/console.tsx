@@ -7,7 +7,6 @@ import {
   CalendarDays,
   CalendarRange,
   FileText,
-  House,
   LayoutDashboard,
   LogOut,
   UserRound,
@@ -232,14 +231,6 @@ export function ConsolePage() {
                 >
                   <UserRound aria-hidden="true" />
                   <span>我的</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link to="/">
-                    <House aria-hidden="true" />
-                    <span>返回登录</span>
-                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

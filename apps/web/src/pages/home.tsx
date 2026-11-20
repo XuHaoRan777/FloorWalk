@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { ArrowRight, CircleAlert, ShieldCheck } from 'lucide-react';
-import { APP_NAME } from '@libs/shared';
 import { Button } from '@/components/ui/button';
+import { AuthFrame } from '@/components/layout/auth-frame';
 import {
   ApiError,
   clearLegacySession,
@@ -92,118 +92,110 @@ export function HomePage() {
     );
 
   return (
-    <div className="fw-login">
-      <header className="fw-login__header">
-        <span className="fw-login__brand">{APP_NAME}</span>
-        <span className="fw-login__meta">门店巡检平台</span>
-      </header>
-      <main className="fw-login__body">
-        <div className="fw-login__intro">
-          <p className="fw-page-eyebrow">连锁门店运营</p>
-          <h1>让每一次巡检都有据可循。</h1>
+    <AuthFrame
+      title="登录工作台"
+      description={
+        <>
+          <p>让每一次巡检都有据可循。</p>
           <p>店长现场记录，商家管理员审核并掌握门店表现。</p>
-          <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <p className="mt-4 flex items-center gap-2">
             <ShieldCheck className="size-4" aria-hidden="true" />
             账号权限按角色分流
           </p>
-        </div>
-        <section className="fw-login__sheet" aria-labelledby="login-heading">
-          <div>
-            <h2 id="login-heading">登录工作台</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              使用登录名和密码继续。
-            </p>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">使用登录名和密码继续。</p>
+        <form className="grid gap-4" onSubmit={onSubmit}>
+          {error && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+            >
+              <CircleAlert
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden="true"
+              />
+              <span>{error}</span>
+            </div>
+          )}
+          <div className="grid gap-2">
+            <label htmlFor="email" className="text-sm font-medium">
+              登录名
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="text"
+              autoComplete="username"
+              required
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setOrganizations([]);
+                setOrgId('');
+              }}
+              className="h-10 min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:ring-2 focus-visible:ring-ring"
+            />
           </div>
-          <form className="mt-6 grid gap-4" onSubmit={onSubmit}>
-            {error && (
-              <div
-                role="alert"
-                className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+          <div className="grid gap-2">
+            <label htmlFor="password" className="text-sm font-medium">
+              密码
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setOrganizations([]);
+                setOrgId('');
+              }}
+              className="h-10 min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          {organizations.length > 0 && (
+            <label className="grid gap-2 text-sm font-medium">
+              选择商家
+              <select
+                required
+                value={orgId}
+                onChange={(event) => setOrgId(event.target.value)}
+                className="h-10 min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <CircleAlert
-                  className="mt-0.5 size-4 shrink-0"
-                  aria-hidden="true"
-                />
-                <span>{error}</span>
-              </div>
+                <option value="">请选择商家</option>
+                {organizations.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <Button type="submit" className="mt-2" disabled={busy}>
+            {busy ? (
+              '正在登录…'
+            ) : (
+              <>
+                登录
+                <ArrowRight aria-hidden="true" />
+              </>
             )}
-            <div className="grid gap-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                登录名
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="text"
-                autoComplete="username"
-                required
-                value={email}
-                onChange={(event) => {
-                  setEmail(event.target.value);
-                  setOrganizations([]);
-                  setOrgId('');
-                }}
-                className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-            <div className="grid gap-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                密码
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(event) => {
-                  setPassword(event.target.value);
-                  setOrganizations([]);
-                  setOrgId('');
-                }}
-                className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-            {organizations.length > 0 && (
-              <label className="grid gap-2 text-sm font-medium">
-                选择商家
-                <select
-                  required
-                  value={orgId}
-                  onChange={(event) => setOrgId(event.target.value)}
-                  className="h-10 rounded-md border bg-background px-3 text-sm"
-                >
-                  <option value="">请选择商家</option>
-                  {organizations.map((org) => (
-                    <option key={org.id} value={org.id}>
-                      {org.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <Button type="submit" className="mt-2" disabled={busy}>
-              {busy ? (
-                '正在登录…'
-              ) : (
-                <>
-                  登录
-                  <ArrowRight aria-hidden="true" />
-                </>
-              )}
-            </Button>
-          </form>
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-            <Button variant="link" className="px-0" asChild>
-              <Link to="/register">注册商家</Link>
-            </Button>
-            <Button variant="link" className="px-0" asChild>
-              <Link to="/forgot-password">忘记密码</Link>
-            </Button>
-          </div>
-        </section>
-      </main>
-    </div>
+          </Button>
+        </form>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Button variant="link" className="px-0" asChild>
+            <Link to="/register">注册商家</Link>
+          </Button>
+          <Button variant="link" className="px-0" asChild>
+            <Link to="/forgot-password">忘记密码</Link>
+          </Button>
+        </div>
+      </div>
+    </AuthFrame>
   );
 }

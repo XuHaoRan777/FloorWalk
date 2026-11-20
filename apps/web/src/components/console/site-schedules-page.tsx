@@ -141,7 +141,7 @@ export function SiteSchedulesPage() {
           </p>
           <fieldset
             disabled={busy || !selectedIds.length}
-            className="grid gap-6 border-y py-4 lg:grid-cols-2"
+            className="grid gap-6 border-y py-4 xl:grid-cols-2"
           >
             <form
               className="space-y-3"
@@ -272,14 +272,18 @@ export function SiteSchedulesPage() {
                         />
                       </td>
                       <td className="p-3">
-                        <span className="font-medium">{site.siteName}</span>
+                        <span className="block min-w-0 break-words font-medium">
+                          {site.siteName}
+                        </span>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {site.siteCode}
                           {!site.active && ' · 已停用'}
                         </p>
                       </td>
                       <td className="p-3">
-                        {site.scheduleName ?? '未选用方案'}
+                        <span className="break-words">
+                          {site.scheduleName ?? '未选用方案'}
+                        </span>
                       </td>
                       <td className="p-3">
                         {!site.skippedRanges.length ? (
@@ -293,12 +297,12 @@ export function SiteSchedulesPage() {
                                 key={range.id}
                                 className="flex items-start justify-between gap-3"
                               >
-                                <div>
+                                <div className="min-w-0 break-words">
                                   <span className="whitespace-nowrap tabular-nums">
                                     {range.startsOn} 至 {range.endsOn}
                                   </span>
                                   {range.note && (
-                                    <p className="mt-1 text-pretty text-xs text-muted-foreground">
+                                    <p className="mt-1 break-words text-pretty text-xs text-muted-foreground">
                                       {range.note}
                                     </p>
                                   )}

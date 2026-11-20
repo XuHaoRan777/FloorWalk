@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { CircleAlert, KeyRound } from 'lucide-react';
 import { ApiError, changePassword, readSession, writeSession } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { AuthFrame } from '@/components/layout/auth-frame';
 
 export function ChangePasswordPage() {
   const navigate = useNavigate();
@@ -41,60 +42,65 @@ export function ChangePasswordPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-lg space-y-6 p-6 sm:p-8">
-      <div className="fw-page-heading">
-        <h1>修改密码</h1>
+    <AuthFrame
+      title="修改密码"
+      description={<p>验证当前密码后更新管理员账号密码。</p>}
+    >
+      <div className="grid gap-4">
+        {error && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 text-sm text-destructive"
+          >
+            <CircleAlert
+              className="mt-0.5 size-4 shrink-0"
+              aria-hidden="true"
+            />
+            <span>{error}</span>
+          </div>
+        )}
+        <form onSubmit={submit} className="grid gap-4">
+          <label className="grid gap-1.5 text-sm font-medium">
+            当前密码
+            <input
+              autoComplete="current-password"
+              className="h-10 min-w-0 rounded-md border bg-background px-3 font-normal"
+              type="password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+              required
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium">
+            新密码
+            <input
+              autoComplete="new-password"
+              className="h-10 min-w-0 rounded-md border bg-background px-3 font-normal"
+              type="password"
+              minLength={8}
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              required
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium">
+            确认新密码
+            <input
+              autoComplete="new-password"
+              className="h-10 min-w-0 rounded-md border bg-background px-3 font-normal"
+              type="password"
+              minLength={8}
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              required
+            />
+          </label>
+          <Button type="submit" disabled={busy}>
+            <KeyRound aria-hidden="true" />
+            {busy ? '正在保存…' : '保存新密码'}
+          </Button>
+        </form>
       </div>
-      {error && (
-        <div
-          role="alert"
-          className="flex items-start gap-2 text-sm text-destructive"
-        >
-          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <span>{error}</span>
-        </div>
-      )}
-      <form onSubmit={submit} className="grid gap-4">
-        <label className="grid gap-1.5 text-sm font-medium">
-          当前密码
-          <input
-            autoComplete="current-password"
-            className="h-10 rounded-md border bg-background px-3 font-normal"
-            type="password"
-            value={currentPassword}
-            onChange={(event) => setCurrentPassword(event.target.value)}
-            required
-          />
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium">
-          新密码
-          <input
-            autoComplete="new-password"
-            className="h-10 rounded-md border bg-background px-3 font-normal"
-            type="password"
-            minLength={8}
-            value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
-            required
-          />
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium">
-          确认新密码
-          <input
-            autoComplete="new-password"
-            className="h-10 rounded-md border bg-background px-3 font-normal"
-            type="password"
-            minLength={8}
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            required
-          />
-        </label>
-        <Button type="submit" disabled={busy}>
-          <KeyRound aria-hidden="true" />
-          {busy ? '正在保存…' : '保存新密码'}
-        </Button>
-      </form>
-    </main>
+    </AuthFrame>
   );
 }

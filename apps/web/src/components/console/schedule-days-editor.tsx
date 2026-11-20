@@ -102,9 +102,9 @@ export function ScheduleDaysEditor({
                 return (
                   <div
                     key={task.key}
-                    className="grid gap-3 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end"
+                    className="grid gap-3 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 lg:items-end"
                   >
-                    <label className="grid min-w-0 gap-1.5 text-sm">
+                    <label className="col-span-2 grid min-w-0 gap-1.5 text-sm lg:col-span-1">
                       模板
                       <select
                         aria-label={`${prefix}模板`}
@@ -125,7 +125,7 @@ export function ScheduleDaysEditor({
                         ))}
                       </select>
                     </label>
-                    <label className="grid gap-1.5 text-sm">
+                    <label className="grid min-w-0 gap-1.5 text-sm">
                       开始时刻
                       <input
                         type="time"
@@ -141,7 +141,7 @@ export function ScheduleDaysEditor({
                         }
                       />
                     </label>
-                    <label className="grid gap-1.5 text-sm">
+                    <label className="grid min-w-0 gap-1.5 text-sm">
                       结束时刻
                       <input
                         type="time"
