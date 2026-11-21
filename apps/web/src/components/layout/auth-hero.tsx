@@ -9,7 +9,7 @@ const checkpoints = [
 ];
 
 function animationDelay(progress: number) {
-  return String(0.35 + 2 * progress) + 's';
+  return `${175 + 1000 * progress}ms`;
 }
 
 export function AuthHero() {

@@ -1194,7 +1194,7 @@
 
 .fw-auth-hero--playing .fw-auth-hero__route {
   stroke-dashoffset: 1;
-  animation: fw-auth-draw 2s linear 0.3s both;
+  animation: fw-auth-draw 1s linear 150ms both;
 }
 
 .fw-auth-hero__checkpoint-fill {
@@ -1204,7 +1204,7 @@
 
 .fw-auth-hero--playing .fw-auth-hero__checkpoint-fill {
   transform: scale(0);
-  animation: fw-auth-light 0.32s var(--fw-ease-emphasized) var(--fw-auth-delay)
+  animation: fw-auth-light 160ms var(--fw-ease-emphasized) var(--fw-auth-delay)
     both;
 }
 
@@ -1288,7 +1288,7 @@
   transform: scale(0.6);
   border-color: transparent;
   background: transparent;
-  animation: fw-auth-light 0.3s var(--fw-ease-emphasized) var(--fw-auth-delay)
+  animation: fw-auth-light 150ms var(--fw-ease-emphasized) var(--fw-auth-delay)
     both;
 }
 
