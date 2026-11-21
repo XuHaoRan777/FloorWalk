@@ -130,6 +130,13 @@ export function ReviewScoreRing({
   const segments = ringSegments(tones, itemCount > 12);
   const gapDegrees = itemCount > 12 ? 0 : 10;
   const stepDegrees = itemCount === 0 ? 360 : 360 / itemCount;
+  const lastScoredIndex = tones.reduce(
+    (lastIndex, tone, index) => (tone ? index : lastIndex),
+    -1,
+  );
+  const badgeAngle =
+    itemCount === 0 ? 0 : (((lastScoredIndex + 1) * 360) / itemCount) % 360;
+  const badgePosition = pointAt(badgeAngle);
   const lastArcEnd = segments.reduce(
     (latest, segment) =>
       Math.max(
@@ -142,79 +149,75 @@ export function ReviewScoreRing({
   const burstDelay = `${lastArcEnd + 0.12}s`;
 
   return (
-    <svg
+    <div
       role="img"
       aria-label={`审核评分${task.score === null ? '—' : `${task.score} 分`}`}
       className={
         playing ? 'fw-review-ring fw-review-ring--playing' : 'fw-review-ring'
       }
-      viewBox="0 0 180 180"
-      width="180"
-      height="180"
-      focusable="false"
     >
-      <circle
-        cx={CENTER}
-        cy={CENTER}
-        r={RADIUS}
-        className="fw-review-ring__track"
-      />
-      {segments.map((segment) => {
-        const startAngle = segment.startIndex * stepDegrees + gapDegrees / 2;
-        const endAngle =
-          (segment.startIndex + segment.itemCount) * stepDegrees -
-          gapDegrees / 2;
-        return (
-          <path
-            key={`${segment.tone}-${segment.startIndex}`}
-            className={`fw-review-ring__arc fw-review-ring__arc--${segment.tone}`}
-            d={arcPath(startAngle, endAngle)}
-            pathLength="1"
-            style={animationStyle(segment, itemCount)}
-          />
-        );
-      })}
-      {hasVerdict && (
-        <g transform={`translate(${CENTER} ${CENTER - RADIUS})`}>
-          <g
-            className={`fw-review-ring__badge fw-review-ring__badge--${isPassed ? 'passed' : 'failed'}`}
-            style={{ '--fw-ring-badge-delay': badgeDelay } as CSSProperties}
-            onAnimationEnd={isPassed ? undefined : onPlaybackEnd}
-          >
-            <circle r="14" />
-            {isPassed ? (
-              <path d="m-5 0.5 3.2 3.2L5.5-3.8" />
-            ) : (
-              <>
-                <path d="M0-5.5v6" />
-                <circle cy="4.6" r="1.5" />
-              </>
-            )}
-          </g>
-        </g>
-      )}
-      {isPassed && playing && (
+      <svg
+        aria-hidden="true"
+        className="fw-review-ring__drawing"
+        viewBox="0 0 180 180"
+        focusable="false"
+      >
         <circle
           cx={CENTER}
           cy={CENTER}
           r={RADIUS}
-          className="fw-review-ring__burst"
-          style={{ '--fw-ring-burst-delay': burstDelay } as CSSProperties}
-          onAnimationEnd={onPlaybackEnd}
+          className="fw-review-ring__track"
         />
-      )}
-      <text
-        x={CENTER}
-        y={task.score === null ? CENTER : CENTER - 4}
-        className="fw-review-ring__score"
-      >
-        {task.score ?? '—'}
-        {task.score !== null && (
-          <tspan className="fw-review-ring__unit" dx="4">
-            {' 分'}
-          </tspan>
+        {segments.map((segment) => {
+          const startAngle = segment.startIndex * stepDegrees + gapDegrees / 2;
+          const endAngle =
+            (segment.startIndex + segment.itemCount) * stepDegrees -
+            gapDegrees / 2;
+          return (
+            <path
+              key={`${segment.tone}-${segment.startIndex}`}
+              className={`fw-review-ring__arc fw-review-ring__arc--${segment.tone}`}
+              d={arcPath(startAngle, endAngle)}
+              pathLength="1"
+              strokeLinecap={itemCount > 12 ? 'butt' : 'round'}
+              style={animationStyle(segment, itemCount)}
+            />
+          );
+        })}
+        {hasVerdict && (
+          <g transform={`translate(${badgePosition.x} ${badgePosition.y})`}>
+            <g
+              className={`fw-review-ring__badge fw-review-ring__badge--${isPassed ? 'passed' : 'failed'}`}
+              style={{ '--fw-ring-badge-delay': badgeDelay } as CSSProperties}
+              onAnimationEnd={isPassed ? undefined : onPlaybackEnd}
+            >
+              <circle r="14" />
+              {isPassed ? (
+                <path d="m-5 0.5 3.2 3.2L5.5-3.8" />
+              ) : (
+                <>
+                  <path d="M0-5.5v6" />
+                  <circle cy="4.6" r="1.5" />
+                </>
+              )}
+            </g>
+          </g>
         )}
-      </text>
-    </svg>
+        {isPassed && playing && (
+          <circle
+            cx={CENTER}
+            cy={CENTER}
+            r={RADIUS}
+            className="fw-review-ring__burst"
+            style={{ '--fw-ring-burst-delay': burstDelay } as CSSProperties}
+            onAnimationEnd={onPlaybackEnd}
+          />
+        )}
+      </svg>
+      <span className="fw-review-ring__content">
+        <strong>{task.score ?? '—'}</strong>
+        {task.score !== null && <small>分</small>}
+      </span>
+    </div>
   );
 }

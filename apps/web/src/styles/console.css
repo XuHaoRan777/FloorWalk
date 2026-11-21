@@ -620,9 +620,17 @@
 }
 
 .fw-review-ring {
+  position: relative;
   width: 180px;
   height: 180px;
   flex: 0 0 180px;
+  overflow: visible;
+}
+
+.fw-review-ring__drawing {
+  display: block;
+  width: 100%;
+  height: 100%;
   overflow: visible;
 }
 
@@ -640,7 +648,6 @@
 .fw-review-ring__arc {
   stroke-dasharray: 1;
   stroke-dashoffset: 0;
-  stroke-linecap: butt;
 }
 
 .fw-review-ring__arc--passed {
@@ -663,7 +670,8 @@
 }
 
 .fw-review-ring__badge circle:first-child {
-  stroke: none;
+  stroke: var(--fw-card);
+  stroke-width: 3;
 }
 
 .fw-review-ring__badge--passed circle:first-child {
@@ -705,18 +713,26 @@
     var(--fw-ring-burst-delay) both;
 }
 
-.fw-review-ring__score {
-  fill: var(--fw-foreground);
-  font-size: var(--fw-text-3xl);
-  font-weight: 650;
-  text-anchor: middle;
-  dominant-baseline: middle;
+.fw-review-ring__content {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  color: var(--fw-foreground);
 }
 
 .fw-review-ring__unit {
-  fill: var(--fw-muted-foreground);
+  margin-top: var(--fw-space-xs);
+  color: var(--fw-muted-foreground);
   font-size: var(--fw-text-sm);
-  text-anchor: middle;
+}
+
+.fw-review-ring__content strong {
+  font-family: var(--fw-font-mono);
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 @keyframes fw-review-ring-draw {
