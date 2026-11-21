@@ -228,6 +228,72 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
     await expect(scoreRing).toBeVisible();
     await expect(scoreRing).toHaveAttribute('aria-label', '审核评分—');
     await expect(scoreRing).not.toHaveClass(/fw-review-ring--playing/);
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      const mobileHeader = await page
+        .locator('.fw-review-heading')
+        .evaluate((heading) => {
+          const identity = heading.querySelector(
+            '.fw-review-heading__identity',
+          )!;
+          const summary = heading.querySelector('.fw-review-heading__summary')!;
+          const ring = heading.querySelector('.fw-review-ring')!;
+          return {
+            documentWidth:
+              document.documentElement.scrollWidth -
+              document.documentElement.clientWidth,
+            identityBottom: identity.getBoundingClientRect().bottom,
+            summaryTop: summary.getBoundingClientRect().top,
+            summaryRight: summary.getBoundingClientRect().right,
+            controlsRight: summary
+              .querySelector('.fw-review-heading__controls')!
+              .getBoundingClientRect().right,
+            ringWidth: ring.getBoundingClientRect().width,
+            ringLeft: ring.getBoundingClientRect().left,
+            ringRight: ring.getBoundingClientRect().right,
+            overflowingElements: Array.from(
+              document.querySelectorAll<HTMLElement>('body *'),
+            )
+              .map((element) => ({
+                element,
+                rect: element.getBoundingClientRect(),
+              }))
+              .filter(
+                ({ element, rect }) =>
+                  rect.width > 0 &&
+                  (rect.right > document.documentElement.clientWidth + 1 ||
+                    element.scrollWidth > element.clientWidth + 1),
+              )
+              .slice(0, 12)
+              .map(({ element, rect }) => ({
+                tag: element.tagName,
+                className: element.className,
+                right: Math.round(rect.right),
+                width: Math.round(rect.width),
+                clientWidth: element.clientWidth,
+                scrollWidth: element.scrollWidth,
+              })),
+          };
+        });
+      expect(
+        mobileHeader.documentWidth,
+        JSON.stringify(mobileHeader.overflowingElements),
+      ).toBeLessThanOrEqual(0);
+      expect(mobileHeader.identityBottom).toBeLessThanOrEqual(
+        mobileHeader.summaryTop,
+      );
+      expect(mobileHeader.ringWidth).toBe(144);
+      expect(mobileHeader.ringRight).toBeLessThanOrEqual(
+        mobileHeader.summaryRight,
+      );
+      expect(mobileHeader.controlsRight).toBeLessThanOrEqual(
+        mobileHeader.ringLeft,
+      );
+      await expect(
+        page.getByRole('button', { name: /待我处理/ }),
+      ).toBeVisible();
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
 
     const firstItem = page
       .getByRole('article')

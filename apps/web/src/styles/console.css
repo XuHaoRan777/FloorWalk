@@ -223,6 +223,19 @@
   font-size: var(--fw-text-sm);
 }
 
+.fw-review-heading__summary {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: var(--fw-space-sm);
+}
+
+.fw-review-heading__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--fw-space-sm);
+}
+
 .fw-page-eyebrow {
   color: var(--fw-muted-foreground);
   font-size: var(--fw-text-xs);
@@ -1628,6 +1641,28 @@
     margin-bottom: var(--fw-space-md);
   }
 
+  .fw-review-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-review-heading__summary {
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--fw-space-md);
+  }
+
+  .fw-review-ring {
+    width: 144px;
+    height: 144px;
+    flex-basis: 144px;
+  }
+
+  .fw-review-ring__content strong {
+    font-size: 32px;
+  }
+
   .fw-data-table th,
   .fw-data-table td {
     padding: 9px 8px;
@@ -1665,5 +1700,28 @@
 
   .fw-login__sheet {
     padding: 20px;
+  }
+}
+
+@media (max-width: 359px) {
+  .fw-console > [data-slot='sidebar-inset'] > header > div {
+    gap: var(--fw-space-sm);
+    padding-inline: var(--fw-space-sm);
+  }
+
+  .fw-console-pending-button {
+    width: 36px;
+    min-width: 36px;
+    padding-inline: 0;
+  }
+
+  .fw-console-pending-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }

@@ -126,8 +126,8 @@ export function ReviewDetail({
 
   return (
     <>
-      <div className="fw-page-heading min-w-0 items-start">
-        <div className="min-w-0">
+      <div className="fw-page-heading fw-review-heading min-w-0 items-start">
+        <div className="fw-review-heading__identity min-w-0">
           <Button
             variant="ghost"
             size="sm"
@@ -145,33 +145,35 @@ export function ReviewDetail({
             {task.templateName} · 截止 {uploadTime(task.dueAt)}
           </p>
         </div>
-        <div className="flex flex-wrap items-start gap-2 sm:gap-3">
-          <span
-            className="fw-dashboard-status whitespace-nowrap"
-            data-status={status}
-          >
-            {task.inspectionStatus
-              ? statusLabel[task.inspectionStatus]
-              : locked
-                ? '已判定'
-                : '待判定'}
-          </span>
+        <div className="fw-review-heading__summary">
+          <div className="fw-review-heading__controls">
+            <span
+              className="fw-dashboard-status whitespace-nowrap"
+              data-status={status}
+            >
+              {task.inspectionStatus
+                ? statusLabel[task.inspectionStatus]
+                : locked
+                  ? '已判定'
+                  : '待判定'}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="刷新任务"
+              title="刷新任务"
+              onClick={() => void refresh()}
+              disabled={busy}
+            >
+              <RotateCcw aria-hidden="true" />
+            </Button>
+          </div>
           <ReviewScoreRing
             key={ringPlayback.key}
             task={task}
             playing={ringPlayback.active}
             onPlaybackEnd={finishRingPlayback}
           />
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="刷新任务"
-            title="刷新任务"
-            onClick={() => void refresh()}
-            disabled={busy}
-          >
-            <RotateCcw aria-hidden="true" />
-          </Button>
         </div>
       </div>
       <ErrorBanner message={error} />

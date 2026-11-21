@@ -258,6 +258,7 @@ export function ConsolePage() {
             <Button
               variant="ghost"
               size="sm"
+              className="fw-console-pending-button"
               title={reviewQueue.error || undefined}
               onClick={() => {
                 setSection('queue');
@@ -266,12 +267,14 @@ export function ConsolePage() {
               }}
             >
               <ClipboardCheck aria-hidden="true" />
-              待我处理{' '}
-              {reviewQueue.error
-                ? '—'
-                : reviewQueue.loading
-                  ? '…'
-                  : reviewQueue.manualQueue.length}
+              <span className="fw-console-pending-label">
+                待我处理{' '}
+                {reviewQueue.error
+                  ? '—'
+                  : reviewQueue.loading
+                    ? '…'
+                    : reviewQueue.manualQueue.length}
+              </span>
             </Button>
           )}
           <Button variant="ghost" size="sm" onClick={logout}>
