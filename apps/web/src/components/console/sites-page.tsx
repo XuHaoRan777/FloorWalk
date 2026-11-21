@@ -9,6 +9,7 @@ import {
 } from '@/lib/api/admin';
 import { getErrorMessage } from './helpers';
 import { ErrorBanner } from './error-banner';
+import { EmptyIllustration } from './empty-illustration';
 
 export function SitesPage() {
   const [sites, setSites] = useState<AdminSite[]>([]);
@@ -136,7 +137,8 @@ export function SitesPage() {
           正在加载门店…
         </p>
       ) : error && sites.length === 0 ? null : sites.length === 0 ? (
-        <div className="fw-state">
+        <div className="fw-state fw-state--illustrated">
+          <EmptyIllustration name="template" />
           <Store aria-hidden="true" />
           <p>暂无门店</p>
         </div>

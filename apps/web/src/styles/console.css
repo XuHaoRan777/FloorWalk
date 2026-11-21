@@ -258,6 +258,70 @@
   color: var(--fw-primary);
 }
 
+.fw-state .fw-empty-illustration,
+.fw-template-list__empty .fw-empty-illustration {
+  width: 160px;
+  height: 120px;
+  flex: 0 1 160px;
+  overflow: visible;
+  color: var(--fw-input);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fw-empty-illustration__block {
+  fill: var(--fw-muted);
+  stroke: none;
+}
+
+.fw-empty-illustration__route {
+  fill: none;
+  stroke: color-mix(in srgb, var(--fw-muted-foreground) 50%, var(--fw-card));
+  stroke-width: 2;
+  stroke-dasharray: 0 6;
+}
+
+.fw-empty-illustration__checkpoint {
+  fill: var(--fw-card);
+  stroke: color-mix(in srgb, var(--fw-muted-foreground) 50%, var(--fw-card));
+}
+
+.fw-empty-illustration__raised {
+  fill: var(--fw-raised);
+  stroke: none;
+}
+
+.fw-empty-illustration__dot {
+  fill: var(--fw-input);
+  stroke: none;
+}
+
+.fw-empty-illustration__halo {
+  fill: var(--fw-raised);
+  stroke: none;
+}
+
+.fw-state--illustrated {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  row-gap: var(--fw-space-md);
+}
+
+.fw-template-list__empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fw-space-md);
+}
+
+.fw-template-list__empty p {
+  flex: 1 1 12rem;
+  margin: 0;
+}
+
 .fw-console [role='status']:is(.text-muted-foreground, .text-sm),
 .fw-login [role='status'] {
   color: var(--fw-muted-foreground);
@@ -553,6 +617,129 @@
   border-color: color-mix(in srgb, var(--fw-primary) 20%, var(--fw-border));
   background: var(--fw-active);
   color: var(--fw-primary);
+}
+
+.fw-review-ring {
+  width: 180px;
+  height: 180px;
+  flex: 0 0 180px;
+  overflow: visible;
+}
+
+.fw-review-ring__track,
+.fw-review-ring__arc,
+.fw-review-ring__burst {
+  fill: none;
+  stroke-width: 10;
+}
+
+.fw-review-ring__track {
+  stroke: var(--fw-muted);
+}
+
+.fw-review-ring__arc {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  stroke-linecap: butt;
+}
+
+.fw-review-ring__arc--passed {
+  stroke: var(--fw-primary);
+}
+
+.fw-review-ring__arc--failed {
+  stroke: var(--fw-destructive);
+}
+
+.fw-review-ring--playing .fw-review-ring__arc {
+  stroke-dashoffset: 1;
+  animation: fw-review-ring-draw var(--fw-ring-duration) linear
+    var(--fw-ring-delay) both;
+}
+
+.fw-review-ring__badge {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.fw-review-ring__badge circle:first-child {
+  stroke: none;
+}
+
+.fw-review-ring__badge--passed circle:first-child {
+  fill: var(--fw-success);
+}
+
+.fw-review-ring__badge--failed circle:first-child {
+  fill: var(--fw-destructive);
+}
+
+.fw-review-ring__badge path,
+.fw-review-ring__badge circle:not(:first-child) {
+  fill: none;
+  stroke: var(--fw-card);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fw-review-ring__badge circle:not(:first-child) {
+  stroke: none;
+  fill: var(--fw-card);
+}
+
+.fw-review-ring--playing .fw-review-ring__badge {
+  transform: scale(0.6);
+  animation: fw-review-ring-light 0.3s var(--fw-ease-emphasized)
+    var(--fw-ring-badge-delay) both;
+}
+
+.fw-review-ring__burst {
+  transform-box: fill-box;
+  transform-origin: center;
+  stroke: var(--fw-primary);
+}
+
+.fw-review-ring--playing .fw-review-ring__burst {
+  animation: fw-review-ring-burst 0.5s var(--fw-ease-standard)
+    var(--fw-ring-burst-delay) both;
+}
+
+.fw-review-ring__score {
+  fill: var(--fw-foreground);
+  font-size: var(--fw-text-3xl);
+  font-weight: 650;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.fw-review-ring__unit {
+  fill: var(--fw-muted-foreground);
+  font-size: var(--fw-text-sm);
+  text-anchor: middle;
+}
+
+@keyframes fw-review-ring-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fw-review-ring-light {
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes fw-review-ring-burst {
+  from {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.18);
+  }
 }
 
 .fw-dashboard-table__note {
@@ -969,32 +1156,189 @@
 
 .fw-login__body {
   display: grid;
+  width: min(100%, 1360px);
+  min-width: 0;
+  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.9fr);
   align-content: center;
-  justify-items: center;
-  gap: var(--fw-space-lg);
+  align-items: center;
+  gap: var(--fw-space-xl);
+  margin-inline: auto;
   padding: var(--fw-space-xxl) var(--fw-space-xl);
 }
 
-.fw-login__intro {
-  width: min(100%, 448px);
+.fw-auth-hero {
+  position: relative;
+  min-width: 0;
+  min-height: 520px;
+  overflow: hidden;
+  border-radius: var(--fw-radius-card);
+  background: linear-gradient(
+    150deg,
+    var(--fw-primary),
+    color-mix(in srgb, var(--fw-primary) 78%, var(--fw-foreground))
+  );
+  color: var(--fw-card);
 }
 
-.fw-login__intro h1 {
-  margin: var(--fw-space-sm) 0 0;
-  font-size: var(--fw-text-2xl);
+.fw-auth-hero__drawing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.fw-auth-hero__route {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+
+.fw-auth-hero--playing .fw-auth-hero__route {
+  stroke-dashoffset: 1;
+  animation: fw-auth-draw 2s linear 0.3s both;
+}
+
+.fw-auth-hero__checkpoint-fill {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.fw-auth-hero--playing .fw-auth-hero__checkpoint-fill {
+  transform: scale(0);
+  animation: fw-auth-light 0.32s var(--fw-ease-emphasized) var(--fw-auth-delay)
+    both;
+}
+
+.fw-auth-hero__copy {
+  position: absolute;
+  z-index: 1;
+  top: var(--fw-space-xxl);
+  left: var(--fw-space-xxl);
+  right: var(--fw-space-xxl);
+  max-width: 36rem;
+}
+
+.fw-auth-hero__copy h1 {
+  margin: 0;
+  font-size: var(--fw-text-3xl);
   font-weight: 650;
-  line-height: 1.3;
+  line-height: 1.25;
 }
 
-.fw-login__intro p {
+.fw-auth-hero__copy p {
+  max-width: 34rem;
   margin: var(--fw-space-sm) 0 0;
+  color: color-mix(in srgb, var(--fw-card) 82%, transparent);
+  font-size: var(--fw-text-base);
+  line-height: 1.6;
+}
+
+.fw-auth-checklist {
+  position: absolute;
+  z-index: 1;
+  right: 28px;
+  bottom: 28px;
+  display: grid;
+  width: min(228px, calc(100% - 40px));
+  gap: 0;
+  padding: var(--fw-space-sm) var(--fw-space-md);
+  border: 1px solid color-mix(in srgb, var(--fw-card) 50%, transparent);
+  border-radius: var(--fw-radius-card);
+  background: color-mix(in srgb, var(--fw-card) 94%, transparent);
+  box-shadow: var(--fw-shadow-md);
+  color: var(--fw-foreground);
+  backdrop-filter: blur(8px);
+}
+
+.fw-auth-checklist__row {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: var(--fw-space-sm);
+  border-top: 1px solid var(--fw-rule);
+}
+
+.fw-auth-checklist__row:first-child {
+  border-top: 0;
+}
+
+.fw-auth-checklist__check {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  place-items: center;
+  transform-box: fill-box;
+  transform-origin: center;
+  border: 1.5px solid var(--fw-input);
+  border-radius: 50%;
+  background: var(--fw-accent);
+}
+
+.fw-auth-checklist__check svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: var(--fw-card);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fw-auth-hero--playing .fw-auth-checklist__check {
+  transform: scale(0.6);
+  border-color: transparent;
+  background: transparent;
+  animation: fw-auth-light 0.3s var(--fw-ease-emphasized) var(--fw-auth-delay)
+    both;
+}
+
+.fw-auth-checklist__line {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--fw-muted);
+}
+
+.fw-login__form-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--fw-space-sm);
+  margin-bottom: var(--fw-space-lg);
+}
+
+.fw-login__form-head > svg {
+  flex: 0 0 auto;
+}
+
+.fw-login__form-copy {
+  min-width: 0;
+}
+
+.fw-login__form-copy h2 {
+  margin: 0;
+  font-size: var(--fw-text-lg);
+  font-weight: 650;
+}
+
+.fw-login__form-description {
+  margin-top: var(--fw-space-xs);
   color: var(--fw-muted-foreground);
   font-size: var(--fw-text-sm);
   line-height: 1.6;
 }
 
+.fw-login__form-description p {
+  margin: var(--fw-space-xs) 0 0;
+}
+
+.fw-login__form-description p:first-child {
+  margin-top: 0;
+}
+
 .fw-login__sheet {
-  width: min(100%, 448px);
+  width: min(100%, 500px);
+  min-width: 0;
+  justify-self: center;
   padding: var(--fw-space-xl);
   border: 1px solid var(--fw-border);
   border-radius: var(--fw-radius-card);
@@ -1005,6 +1349,38 @@
 .fw-login__sheet h2 {
   font-size: var(--fw-text-lg);
   font-weight: 650;
+}
+
+@keyframes fw-auth-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fw-auth-light {
+  to {
+    transform: scale(1);
+    opacity: 1;
+    border-color: var(--fw-accent);
+    background: var(--fw-accent);
+  }
+}
+
+@media (max-width: 1023px) {
+  .fw-login__body {
+    width: min(100%, 760px);
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--fw-space-lg);
+  }
+
+  .fw-auth-hero {
+    min-height: 480px;
+  }
+
+  .fw-login__sheet {
+    width: 100%;
+    max-width: none;
+  }
 }
 
 .fw-login__sheet input {
@@ -1192,6 +1568,33 @@
   .fw-login :is(button, a):active {
     transform: none;
   }
+
+  .fw-login .fw-auth-hero__route {
+    stroke-dashoffset: 0 !important;
+  }
+
+  .fw-login .fw-auth-hero__checkpoint-fill,
+  .fw-login .fw-auth-checklist__check {
+    transform: none !important;
+    opacity: 1 !important;
+  }
+
+  .fw-login .fw-auth-checklist__check {
+    border-color: var(--fw-accent) !important;
+    background: var(--fw-accent) !important;
+  }
+
+  .fw-review-ring--playing .fw-review-ring__arc {
+    stroke-dashoffset: 0 !important;
+  }
+
+  .fw-review-ring__badge {
+    transform: none !important;
+  }
+
+  .fw-review-ring__burst {
+    display: none;
+  }
 }
 
 @media (max-width: 767px) {
@@ -1222,6 +1625,26 @@
   .fw-login__body {
     align-content: center;
     padding: 24px 16px;
+  }
+
+  .fw-auth-hero {
+    min-height: 440px;
+  }
+
+  .fw-auth-hero__copy {
+    top: 20px;
+    left: 20px;
+    right: 20px;
+  }
+
+  .fw-auth-hero__copy h1 {
+    font-size: var(--fw-text-2xl);
+  }
+
+  .fw-auth-checklist {
+    right: 16px;
+    bottom: 16px;
+    width: min(228px, calc(100% - 32px));
   }
 
   .fw-login__sheet {

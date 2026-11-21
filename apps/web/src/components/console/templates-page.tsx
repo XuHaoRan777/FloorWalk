@@ -18,6 +18,7 @@ import {
 } from '@/lib/api/admin';
 import { getErrorMessage } from './helpers';
 import { ErrorBanner } from './error-banner';
+import { EmptyIllustration } from './empty-illustration';
 import {
   newDraftItem,
   TemplateItemsEditor,
@@ -215,9 +216,10 @@ export function TemplatesPage() {
               <span>{templates.length} 个</span>
             </div>
             {templates.length === 0 && !isNew && !error ? (
-              <p className="fw-template-list__empty">
-                暂无模板，可新建或使用快捷配置。
-              </p>
+              <div className="fw-template-list__empty">
+                <EmptyIllustration name="template" />
+                <p>暂无模板，可新建或使用快捷配置。</p>
+              </div>
             ) : (
               <div className="fw-template-list__items">
                 {templates.map((template) => (

@@ -32,6 +32,7 @@ import { DashboardView } from '@/components/console/dashboard-view';
 import { TodayView } from '@/components/console/today-view';
 import { ErrorBanner } from '@/components/console/error-banner';
 import { roleLabel } from '@/components/console/labels';
+import { BrandMark } from '@/components/brand-mark';
 import { QueueView } from '@/components/console/queue-view';
 import { ReviewDetail } from '@/components/console/review-detail';
 import { useReviewQueue } from '@/components/console/use-review-queue';
@@ -96,7 +97,11 @@ export function ConsolePage() {
     <SidebarProvider className="fw-console">
       <Sidebar variant="inset">
         <SidebarHeader>
-          <Link to="/" className="px-3 py-3 text-base font-semibold">
+          <Link
+            to="/"
+            className="flex items-center gap-2.5 px-3 py-3 text-base font-semibold"
+          >
+            <BrandMark size={28} className="shrink-0" />
             {APP_NAME}
           </Link>
         </SidebarHeader>

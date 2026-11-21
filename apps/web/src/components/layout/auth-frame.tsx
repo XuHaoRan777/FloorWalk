@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import { APP_NAME } from '@libs/shared';
+import { BrandMark } from '@/components/brand-mark';
+import { AuthHero } from './auth-hero';
 
 type AuthFrameProps = {
   title: string;
@@ -15,12 +17,20 @@ export function AuthFrame({ title, description, children }: AuthFrameProps) {
         <span className="fw-login__meta">连锁门店运营</span>
       </header>
       <main className="fw-login__body">
-        <section className="fw-login__intro" aria-labelledby="auth-title">
-          <p className="fw-page-eyebrow">商家管理员入口</p>
-          <h1 id="auth-title">{title}</h1>
-          {description}
-        </section>
-        <section className="fw-login__sheet" aria-label={title}>
+        <AuthHero />
+        <section
+          className="fw-login__sheet"
+          aria-labelledby="fw-auth-form-title"
+        >
+          <div className="fw-login__form-head">
+            <BrandMark size={28} />
+            <div className="fw-login__form-copy">
+              <h2 id="fw-auth-form-title">{title}</h2>
+              {description && (
+                <div className="fw-login__form-description">{description}</div>
+              )}
+            </div>
+          </div>
           {children}
         </section>
       </main>

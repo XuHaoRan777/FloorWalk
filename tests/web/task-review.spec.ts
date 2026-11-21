@@ -224,6 +224,10 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
     await expect(taskRow).toContainText('AI 调用失败，请人工审核。');
     await taskRow.click();
     await expect(page.getByRole('heading', { name: site.name })).toBeVisible();
+    const scoreRing = page.locator('.fw-review-ring');
+    await expect(scoreRing).toBeVisible();
+    await expect(scoreRing).toHaveAttribute('aria-label', '审核评分—');
+    await expect(scoreRing).not.toHaveClass(/fw-review-ring--playing/);
 
     const firstItem = page
       .getByRole('article')
@@ -273,6 +277,7 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
     await page.getByRole('button', { name: '刷新任务' }).click();
     await expect(firstItem).toContainText('FW-031 测试店长');
     await firstItem.getByRole('button', { name: '通过' }).click();
+    await expect(scoreRing).not.toHaveClass(/fw-review-ring--playing/);
     const secondItem = page
       .getByRole('article')
       .filter({ has: page.getByRole('heading', { name: /检查项二/ }) });
@@ -286,6 +291,8 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
     const summary = page.locator('.fw-page-heading').last();
     await expect(summary).toContainText('100 分');
     await expect(summary).toContainText('通过');
+    await expect(scoreRing).toHaveAttribute('aria-label', '审核评分100 分');
+    await expect(scoreRing).toHaveClass(/fw-review-ring--playing/);
     await expect(pendingCount).toHaveText(`待我处理 ${initialCount}`);
     await page.getByRole('button', { name: '返回队列' }).click();
     await expect(taskRow).toHaveCount(0);
@@ -295,6 +302,8 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
       .filter({ hasText: site.name });
     await expect(decidedRow).toContainText('100 分');
     await decidedRow.click();
+    await expect(scoreRing).toHaveAttribute('aria-label', '审核评分100 分');
+    await expect(scoreRing).not.toHaveClass(/fw-review-ring--playing/);
     await pool.query(
       `UPDATE floorwalk.inspection_tasks
        SET due_at = now() - interval '2 hours' WHERE id = $1`,
@@ -303,6 +312,8 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
     await secondItem.getByRole('button', { name: '不合格' }).click();
     await expect(summary).toContainText('50 分');
     await expect(summary).toContainText('不合格');
+    await expect(scoreRing).toHaveAttribute('aria-label', '审核评分50 分');
+    await expect(scoreRing).toHaveClass(/fw-review-ring--playing/);
     await expect(
       firstItem.getByRole('button', { name: '打回' }),
     ).toBeDisabled();
@@ -310,6 +321,8 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
     await secondItem.getByRole('button', { name: '通过' }).click();
     await expect(summary).toContainText('100 分');
     await expect(summary).toContainText('通过');
+    await expect(scoreRing).toHaveAttribute('aria-label', '审核评分100 分');
+    await expect(scoreRing).not.toHaveClass(/fw-review-ring--playing/);
     await expect(pendingCount).toHaveText(`待我处理 ${initialCount}`);
   } finally {
     if (managerContext) {

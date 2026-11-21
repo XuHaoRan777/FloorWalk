@@ -9,6 +9,7 @@ import {
 } from '@/lib/api/admin';
 import { ErrorBanner } from './error-banner';
 import { getErrorMessage } from './helpers';
+import { EmptyIllustration } from './empty-illustration';
 
 export function AiStandardsPage() {
   const [standards, setStandards] = useState<AiStandard[]>([]);
@@ -113,7 +114,8 @@ export function AiStandardsPage() {
       ) : (
         <>
           {standards.length === 0 && !isNew && !error && (
-            <div className="fw-state">
+            <div className="fw-state fw-state--illustrated">
+              <EmptyIllustration name="template" />
               <FileText aria-hidden="true" />
               <p>暂无审核标准</p>
             </div>

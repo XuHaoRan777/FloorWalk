@@ -7,6 +7,7 @@ import {
 import type { TaskReview } from '@libs/shared';
 import { Button } from '@/components/ui/button';
 import { ErrorBanner } from './error-banner';
+import { EmptyIllustration } from './empty-illustration';
 import { formatTime } from './helpers';
 import { statusLabel } from './labels';
 
@@ -130,7 +131,8 @@ export function QueueView({
           正在加载审核队列…
         </p>
       ) : error && empty ? null : empty ? (
-        <div className="fw-state">
+        <div className="fw-state fw-state--illustrated">
+          <EmptyIllustration name="notification" />
           <ClipboardCheck aria-hidden="true" />
           <p>当前没有待人工或今日已判定任务。</p>
         </div>

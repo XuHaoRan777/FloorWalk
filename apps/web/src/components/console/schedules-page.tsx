@@ -17,6 +17,7 @@ import {
   type DraftScheduleDay,
 } from './schedule-days-editor';
 import { ErrorBanner } from './error-banner';
+import { EmptyIllustration } from './empty-illustration';
 import { getErrorMessage } from './helpers';
 
 export function SchedulesPage() {
@@ -153,7 +154,8 @@ export function SchedulesPage() {
       ) : (
         <>
           {schedules.length === 0 && !isNew && !error && (
-            <div className="fw-state">
+            <div className="fw-state fw-state--illustrated">
+              <EmptyIllustration name="template" />
               <CalendarDays aria-hidden="true" />
               <p>暂无日程方案，点击「新建方案」开始配置。</p>
             </div>

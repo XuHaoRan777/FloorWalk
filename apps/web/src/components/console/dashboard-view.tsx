@@ -24,6 +24,7 @@ import { ErrorBanner } from './error-banner';
 import { getErrorMessage } from './helpers';
 import { DashboardTrend } from './dashboard-trend';
 import { DashboardSiteTable } from './dashboard-site-table';
+import { EmptyIllustration } from './empty-illustration';
 import { percentage, scoreLabel } from './dashboard-format';
 
 type DashboardData = {
@@ -163,7 +164,8 @@ export function DashboardView({ onQueue }: { onQueue: () => void }) {
         </p>
       ) : error || !data ? null : data.summary.overall.expected === 0 ? (
         <>
-          <div className="fw-state">
+          <div className="fw-state fw-state--illustrated">
+            <EmptyIllustration name="today" />
             <LayoutDashboard aria-hidden="true" />
             <p>{periodLabel}暂无数据</p>
           </div>

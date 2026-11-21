@@ -8,6 +8,7 @@ import { EvidenceImage } from './evidence-image';
 import { getErrorMessage } from './helpers';
 import { ChatPanel } from './chat-panel';
 import { statusLabel } from './labels';
+import { ReviewScoreRing } from './review-score-ring';
 
 const resultLabel: Record<InspectionItemDecisionResult, string> = {
   pass: '通过',
@@ -51,6 +52,7 @@ export function ReviewDetail({
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [reworkItemId, setReworkItemId] = useState<string | null>(null);
   const [reworkReason, setReworkReason] = useState('');
+  const [ringPlayback, setRingPlayback] = useState({ key: 0, active: false });
   const locked = task.decidedAt !== null;
   const status =
     task.inspectionStatus ?? (task.status === 'overdue' ? 'failed' : 'draft');
@@ -70,6 +72,7 @@ export function ReviewDetail({
     setError('');
     try {
       setTask(await getTaskReview(task.id));
+      setRingPlayback((current) => ({ ...current, active: false }));
     } catch (reason) {
       setError(getErrorMessage(reason));
     } finally {
@@ -87,7 +90,24 @@ export function ReviewDetail({
     try {
       const decision =
         result === 'rework' ? { result, reason: reason ?? '' } : { result };
-      setTask(await decideTaskItem(task.id, itemId, decision));
+      const nextTask = await decideTaskItem(task.id, itemId, decision);
+      setTask(nextTask);
+      const startedDecision =
+        task.decidedAt === null && nextTask.decidedAt !== null;
+      const changedDecision = task.decidedAt !== null;
+      if (startedDecision || changedDecision) {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          setRingPlayback((current) => ({ ...current, active: false }));
+        } else {
+          setRingPlayback((current) =>
+            current.active
+              ? { ...current, active: false }
+              : { key: current.key + 1, active: true },
+          );
+        }
+      } else {
+        setRingPlayback((current) => ({ ...current, active: false }));
+      }
       onReviewed();
       if (result === 'rework') {
         setReworkItemId(null);
@@ -98,6 +118,10 @@ export function ReviewDetail({
     } finally {
       setBusyItemId(null);
     }
+  }
+
+  function finishRingPlayback() {
+    setRingPlayback((current) => ({ ...current, active: false }));
   }
 
   return (
@@ -121,7 +145,7 @@ export function ReviewDetail({
             {task.templateName} · 截止 {uploadTime(task.dueAt)}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-start gap-2 sm:gap-3">
           <span
             className="fw-dashboard-status whitespace-nowrap"
             data-status={status}
@@ -132,9 +156,12 @@ export function ReviewDetail({
                 ? '已判定'
                 : '待判定'}
           </span>
-          <span className="whitespace-nowrap text-2xl font-semibold">
-            {task.score === null ? '—' : `${task.score} 分`}
-          </span>
+          <ReviewScoreRing
+            key={ringPlayback.key}
+            task={task}
+            playing={ringPlayback.active}
+            onPlaybackEnd={finishRingPlayback}
+          />
           <Button
             variant="outline"
             size="icon"

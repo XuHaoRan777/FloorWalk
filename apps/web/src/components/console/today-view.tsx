@@ -10,6 +10,7 @@ import type { AdminTodayResponse, TaskReview } from '@libs/shared';
 import { getAdminToday, getTaskReview } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { ErrorBanner } from './error-banner';
+import { EmptyIllustration } from './empty-illustration';
 import { getErrorMessage } from './helpers';
 
 const taskStatusLabel = {
@@ -190,7 +191,8 @@ export function TodayView({
             <section aria-label="各店今日任务" className="min-w-0">
               <h2 className="fw-section-title mb-3">各店今日任务</h2>
               {data.tasks.length === 0 ? (
-                <div className="fw-state">
+                <div className="fw-state fw-state--illustrated">
+                  <EmptyIllustration name="today" />
                   <CalendarDays aria-hidden="true" />
                   <p>今日无任务</p>
                 </div>
