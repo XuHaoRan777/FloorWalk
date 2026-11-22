@@ -11,4 +11,4 @@ docs/work/FW-NNN-slug/
 
 不需要 README。规则见 [`AGENTS.md`](../../AGENTS.md) 第 6 节，模板见 [`_template/`](_template/)。编号取现有最大号加一。
 
-`plan.md` 是快照，只记"做了什么、怎么验证的"。业务事实写进 [`docs/specs/`](../specs/README.md)，不写在这里。归档后的单元是历史：`specs/`、`context/`、`adr/`、`pitfalls.md` 不链接它（校验器检查），新会话只在当前单元「依赖」列出或用户点名时读它。单元归档前用户测出的问题是它的回修，记在本单元 `plan.md`「回修」；归档后真机测试中的零碎改动不开单元，记 [`docs/testlog.md`](../testlog.md)。收尾步骤见 [`howto/archive.md`](../howto/archive.md)。
+`plan.md` 是快照，只记"做了什么、怎么验证的"。业务事实写进 [`docs/specs/`](../specs/README.md)，不写在这里。归档后的单元是历史：`specs/`、`context/`、`adr/`、`pitfalls.md` 不链接它（校验器检查），新会话只在当前单元「依赖」列出或用户点名时读它。单元归档前用户提出的要求是它的回修，记在本单元 `plan.md`「回修」；归档后真机测试中的零碎改动不开单元，记 [`docs/testlog.md`](../testlog.md)。收尾步骤见 [`howto/archive.md`](../howto/archive.md)。

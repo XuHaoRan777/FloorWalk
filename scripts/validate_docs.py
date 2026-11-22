@@ -13,17 +13,25 @@
 5. `specs/`、`context/`、`adr/`、`pitfalls.md` 不链接到 `docs/work/`。
 6. `docs/testlog.md` 的 `待同步` 行不超过 5 条，最早一行不超过 2 天。
 7. `AGENTS.md` 字数不超过 `scripts/workflow.conf` 的 `kernel-max-chars`（按字符计）。
-8. `--archive-gate`：工作树必须干净。
+8. `--archive-gate`：工作树必须干净；`workflow.conf` 登记了 `gate` 行时，每个门在当前代码上都有
+   `scripts/gate.py` 记下的通过记录（用户登记了 `gate-known-red` 的门只要求跑过）。
 9. 未归档、在 `cross-unit-ac-since` 当天及以后批准（或未批准）的 `spec.md` 不引用别的单元的 AC。
 10. 配置键契约（`workflow.conf` 配了 `env-*` 才查）：模板键有属性注释、被引用到；
     无默认值的引用键在模板里；`env-untracked on` 时 `.env*` 不被 Git 跟踪。
 11. `--env-keys`：只报本地配置文件缺的键名，从不打印值。
+12. 仓库根有 `scripts/hooks/commit-msg` 时，`core.hooksPath` 要指向 `scripts/hooks`。
+13. `--kickoff <单元号…>`：先跑上面的检查，再查单元能不能开工（已批准、每条 AC 有标签和内容、
+    验收方式已定、模板字样已填、任务表不超行数；多个单元号时加查接力线的排法和工作树干净），
+    全过才打印开工提示词（`docs/howto/open-unit.md`）。
+14. 回修表（表头有「状态」列的格式）：状态只能是 `做了|延后`；`延后` 行写用户同意的日期；
+    未归档（或归档改动还没提交）的单元，没转进别的单元的延后条数不多于 Backlog「待开单元」里注明本单元号的行数。
 
 `CLAUDE.md` 只含 `@AGENTS.md` 导入，不再需要内核同步检查。`workflow.conf` 的
 `hardline` 路径由 `scripts/hooks/commit-msg` 检查，不在这里。
 
 用法：
     python scripts/validate_docs.py [--root DIR] [--archive-gate] [--today YYYY-MM-DD] [--env-keys]
+    python scripts/validate_docs.py --kickoff <单元号> [<单元号>...]
 
 退出码 0 表示通过，1 表示存在错误。
 """
@@ -32,6 +40,7 @@ from __future__ import annotations
 import argparse
 import ast
 import datetime as _dt
+import importlib.util
 import re
 import subprocess
 import sys
@@ -647,20 +656,280 @@ def check_backlog(root: Path, states: dict[str, tuple[str, str]], issues: list[I
         issues.append(Issue("backlog", where, f"登记了非活动单元：{name}"))
 
 
-def check_worktree_clean(root: Path, issues: list[Issue]) -> None:
+# 回修表（AGENTS.md 第 10 节）：表头有「状态」列的才查，旧格式的历史单元不受影响。
+REWORK_STATUSES = {"做了", "延后"}
+ISO_DATE_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}")
+TABLE_SEPARATOR_PATTERN = re.compile(r":?-{3,}:?")
+BACKLOG_QUEUE_PATTERN = re.compile(r"^## 待开单元[^\n]*\n(?P<body>.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL)
+
+
+def table_rows(section: str) -> list[list[str]]:
+    """一段 Markdown 里的表格行（含表头），跳过分隔行。"""
+    rows: list[list[str]] = []
+    for line in section.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = split_table_row(line)
+        if not all(TABLE_SEPARATOR_PATTERN.fullmatch(cell) for cell in cells):
+            rows.append(cells)
+    return rows
+
+
+def has_uncommitted_changes(root: Path, path: Path) -> bool:
+    """文件相对 HEAD 有改动；不是 git 仓库或还没有提交时当作没有。"""
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--quiet", "HEAD", "--", relative(path, root)], cwd=root, capture_output=True, check=False
+        )
+    except OSError:
+        return False
+    return result.returncode == 1
+
+
+def check_rework(root: Path, states: dict[str, tuple[str, str]], issues: list[Issue]) -> None:
+    """状态取值合法；`延后` 写了同意日期；没转进别的单元的延后，Backlog「待开单元」有同样多行注明本单元号。
+
+    已归档且已提交的单元不查登记：那时延后的要求可能已经开成单元、从「待开单元」删掉了。
+    """
+    backlog_path = root / "docs/backlog.md"
+    backlog = HTML_COMMENT_PATTERN.sub("", read_text(backlog_path)) if backlog_path.is_file() else ""
+    queue = BACKLOG_QUEUE_PATTERN.search(backlog)
+    queue_rows = table_rows(queue.group("body"))[1:] if queue else []
+    for name, (archive_status, _) in sorted(states.items()):
+        plan_path = root / "docs/work" / name / "plan.md"
+        rows = table_rows(markdown_section(HTML_COMMENT_PATTERN.sub("", read_text(plan_path)), "回修"))
+        if not rows or "状态" not in rows[0]:
+            continue
+        header, where = rows[0], relative(plan_path, root)
+        own_id = WORK_UNIT_DIRECTORY_PATTERN.fullmatch(name).group(1)
+        status_at = header.index("状态")
+        target_at = next((index for index, cell in enumerate(header) if "去向" in cell), None)
+        unrouted = 0
+        for cells in rows[1:]:
+            if not any(cells):
+                continue
+            status = cells[status_at].strip("` ") if status_at < len(cells) else ""
+            if status not in REWORK_STATUSES:
+                issues.append(Issue("rework", where, f"「回修」状态只能是 `做了` 或 `延后`：{status or '空'}"))
+                continue
+            if status == "做了":
+                continue
+            target = cells[target_at] if target_at is not None and target_at < len(cells) else ""
+            if not ISO_DATE_PATTERN.search(target):
+                issues.append(Issue("rework", where, "「回修」延后的行，「改动或去向」要写用户同意延后的日期"))
+            if not any(found != own_id for found in UNIT_ID_PATTERN.findall(target)):
+                unrouted += 1
+        if not unrouted or (archive_status == "archived" and not has_uncommitted_changes(root, plan_path)):
+            continue
+        registered = sum(own_id in " ".join(cells) for cells in queue_rows)
+        if registered < unrouted:
+            issues.append(
+                Issue(
+                    "rework",
+                    where,
+                    f"「回修」{unrouted} 条延后，Backlog「待开单元」注明 {own_id} 的只有 {registered} 行：每条登记一行",
+                )
+            )
+
+
+def worktree_changes(root: Path) -> tuple[str, list[str]]:
+    """(`git status` 跑不了时的原因, 未提交的条目)。"""
     try:
         result = subprocess.run(
             ["git", "status", "--short"], cwd=root, capture_output=True, text=True, check=False
         )
     except OSError as exc:
-        issues.append(Issue("archive-gate", ".", f"无法执行 git status：{exc}"))
-        return
+        return f"无法执行 git status：{exc}", []
     if result.returncode != 0:
-        issues.append(Issue("archive-gate", ".", f"git status 退出码 {result.returncode}"))
-        return
-    dirty = [line for line in result.stdout.splitlines() if line.strip()]
-    if dirty:
+        return f"git status 退出码 {result.returncode}", []
+    return "", [line for line in result.stdout.splitlines() if line.strip()]
+
+
+def check_worktree_clean(root: Path, issues: list[Issue]) -> None:
+    error, dirty = worktree_changes(root)
+    if error:
+        issues.append(Issue("archive-gate", ".", error))
+    elif dirty:
         issues.append(Issue("archive-gate", ".", f"工作树非干净，禁止归档（{len(dirty)} 项）：{'; '.join(dirty[:10])}"))
+
+
+def check_hooks_installed(root: Path, issues: list[Issue]) -> None:
+    """仓库根带着钩子却没装（新克隆、换机器）时报错：归属、硬线、testlog 三项检查都靠它。"""
+    if not (root / "scripts/hooks/commit-msg").is_file():
+        return
+    try:
+        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=root, capture_output=True, text=True, check=False)
+        if top.returncode != 0 or Path(top.stdout.strip()).resolve() != root.resolve():
+            return
+        configured = subprocess.run(
+            ["git", "config", "--get", "core.hooksPath"], cwd=root, capture_output=True, text=True, check=False
+        ).stdout.strip()
+    except OSError:
+        return
+    if configured.replace("\\", "/").rstrip("/") != "scripts/hooks":
+        issues.append(Issue("hooks", "scripts/hooks", "钩子没装：git config core.hooksPath scripts/hooks"))
+
+
+def check_gate_records(root: Path, issues: list[Issue]) -> None:
+    """登记了机器门时，当前代码要有 `scripts/gate.py` 记下的全绿记录。结果只认它的记录，不认 plan 里手写的。"""
+    if not read_workflow_conf_rows(root, "gate"):
+        return
+    path = Path(__file__).with_name("gate.py")
+    if not path.is_file():
+        issues.append(Issue("archive-gate", WORKFLOW_CONF, "登记了 gate 行，但没有 scripts/gate.py"))
+        return
+    spec = importlib.util.spec_from_file_location("workflow_gate", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    for problem in module.archive_gate_problems(root):
+        issues.append(Issue("archive-gate", ".", problem))
+
+
+# ---------------------------------------------------------------------------
+# 开工提示词（--kickoff，步骤见 docs/howto/open-unit.md）
+# ---------------------------------------------------------------------------
+
+UNIT_ID_PATTERN = re.compile(r"[A-Z][A-Z0-9]{1,5}-\d{3}")
+AC_LINE_PATTERN = re.compile(r"^- AC-\d+.*$", re.MULTILINE)
+# 只查有没有标签和内容，不枚举标签：项目可以有内核之外的标签（如立项出包的 `AI 定`）。
+AC_FILLED_PATTERN = re.compile(r"^- AC-\d+（`[^`]+`）[：:]\s*\S")
+ACCEPTANCE_MODES = {"A": "A 人工验收", "B": "B Agent 验收"}
+TASK_ROW_PATTERN = re.compile(r"^\|\s*T\d+\s*\|")
+# 批准时任务表的行数上限（AGENTS.md 第 6 节）。
+MAX_APPROVED_TASKS = 8
+KICKOFF_WORK_STATUSES = {"approved", "in_progress"}
+SPEC_APPROVAL_BASIS_PATTERN = re.compile(r"^- 批准依据：[ \t]*\S", re.MULTILINE)
+# spec 模板里没填就会留下的字样；测试核对它们确实出现在 docs/work/_template/spec.md 里。
+SPEC_TEMPLATE_LEFTOVERS = (
+    "<工作单元名称>",
+    "<前缀>",
+    "<模块>",
+    "<小节>",
+    "<用户原话或指令摘要>",
+    "<无，或相对常设授权",
+    "<不在接力线上删掉本行",
+)
+RELAY_PROBE_PATTERN = re.compile(r"^- 接力探针.*\d{4}-\d{2}-\d{2}", re.MULTILINE)
+PARALLEL_GROUP_PATTERN = re.compile(r"^- 并行组：", re.MULTILINE)
+
+
+def markdown_section(content: str, title: str) -> str:
+    """`## title` 到下一个二级标题之间的正文；没有这一节返回空串。"""
+    match = re.search(
+        rf"^## {re.escape(title)}[ \t]*\n(?P<body>.*?)(?=^## |\Z)", content, re.MULTILINE | re.DOTALL
+    )
+    return match.group("body") if match else ""
+
+
+def find_unit_dir(root: Path, unit_id: str) -> Path | None:
+    work_root = root / "docs/work"
+    if not work_root.is_dir():
+        return None
+    matches = [path for path in sorted(work_root.iterdir()) if path.is_dir() and path.name.startswith(f"{unit_id}-")]
+    return matches[0] if len(matches) == 1 else None
+
+
+def check_kickoff_unit(root: Path, unit_id: str, issues: list[Issue], *, in_relay: bool) -> str:
+    """单元能不能开工；返回验收方式 `A` 或 `B`，定不出来返回空串。"""
+    unit = find_unit_dir(root, unit_id)
+    if unit is None:
+        issues.append(Issue("kickoff", "docs/work", f"找不到单元 {unit_id}，或同号目录不止一个"))
+        return ""
+    spec_path, plan_path = unit / "spec.md", unit / "plan.md"
+    if not spec_path.is_file() or not plan_path.is_file():
+        return ""  # 常规检查已报 unit-file
+    spec_where, plan_where = relative(spec_path, root), relative(plan_path, root)
+    spec = HTML_COMMENT_PATTERN.sub("", read_text(spec_path))
+    plan = HTML_COMMENT_PATTERN.sub("", read_text(plan_path))
+
+    def add(where: str, message: str) -> None:
+        issues.append(Issue("kickoff", where, message))
+
+    own = SPEC_ID_PATTERN.search(spec)
+    if not own or own.group(1) != unit_id:
+        add(spec_where, f"ID 应为 {unit_id}，实际 {own.group(1) if own else '缺失'}")
+    status = SPEC_STATUS_PATTERN.search(spec)
+    if not status or status.group(1) != "approved":
+        add(spec_where, "规格还没批准：用户在编排会话批准后把状态改成 approved，再生成提示词")
+    if not SPEC_APPROVED_DATE_PATTERN.search(spec) or not SPEC_APPROVAL_BASIS_PATTERN.search(spec):
+        add(spec_where, "「批准记录」缺批准依据（用户原话）或批准时间")
+    leftovers = [token for token in SPEC_TEMPLATE_LEFTOVERS if token in spec]
+    if leftovers:
+        add(spec_where, f"还留着模板字样：{' '.join(leftovers)}")
+    ac_lines = AC_LINE_PATTERN.findall(markdown_section(spec, "验收标准"))
+    if not ac_lines:
+        add(spec_where, "「验收标准」一条 AC 都没有")
+    for line in ac_lines:
+        if not AC_FILLED_PATTERN.match(line):
+            add(spec_where, f"AC 缺标签或没写内容（括号里只放标签，修订说明写在正文末尾）：{line[:40]}")
+    first_line = next((line.strip() for line in markdown_section(spec, "验收方式").splitlines() if line.strip()), "")
+    modes = [mode for mode, text in ACCEPTANCE_MODES.items() if text in first_line]
+    if len(modes) != 1:
+        add(spec_where, "验收方式没定：「验收方式」第一行只留 `A 人工验收` 或 `B Agent 验收` 其中一个")
+    if in_relay and not RELAY_PROBE_PATTERN.search(spec):
+        add(spec_where, "接力线上的单元，「批准记录」要有带日期的接力探针行（docs/howto/relay.md）")
+
+    work = WORK_STATUS_PATTERN.search(plan)
+    archive = ARCHIVE_STATUS_PATTERN.search(plan)
+    work_status = work.group(1) if work else ""
+    if archive and archive.group(1) == "archived":
+        add(plan_where, "单元已归档")
+    elif work_status not in KICKOFF_WORK_STATUSES:
+        add(plan_where, f"工作单元状态是 {work_status or '缺失'}：批准后改成 approved 才能开工")
+    rows = [split_table_row(line) for line in markdown_section(plan, "任务表").splitlines() if TASK_ROW_PATTERN.match(line)]
+    if not any(len(row) > 1 and row[1] for row in rows):
+        add(plan_where, "任务表没有任务")
+    elif work_status == "approved" and len(rows) > MAX_APPROVED_TASKS:
+        add(plan_where, f"任务表 {len(rows)} 行，批准时不超过 {MAX_APPROVED_TASKS} 行：拆单元")
+    if PARALLEL_GROUP_PATTERN.search(plan):
+        add(plan_where, "并行组的单元不用这条命令，提示词在 docs/howto/parallel.md 第 2 节")
+    return modes[0] if len(modes) == 1 else ""
+
+
+def check_kickoff(root: Path, unit_ids: list[str], issues: list[Issue]) -> None:
+    """一个单元号是单独开工；多个按给出的顺序当一条接力线，加查 docs/howto/relay.md 的排线规矩。"""
+    malformed = [unit_id for unit_id in unit_ids if not UNIT_ID_PATTERN.fullmatch(unit_id)]
+    if malformed or len(set(unit_ids)) != len(unit_ids):
+        issues.append(Issue("kickoff", "--kickoff", f"单元号写错或重复：{' '.join(unit_ids)}"))
+        return
+    in_relay = len(unit_ids) > 1
+    modes = [check_kickoff_unit(root, unit_id, issues, in_relay=in_relay) for unit_id in unit_ids]
+    if not in_relay:
+        return
+    for unit_id, mode in zip(unit_ids[:-1], modes[:-1]):
+        if mode == "A":
+            issues.append(Issue("kickoff", unit_id, "方式 A 的单元只能在线尾，一条线最多一个"))
+    if len(unit_ids) == 2 and modes[-1] == "A":
+        issues.append(
+            Issue("kickoff", "--kickoff", "不够接力门槛（至少 3 个单元，或 2 个连续的方式 B）：逐个开会话")
+        )
+    error, dirty = worktree_changes(root)
+    if error or dirty:
+        detail = error or f"{len(dirty)} 项未提交：{'; '.join(dirty[:5])}"
+        issues.append(Issue("kickoff", ".", f"接力开工要求工作树干净，先提交编排产物（{detail}）"))
+
+
+def kickoff_prompt(unit_ids: list[str]) -> str:
+    """只写内核不知道的事：哪个单元、是不是接力。规则和讨论内容不进提示词。"""
+    if len(unit_ids) == 1:
+        return f"执行 {unit_ids[0]}。"
+    return f"执行 {unit_ids[0]}，自动接力到 {unit_ids[-1]}，按 docs/howto/relay.md。"
+
+
+def report_kickoff(root: Path, unit_ids: list[str], *, today: _dt.date | None = None) -> int:
+    """`--kickoff`：文档校验和开工检查都过了才打印提示词，否则列出问题。"""
+    issues = validate_repository(root, today=today)
+    check_kickoff(root, unit_ids, issues)
+    for issue in issues:
+        print(issue)
+    if issues:
+        print(f"还不能开工：{len(issues)} 个问题，不生成提示词")
+        return 1
+    print("开工提示词（在项目主目录开新会话，整段发送）：")
+    print()
+    print(kickoff_prompt(unit_ids))
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -684,14 +953,17 @@ def validate_repository(
 
     states = check_work_units(root, issues)
     check_backlog(root, states, issues)
+    check_rework(root, states, issues)
     check_testlog(root, issues, today=today)
     check_kernel_size(root, issues)
     check_cross_unit_ac(root, issues)
     check_env_contract(root, issues)
     check_env_tracked(root, issues)
+    check_hooks_installed(root, issues)
 
     if archive_gate:
         check_worktree_clean(root, issues)
+        check_gate_records(root, issues)
     return issues
 
 
@@ -703,6 +975,9 @@ def main() -> int:
     parser.add_argument("--archive-gate", action="store_true", help="归档门：要求 git 工作树干净")
     parser.add_argument("--today", type=_dt.date.fromisoformat, default=None, help="覆盖当天日期（测试用）")
     parser.add_argument("--env-keys", action="store_true", help="只检查本地配置文件缺不缺键，只打印键名")
+    parser.add_argument(
+        "--kickoff", nargs="+", metavar="单元号", help="单元就绪时打印开工提示词；多个单元号按顺序当一条接力线"
+    )
     args = parser.parse_args()
 
     for stream in (sys.stdout, sys.stderr):
@@ -711,6 +986,8 @@ def main() -> int:
 
     if args.env_keys:
         return report_env_keys(args.root.resolve())
+    if args.kickoff:
+        return report_kickoff(args.root.resolve(), args.kickoff, today=args.today)
 
     issues = validate_repository(args.root.resolve(), archive_gate=args.archive_gate, today=args.today)
     for issue in issues:

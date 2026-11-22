@@ -7,7 +7,8 @@ import unittest
 from pathlib import Path
 
 
-HOOK_PATH = Path(__file__).parents[1] / "hooks" / "commit-msg"
+HOOKS_DIR = Path(__file__).parents[1] / "hooks"
+HOOK_NAMES = ("commit-msg", "prepare-commit-msg")
 CONF = "kernel-max-chars 6500\n# hardline docs/*\nhardline db/migrations/*\n  hardline src/auth/*   # 认证模块\n"
 GIT = ["git", "-c", "user.email=t@t", "-c", "user.name=test", "-c", "commit.gpgsign=false"]
 
@@ -27,12 +28,15 @@ class CommitMsgHookTests(unittest.TestCase):
         self.git("init", "-q")
         hooks = self.root / "scripts" / "hooks"
         hooks.mkdir(parents=True)
-        (hooks / "commit-msg").write_bytes(HOOK_PATH.read_bytes())
-        if os.name != "nt":
-            (hooks / "commit-msg").chmod(stat.S_IRWXU)
+        for name in HOOK_NAMES:
+            (hooks / name).write_bytes((HOOKS_DIR / name).read_bytes())
+            if os.name != "nt":
+                (hooks / name).chmod(stat.S_IRWXU)
         self.git("config", "core.hooksPath", "scripts/hooks")
         self.write("scripts/workflow.conf", CONF)
         self.write("docs/testlog.md", "# 修正记录\n")
+        self.unit("EX-001-done", "verified", "archived")
+        self.unit("EX-002-waiting", "blocked")
         self.git("add", "-A")
         self.git("commit", "-q", "--no-verify", "-m", "init")
 
@@ -54,6 +58,15 @@ class CommitMsgHookTests(unittest.TestCase):
         path = self.root / relative_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+
+    def unit(self, name: str, work_status: str, archive_status: str = "active") -> None:
+        self.write(
+            f"docs/work/{name}/plan.md",
+            f"# 计划\n\n## 当前状态\n\n- 工作单元状态：`{work_status}`\n- 归档状态：`{archive_status}`\n",
+        )
+
+    def last_message(self) -> str:
+        return self.git("log", "-1", "--format=%B").stdout
 
     def commit(self, message: str, *paths: str) -> subprocess.CompletedProcess:
         for path in paths:
@@ -89,7 +102,7 @@ class CommitMsgHookTests(unittest.TestCase):
         self.assertAccepted(self.commit("docs: 改说明 Mode: fix", "docs/specs/orders.md"))
 
     def test_mode_fixed_is_not_fix_mode(self) -> None:
-        self.assertAccepted(self.commit("chore: Mode: fixed 不是修正模式", "src/page.ts"))
+        self.assertAccepted(self.commit("chore(EX-001): Mode: fixed 不是修正模式", "src/page.ts"))
 
     def test_mode_in_comment_line_is_ignored(self) -> None:
         self.write("msg.txt", "feat(EX-001): 新页面\n# Mode: fix\n")
@@ -173,6 +186,68 @@ class CommitMsgHookTests(unittest.TestCase):
         self.git("checkout", "-q", "-")
         self.assertAccepted(self.commit("feat(EX-002): 别的", "src/other.ts"))
         self.assertAccepted(self.git("merge", "--no-ff", "-q", "side", "-m", "Merge side"))
+
+    # 3. 改了代码的提交要有归属
+    def test_code_commit_without_owner_is_rejected(self) -> None:
+        self.assertRejected(self.commit("feat: 新页面", "src/page.ts"), "归属")
+
+    def test_unknown_unit_id_is_not_an_owner(self) -> None:
+        self.assertRejected(self.commit("fix: HTTP-404 页面", "src/page.ts"), "归属")
+        self.assertRejected(self.commit("feat(EX-009): 新页面", "src/page.ts"), "归属")
+
+    def test_unit_trailer_is_an_owner(self) -> None:
+        self.assertAccepted(self.commit("feat: 新页面\n\nUnit: EX-002", "src/page.ts"))
+
+    def test_unit_none_is_accepted(self) -> None:
+        self.assertAccepted(self.commit("chore: 升级构建脚本\n\nUnit: none", "tools/build.js"))
+
+    def test_docs_only_commit_needs_no_owner(self) -> None:
+        self.assertAccepted(self.commit("docs: 改说明", "docs/specs/orders.md", "README.md"))
+
+    def test_first_commit_needs_no_owner(self) -> None:
+        self.git("checkout", "-q", "--orphan", "fresh")
+        self.assertAccepted(self.commit("init: 套模板", "src/page.ts"))
+
+    # 4. 只有一个单元在做时自动补归属
+    def test_single_in_progress_unit_is_filled_in(self) -> None:
+        self.unit("EX-003-doing", "in_progress")
+        self.assertAccepted(self.commit("feat: 新页面", "src/page.ts"))
+        message = self.last_message()
+        self.assertTrue(message.startswith("feat: 新页面\n"), message)
+        self.assertIn("\nUnit: EX-003\n", message)
+
+    def test_two_in_progress_units_are_not_guessed(self) -> None:
+        self.unit("EX-003-doing", "in_progress")
+        self.unit("EX-004-doing", "in_progress")
+        self.assertRejected(self.commit("feat: 新页面", "src/page.ts"), "归属")
+
+    def test_explicit_owner_is_left_alone(self) -> None:
+        self.unit("EX-003-doing", "in_progress")
+        self.assertAccepted(self.commit("fix: 改文案 Mode: fix", "src/a.ts", "docs/testlog.md"))
+        self.assertNotIn("Unit:", self.last_message())
+        self.assertAccepted(self.commit("fix(EX-002): 回修", "src/b.ts"))
+        self.assertNotIn("Unit:", self.last_message())
+        self.assertAccepted(self.commit("chore: 构建脚本\n\nUnit: none", "src/c.ts"))
+        self.assertNotIn("EX-003", self.last_message())
+
+    def test_fill_in_keeps_editor_comments_out_of_message(self) -> None:
+        self.unit("EX-003-doing", "in_progress")
+        self.write("src/page.ts", "y\n")
+        self.git("add", "-A")
+        result = self.git("commit", "-q", "-e", "-m", "feat: 新页面", env={"GIT_EDITOR": "true"})
+        self.assertAccepted(result)
+        self.assertEqual(self.last_message().strip(), "feat: 新页面\n\nUnit: EX-003")
+
+    def test_merge_commit_is_not_filled_in(self) -> None:
+        self.unit("EX-003-doing", "in_progress")
+        self.git("add", "-A")
+        self.git("commit", "-q", "--no-verify", "-m", "seed")
+        self.git("checkout", "-q", "-b", "side")
+        self.assertAccepted(self.commit("feat(EX-001): 旁支", "src/side.ts"))
+        self.git("checkout", "-q", "-")
+        self.assertAccepted(self.commit("feat(EX-002): 主线", "src/main.ts"))
+        self.assertAccepted(self.git("merge", "--no-ff", "-q", "side", "-m", "Merge side"))
+        self.assertNotIn("Unit:", self.last_message())
 
 
 if __name__ == "__main__":

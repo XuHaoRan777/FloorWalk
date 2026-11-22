@@ -1,0 +1,32 @@
+#!/bin/sh
+# prepare-commit-msg 钩子（AGENTS.md 第 6 节）：提交信息没写归属、又正好只有一个单元 in_progress 时，
+# 在末尾补一行 `Unit: <单元号>`。已有单元号、`Mode: fix` 或 `Unit:` 行的不动；
+# 没有或不止一个单元在做时也不动，由 commit-msg 拒绝后自己写。合并与压缩提交不补。
+
+msg_file="$1"
+case "$2" in merge|squash) exit 0 ;; esac
+
+msg=$(tr -d '\r' < "$msg_file" | sed -e '/^# -\{8,\} >8 -\{8,\}$/,$d' -e '/^#/d')
+printf '%s\n' "$msg" | grep -qiE 'mode: *fix([^[:alnum:]]|$)' && exit 0
+printf '%s\n' "$msg" | grep -qiE '^Unit:' && exit 0
+for id in $(printf '%s\n' "$msg" | grep -oE '[A-Z][A-Z0-9]{1,5}-[0-9]{3}' | sort -u); do
+  for dir in docs/work/"$id"-*/; do
+    [ -d "$dir" ] && exit 0
+  done
+done
+
+units=""
+for plan in docs/work/*/plan.md; do
+  [ -f "$plan" ] || continue
+  grep -q '^- 工作单元状态：`in_progress`' "$plan" || continue
+  grep -q '^- 归档状态：`active`' "$plan" || continue
+  dir=${plan%/plan.md}
+  id=$(printf '%s\n' "${dir##*/}" | sed -n 's/^\([A-Z][A-Z0-9]\{1,5\}-[0-9]\{3\}\)-.*$/\1/p')
+  [ -n "$id" ] && units="$units $id"
+done
+# shellcheck disable=SC2086
+set -- $units
+[ $# -eq 1 ] || exit 0
+
+git interpret-trailers --in-place --if-exists doNothing --trailer "Unit: $1" "$msg_file"
+exit 0
