@@ -19,12 +19,10 @@ type OriginalProfile = {
 };
 
 async function openProfile(page: Page) {
-  await page
-    .getByLabel('控制台导航')
-    .getByRole('button', { name: '我的', exact: true })
-    .click();
+  await page.locator('.fw-sidebar-user > summary').click();
+  await page.getByRole('button', { name: '账户设置', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: '我的', exact: true }),
+    page.getByRole('heading', { name: '账户设置', exact: true }),
   ).toBeVisible();
 }
 
@@ -73,7 +71,7 @@ for (const account of [
 
         await openProfile(page);
         const profile = page.locator('section').filter({
-          has: page.getByRole('heading', { name: '我的', exact: true }),
+          has: page.getByRole('heading', { name: '账户设置', exact: true }),
         });
         await expect(
           profile.getByText('登录名（只读）', { exact: true }),
@@ -155,7 +153,8 @@ for (const account of [
             updatedName,
           );
 
-        await profile
+        await page.locator('.fw-sidebar-user > summary').click();
+        await page
           .getByRole('button', { name: '退出登录', exact: true })
           .click();
         await expect(page).toHaveURL('/');
@@ -258,7 +257,7 @@ for (const account of [
         await page.reload();
         await openProfile(page);
         const profile = page.locator('section').filter({
-          has: page.getByRole('heading', { name: '我的', exact: true }),
+          has: page.getByRole('heading', { name: '账户设置', exact: true }),
         });
         await expect(
           profile.getByText(account.loginName, { exact: true }),

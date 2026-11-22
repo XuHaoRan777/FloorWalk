@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
   ClipboardCheck,
@@ -11,14 +11,17 @@ import {
   LogOut,
   UserRound,
   Users,
+  ChevronUp,
+  Settings2,
 } from 'lucide-react';
-import { APP_NAME } from '@libs/shared';
+import { APP_NAME, type CurrentUser } from '@libs/shared';
 import { Header } from '@/components/layout/header';
 import { Main } from '@/components/layout/main';
 import { Button } from '@/components/ui/button';
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
@@ -26,7 +29,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
 } from '@/components/ui/sidebar';
-import { readSession, type TaskReview } from '@/lib/api';
+import { getMe, readSession, type TaskReview } from '@/lib/api';
 import type { Notification } from '@libs/shared';
 import { DashboardView } from '@/components/console/dashboard-view';
 import { TodayView } from '@/components/console/today-view';
@@ -69,6 +72,15 @@ export function ConsolePage() {
   const [selected, setSelected] = useState<TaskReview | null>(null);
   const [selectedNotification, setSelectedNotification] =
     useState<Notification | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const userId = session?.user.id;
+  const handleUserChange = useCallback(
+    (nextUser: CurrentUser) => {
+      updateUser(nextUser);
+      setAvatarUrl(nextUser.avatarUrl);
+    },
+    [updateUser],
+  );
   const reviewQueue = useReviewQueue(
     !loading &&
       session?.user.role === 'admin' &&
@@ -77,6 +89,19 @@ export function ConsolePage() {
   useEffect(() => {
     if (session?.user.role === 'admin') setSection('dashboard');
   }, [session?.user.role]);
+  useEffect(() => {
+    let active = true;
+    if (userId) {
+      void getMe()
+        .then((currentUser) => {
+          if (active) setAvatarUrl(currentUser.avatarUrl);
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      active = false;
+    };
+  }, [userId]);
   useEffect(() => {
     if (session?.user.mustChangePassword)
       void navigate({ to: '/change-password', replace: true });
@@ -93,6 +118,11 @@ export function ConsolePage() {
   const { user } = session;
   if (user.mustChangePassword) return null;
   const isAdmin = user.role === 'admin';
+  const navigateSection = (nextSection: ConsoleSection) => {
+    setSelectedNotification(null);
+    setSelected(null);
+    setSection(nextSection);
+  };
   return (
     <SidebarProvider className="fw-console">
       <Sidebar variant="inset">
@@ -106,59 +136,42 @@ export function ConsolePage() {
           </Link>
         </SidebarHeader>
         <SidebarContent>
-          <nav aria-label="控制台导航" className="p-2">
+          <nav aria-label="控制台导航" className="flex min-h-full flex-col p-2">
             <SidebarMenu>
-              {isAdmin && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    isActive={section === 'today'}
-                    onClick={() => {
-                      setSection('today');
-                      setSelected(null);
-                    }}
-                  >
-                    <CalendarDays aria-hidden="true" />
-                    <span>今日视图</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-              {isAdmin && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    isActive={section === 'queue'}
-                    onClick={() => {
-                      setSection('queue');
-                      setSelected(null);
-                    }}
-                  >
-                    <ClipboardCheck aria-hidden="true" />
-                    <span>审核队列</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-              {isAdmin && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    isActive={isAdmin && section === 'dashboard'}
-                    onClick={() => {
-                      setSection('dashboard');
-                      setSelected(null);
-                    }}
-                  >
-                    <LayoutDashboard aria-hidden="true" />
-                    <span>总部看板</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
               {isAdmin && (
                 <>
                   <SidebarMenuItem>
                     <SidebarMenuButton
+                      isActive={section === 'today'}
+                      onClick={() => navigateSection('today')}
+                    >
+                      <CalendarDays aria-hidden="true" />
+                      <span>今日视图</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={section === 'dashboard'}
+                      onClick={() => navigateSection('dashboard')}
+                    >
+                      <LayoutDashboard aria-hidden="true" />
+                      <span>总部看板</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={section === 'queue'}
+                      onClick={() => navigateSection('queue')}
+                    >
+                      <ClipboardCheck aria-hidden="true" />
+                      <span>审核队列</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <li className="fw-sidebar-divider" aria-hidden="true" />
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
                       isActive={section === 'sites'}
-                      onClick={() => {
-                        setSection('sites');
-                        setSelected(null);
-                      }}
+                      onClick={() => navigateSection('sites')}
                     >
                       <Store aria-hidden="true" />
                       <span>门店</span>
@@ -167,10 +180,7 @@ export function ConsolePage() {
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       isActive={section === 'templates'}
-                      onClick={() => {
-                        setSection('templates');
-                        setSelected(null);
-                      }}
+                      onClick={() => navigateSection('templates')}
                     >
                       <ClipboardList aria-hidden="true" />
                       <span>模板</span>
@@ -178,35 +188,8 @@ export function ConsolePage() {
                   </SidebarMenuItem>
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      isActive={section === 'standards'}
-                      onClick={() => {
-                        setSection('standards');
-                        setSelected(null);
-                      }}
-                    >
-                      <FileText aria-hidden="true" />
-                      <span>AI 审核标准</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      isActive={section === 'schedules'}
-                      onClick={() => {
-                        setSection('schedules');
-                        setSelected(null);
-                      }}
-                    >
-                      <CalendarDays aria-hidden="true" />
-                      <span>日程方案</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
                       isActive={section === 'site-schedules'}
-                      onClick={() => {
-                        setSection('site-schedules');
-                        setSelected(null);
-                      }}
+                      onClick={() => navigateSection('site-schedules')}
                     >
                       <CalendarRange aria-hidden="true" />
                       <span>门店日程安排</span>
@@ -214,43 +197,78 @@ export function ConsolePage() {
                   </SidebarMenuItem>
                   <SidebarMenuItem>
                     <SidebarMenuButton
+                      isActive={section === 'schedules'}
+                      onClick={() => navigateSection('schedules')}
+                    >
+                      <CalendarDays aria-hidden="true" />
+                      <span>日程方案</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={section === 'standards'}
+                      onClick={() => navigateSection('standards')}
+                    >
+                      <FileText aria-hidden="true" />
+                      <span>AI 审核标准</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
                       isActive={section === 'users'}
-                      onClick={() => {
-                        setSection('users');
-                        setSelected(null);
-                      }}
+                      onClick={() => navigateSection('users')}
                     >
                       <Users aria-hidden="true" />
-                      <span>账号</span>
+                      <span>人员管理</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 </>
               )}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={section === 'profile'}
-                  onClick={() => {
-                    setSection('profile');
-                    setSelected(null);
-                  }}
-                >
-                  <UserRound aria-hidden="true" />
-                  <span>我的</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
             </SidebarMenu>
           </nav>
         </SidebarContent>
+        <SidebarFooter className="fw-sidebar-footer">
+          <details className="fw-sidebar-user">
+            <summary
+              aria-label={`账户菜单，${user.displayName}`}
+              title={user.displayName}
+            >
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" />
+              ) : (
+                <span className="fw-sidebar-user__avatar">
+                  <UserRound aria-hidden="true" />
+                </span>
+              )}
+              <span className="fw-sidebar-user__identity">
+                <strong>{user.displayName}</strong>
+                <small>{roleLabel[user.role]}</small>
+              </span>
+              <ChevronUp aria-hidden="true" />
+            </summary>
+            <div className="fw-sidebar-user__menu">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.currentTarget
+                    .closest('details')
+                    ?.removeAttribute('open');
+                  navigateSection('profile');
+                }}
+              >
+                <Settings2 aria-hidden="true" />
+                账户设置
+              </button>
+              <button type="button" onClick={() => void logout()}>
+                <LogOut aria-hidden="true" />
+                退出登录
+              </button>
+            </div>
+          </details>
+        </SidebarFooter>
       </Sidebar>
       <SidebarInset className="@container/content">
         <Header>
-          <span
-            data-slot="console-identity"
-            className="min-w-0 truncate whitespace-nowrap text-sm text-muted-foreground"
-            title={`${roleLabel[user.role]} · ${user.displayName}`}
-          >
-            {roleLabel[user.role]} · {user.displayName}
-          </span>
           <div className="ml-auto">
             <NotificationInbox onOpen={setSelectedNotification} />
           </div>
@@ -261,8 +279,7 @@ export function ConsolePage() {
               className="fw-console-pending-button"
               title={reviewQueue.error || undefined}
               onClick={() => {
-                setSection('queue');
-                setSelected(null);
+                navigateSection('queue');
                 reviewQueue.refresh();
               }}
             >
@@ -277,10 +294,6 @@ export function ConsolePage() {
               </span>
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={logout}>
-            <LogOut aria-hidden="true" />
-            退出登录
-          </Button>
         </Header>
         <Main id="main">
           <div className="fw-console-sheet">
@@ -293,7 +306,7 @@ export function ConsolePage() {
                 onReviewed={reviewQueue.refresh}
               />
             ) : section === 'profile' ? (
-              <ProfilePage onUserChange={updateUser} onLogout={logout} />
+              <ProfilePage onUserChange={handleUserChange} />
             ) : isAdmin && section === 'sites' ? (
               <SitesPage />
             ) : isAdmin && section === 'templates' ? (

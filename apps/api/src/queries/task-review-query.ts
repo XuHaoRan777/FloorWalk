@@ -89,7 +89,13 @@ export async function loadTaskReview(
            AND (NOT template.ai_enabled OR ai_job.status IS NULL) THEN 'manual'
            ELSE ai_job.status END AS "aiReviewStatus",
          uploader.display_name AS "uploadedByName", item.uploaded_at AS "uploadedAt",
-         item.incomplete, item.note, item.created_at AS "createdAt"
+         item.incomplete,
+         EXISTS (
+           SELECT 1 FROM floorwalk.inspection_item_decisions decision
+           WHERE decision.inspection_item_id = item.id
+             AND decision.created_at > inspection.decided_at
+         ) AS "manuallyDecidedAfterCompletion",
+         item.note, item.created_at AS "createdAt"
        FROM floorwalk.inspection_items item
        JOIN floorwalk.inspections inspection ON inspection.id = item.inspection_id
        JOIN floorwalk.templates template ON template.id = inspection.template_id

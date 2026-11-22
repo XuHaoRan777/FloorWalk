@@ -173,6 +173,7 @@ export const taskReviewItemSchema = inspectionItemSchema.extend({
   uploadedByName: z.string().nullable(),
   uploadedAt: timestamp.nullable(),
   incomplete: z.boolean(),
+  manuallyDecidedAfterCompletion: z.boolean(),
   aiReviewStatus: aiReviewJobStatusSchema.nullable(),
   aiReason: z.string().nullable(),
   lastReworkReason: z.string().nullable(),

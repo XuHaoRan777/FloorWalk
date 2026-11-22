@@ -43,7 +43,7 @@ test('店长 Web 端不显示管理员审核与配置页面', async ({ page }) =
   await page.getByLabel('密码').fill('northbean-demo');
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page.getByText('请使用手机端')).toBeVisible();
-  for (const name of ['审核队列', '门店', '模板', '账号'])
+  for (const name of ['审核队列', '门店', '模板', '人员管理'])
     await expect(page.getByRole('button', { name, exact: true })).toHaveCount(
       0,
     );

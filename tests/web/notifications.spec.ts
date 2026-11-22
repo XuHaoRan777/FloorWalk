@@ -124,6 +124,12 @@ test('FW-036 AC-04 通知面板显示未读并标记后跳转任务详情', asyn
   await entry.click();
   await expect(page.getByRole('heading', { name: '检查项' })).toBeVisible();
   await expect(page.getByRole('button', { name: /^通知$/ })).toBeVisible();
+  await page
+    .getByLabel('控制台导航')
+    .getByRole('button', { name: '今日视图', exact: true })
+    .click();
+  await expect(page.getByRole('heading', { name: '今日视图' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '检查项' })).toHaveCount(0);
 
   const stored = await pool.query<{ readAt: Date | null }>(
     'SELECT read_at AS "readAt" FROM floorwalk.notifications WHERE id = $1',

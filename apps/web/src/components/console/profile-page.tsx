@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Camera, KeyRound, LogOut, UserRound } from 'lucide-react';
+import { Camera, KeyRound, UserRound } from 'lucide-react';
 import {
   avatarMimeTypes,
   maxAvatarSizeBytes,
@@ -15,15 +15,13 @@ import { roleLabel } from './labels';
 
 export function ProfilePage({
   onUserChange,
-  onLogout,
 }: {
   onUserChange: (user: CurrentUser) => void;
-  onLogout: () => Promise<void>;
 }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<'name' | 'avatar' | 'logout' | null>(null);
+  const [busy, setBusy] = useState<'name' | 'avatar' | null>(null);
   const [error, setError] = useState('');
   const [nameError, setNameError] = useState('');
   const [avatarError, setAvatarError] = useState('');
@@ -110,7 +108,7 @@ export function ProfilePage({
       <div className="fw-page-heading">
         <div>
           <p className="fw-page-eyebrow">个人资料</p>
-          <h1>我的</h1>
+          <h1>账户设置</h1>
         </div>
       </div>
       <ErrorBanner message={error} />
@@ -255,17 +253,6 @@ export function ProfilePage({
                 <KeyRound aria-hidden="true" />
                 改密码
               </Link>
-            </Button>
-            <Button
-              variant="outline"
-              disabled={busy !== null}
-              onClick={() => {
-                setBusy('logout');
-                void onLogout().finally(() => setBusy(null));
-              }}
-            >
-              <LogOut aria-hidden="true" />
-              {busy === 'logout' ? '正在退出…' : '退出登录'}
             </Button>
           </div>
         </>

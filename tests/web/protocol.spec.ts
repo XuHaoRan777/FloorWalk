@@ -32,10 +32,13 @@ for (const account of [
     await page.getByLabel('密码').fill('northbean-demo');
     await page.getByRole('button', { name: '登录' }).click();
     await expect(page).toHaveURL(/\/console$/);
-    const usersButton = page.getByRole('button', { name: '账号', exact: true });
+    const usersButton = page.getByRole('button', {
+      name: '人员管理',
+      exact: true,
+    });
     if (account.canManage) {
       await usersButton.click();
-      await expect(page.getByRole('heading', { name: '账号' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: '人员管理' })).toBeVisible();
       await expect(page.getByLabel('昵称')).toBeVisible();
       await expect(page.getByLabel('登录名（手机号或邮箱）')).toBeVisible();
       await expect(page.getByLabel('初始密码')).toBeVisible();

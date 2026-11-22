@@ -220,7 +220,7 @@ export function ReviewDetail({
                           {item.minPhotoCount > 0
                             ? `至少 ${item.minPhotoCount} 张照片`
                             : '可不上传照片，需填写备注'}
-                          {item.incomplete ? ' · 未完成' : ''}
+                          {item.incomplete ? ' · 截止时未完成' : ''}
                         </p>
                         <p className="mt-2 break-all text-sm text-muted-foreground">
                           {item.uploadedByName ?? '系统'} · 上传于{' '}

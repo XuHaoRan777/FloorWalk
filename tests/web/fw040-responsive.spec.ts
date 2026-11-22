@@ -249,7 +249,7 @@ test('FW-040 AC-05/08 与 FW-041 AC-07 Web 页面宽度和改版前截图', asyn
     .click();
   await inspectScreen(page, 'dashboard-dates', observations);
 
-  await openSection(page, '账号');
+  await openSection(page, '人员管理');
   await expect(page.getByRole('table')).toBeVisible();
   await inspectScreen(page, 'users', observations);
 
@@ -272,7 +272,11 @@ test('FW-040 AC-05/08 与 FW-041 AC-07 Web 页面宽度和改版前截图', asyn
   await openSection(page, '门店日程安排');
   await inspectScreen(page, 'site-schedules', observations);
 
-  await openSection(page, '我的');
+  await page.locator('.fw-sidebar-user > summary').click();
+  await page.getByRole('button', { name: '账户设置', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: '账户设置', exact: true }),
+  ).toBeVisible();
   await inspectScreen(page, 'profile', observations);
 
   await page.getByRole('button', { name: /^通知/ }).click();
@@ -348,37 +352,46 @@ test('FW-040 AC-01/06 侧栏断点与抽屉键盘焦点', async ({ page }) => {
   ).toHaveCount(0);
 });
 
-test('FW-040 AC-04 顶栏身份单行截断并保留完整名称', async ({ page }) => {
+test('FW-040 AC-04 侧栏账户姓名在窄屏内截断显示', async ({ page }) => {
   await loginAsAdmin(page);
-  const identity = page.locator('[data-slot="console-identity"]');
-  const fullIdentity = (await identity.textContent())?.trim() ?? '';
-  await expect(identity).toHaveAttribute('title', fullIdentity);
+  const identity = page.locator('.fw-sidebar-user__identity');
+  const displayName = await identity.locator('strong').textContent();
+  await expect(page.locator('.fw-sidebar-user summary')).toHaveAttribute(
+    'title',
+    displayName ?? '',
+  );
 
   for (const width of [768, 1023]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.locator('[data-slot="sidebar"]')).toHaveCount(0);
+    await page.locator('[data-slot="sidebar-trigger"]').click();
+    await expect(page.locator('.fw-sidebar-user')).toBeVisible();
     const layout = await identity.evaluate((element) => {
-      const original = element.textContent ?? '';
-      element.textContent = `${original} · ${'Northbean管理员'.repeat(10)}`;
-      const style = getComputedStyle(element);
+      const name = element.querySelector('strong') as HTMLElement;
+      const original = name.textContent ?? '';
+      name.textContent = `${original} · ${'Northbean管理员'.repeat(10)}`;
+      const style = getComputedStyle(name);
       const result = {
         whiteSpace: style.whiteSpace,
         textOverflow: style.textOverflow,
-        clientWidth: element.clientWidth,
-        scrollWidth: element.scrollWidth,
+        clientWidth: name.clientWidth,
+        scrollWidth: name.scrollWidth,
         withinHeader:
-          element.getBoundingClientRect().right <=
-          element.parentElement!.getBoundingClientRect().right,
+          name.getBoundingClientRect().right <=
+          element.getBoundingClientRect().right,
       };
-      element.textContent = original;
+      name.textContent = original;
       return result;
     });
 
-    expect(layout.whiteSpace, `${width}px 身份文本`).toBe('nowrap');
-    expect(layout.textOverflow, `${width}px 身份截断`).toBe('ellipsis');
-    expect(layout.clientWidth, `${width}px 应发生截断`).toBeLessThan(
+    expect(layout.whiteSpace, `${width}px 用户名称`).toBe('nowrap');
+    expect(layout.textOverflow, `${width}px 用户名称截断`).toBe('ellipsis');
+    expect(layout.clientWidth, `${width}px 名称应发生截断`).toBeLessThan(
       layout.scrollWidth,
     );
-    expect(layout.withinHeader, `${width}px 身份不得溢出顶栏`).toBe(true);
+    expect(layout.withinHeader, `${width}px 名称不得溢出用户组件`).toBe(true);
+    await page
+      .locator('[data-slot="sidebar"][data-mobile="true"]')
+      .getByRole('button', { name: '关闭' })
+      .click();
   }
 });

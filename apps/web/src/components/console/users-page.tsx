@@ -136,7 +136,7 @@ export function UsersPage() {
       <div className="fw-page-heading flex-wrap">
         <div>
           <p className="fw-page-eyebrow">人员与权限</p>
-          <h1>账号</h1>
+          <h1>人员管理</h1>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RotateCcw aria-hidden="true" />

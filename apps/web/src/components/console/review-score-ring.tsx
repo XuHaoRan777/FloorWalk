@@ -3,6 +3,8 @@ import type { TaskReview } from '@libs/shared';
 
 const CENTER = 90;
 const RADIUS = 74;
+const STROKE_WIDTH = 10;
+const SEGMENT_GAP_DEGREES = 10;
 const DRAW_SECONDS = 0.6;
 
 type SegmentTone = 'passed' | 'failed' | null;
@@ -40,8 +42,13 @@ function arcPath(startAngle: number, endAngle: number) {
 
 function segmentTones(task: TaskReview): SegmentTone[] {
   return task.items.map((item) => {
-    if (item.incomplete || item.result === 'pending') return null;
-    return item.result === 'pass' ? 'passed' : 'failed';
+    if (item.result === 'pass') return 'passed';
+    if (
+      item.result === 'pending' ||
+      (item.incomplete && !item.manuallyDecidedAfterCompletion)
+    )
+      return null;
+    return 'failed';
   });
 }
 
@@ -128,7 +135,10 @@ export function ReviewScoreRing({
     task.decidedAt !== null && task.inspectionStatus === 'passed';
   const hasVerdict = task.decidedAt !== null;
   const segments = ringSegments(tones, itemCount > 12);
-  const gapDegrees = itemCount > 12 ? 0 : 10;
+  const capCoverageDegrees =
+    (Math.asin(STROKE_WIDTH / (2 * RADIUS)) * 180) / Math.PI;
+  const arcInsetDegrees =
+    itemCount > 12 ? 0 : SEGMENT_GAP_DEGREES / 2 + capCoverageDegrees;
   const stepDegrees = itemCount === 0 ? 360 : 360 / itemCount;
   const lastScoredIndex = tones.reduce(
     (lastIndex, tone, index) => (tone ? index : lastIndex),
@@ -166,19 +176,21 @@ export function ReviewScoreRing({
           cx={CENTER}
           cy={CENTER}
           r={RADIUS}
+          strokeWidth={STROKE_WIDTH}
           className="fw-review-ring__track"
         />
         {segments.map((segment) => {
-          const startAngle = segment.startIndex * stepDegrees + gapDegrees / 2;
+          const startAngle = segment.startIndex * stepDegrees + arcInsetDegrees;
           const endAngle =
             (segment.startIndex + segment.itemCount) * stepDegrees -
-            gapDegrees / 2;
+            arcInsetDegrees;
           return (
             <path
               key={`${segment.tone}-${segment.startIndex}`}
               className={`fw-review-ring__arc fw-review-ring__arc--${segment.tone}`}
               d={arcPath(startAngle, endAngle)}
               pathLength="1"
+              strokeWidth={STROKE_WIDTH}
               strokeLinecap={itemCount > 12 ? 'butt' : 'round'}
               style={animationStyle(segment, itemCount)}
             />
@@ -208,6 +220,7 @@ export function ReviewScoreRing({
             cx={CENTER}
             cy={CENTER}
             r={RADIUS}
+            strokeWidth={STROKE_WIDTH}
             className="fw-review-ring__burst"
             style={{ '--fw-ring-burst-delay': burstDelay } as CSSProperties}
             onAnimationEnd={onPlaybackEnd}

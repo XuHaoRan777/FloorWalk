@@ -21,9 +21,9 @@ test('FW-024 AC-08 管理员创建店长并完成首次改密', async ({ page })
     await page.getByRole('button', { name: '登录', exact: true }).click();
     await expect(page).toHaveURL(/\/console$/);
 
-    await page.getByRole('button', { name: '账号', exact: true }).click();
+    await page.getByRole('button', { name: '人员管理', exact: true }).click();
     await expect(
-      page.getByRole('heading', { name: '账号', exact: true }),
+      page.getByRole('heading', { name: '人员管理', exact: true }),
     ).toBeVisible();
     await page.getByLabel('昵称', { exact: true }).fill('FW-024 e2e 店长');
     await page.getByLabel('登录名（手机号或邮箱）').fill(email);

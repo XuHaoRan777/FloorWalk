@@ -82,6 +82,12 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
               title: '检查项二',
               minPhotoCount: 0,
               acceptanceCriteria: '确认记录准确。',
+              critical: true,
+            },
+            {
+              title: '检查项三',
+              minPhotoCount: 0,
+              acceptanceCriteria: '核对截止时未提交的条目。',
               critical: false,
             },
           ],
@@ -295,6 +301,25 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
     }
     await page.setViewportSize({ width: 1280, height: 900 });
 
+    await page.setViewportSize({ width: 2560, height: 1440 });
+    const reviewSheet = page.locator('.fw-console-sheet');
+    const wideLayout = await reviewSheet.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      const mainBounds = element.closest('#main')!.getBoundingClientRect();
+      return {
+        width: bounds.width,
+        left: bounds.left,
+        mainLeft: mainBounds.left,
+        mainWidth: mainBounds.width,
+      };
+    });
+    expect(wideLayout.width).toBeLessThanOrEqual(1680);
+    expect(wideLayout.left).toBeCloseTo(
+      wideLayout.mainLeft + (wideLayout.mainWidth - wideLayout.width) / 2,
+      0,
+    );
+    await page.setViewportSize({ width: 1280, height: 900 });
+
     const firstItem = page
       .getByRole('article')
       .filter({ has: page.getByRole('heading', { name: /检查项一/ }) });
@@ -356,16 +381,39 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
     await secondItem.getByRole('button', { name: '通过' }).click();
     const summary = page.locator('.fw-page-heading').last();
     await expect(summary).toContainText('通过');
-    await expect(scoreRing).toHaveAttribute('aria-label', '审核评分100 分');
+    await expect(scoreRing).toHaveAttribute('aria-label', '审核评分67 分');
     await expect(scoreRing).toHaveClass(/fw-review-ring--playing/);
     await expect(scoreRing.locator('.fw-review-ring__content')).toHaveText(
-      '100分',
+      '67分',
     );
     await expect(scoreRing.locator('.fw-review-ring__arc')).toHaveCount(2);
     await expect(scoreRing.locator('.fw-review-ring__arc').first()).toHaveCSS(
       'stroke-linecap',
       'round',
     );
+    await expect(scoreRing.locator('.fw-review-ring__arc').first()).toHaveCSS(
+      'stroke-width',
+      '10px',
+    );
+    const visibleSegmentGap = await scoreRing
+      .locator('.fw-review-ring__arc')
+      .evaluateAll((arcs) => {
+        const center = 90;
+        const firstArc = arcs[0] as SVGPathElement;
+        const secondArc = arcs[1] as SVGPathElement;
+        const endPoint = firstArc.getPointAtLength(firstArc.getTotalLength());
+        const startPoint = secondArc.getPointAtLength(0);
+        const radius = Math.hypot(endPoint.x - center, endPoint.y - center);
+        const strokeWidth = Number(firstArc.getAttribute('stroke-width'));
+        const capCoverageDegrees =
+          (Math.asin(strokeWidth / (2 * radius)) * 180) / Math.PI;
+        const toAngle = (point: DOMPoint) =>
+          (Math.atan2(point.x - center, center - point.y) * 180) / Math.PI;
+        const centerlineGap =
+          (toAngle(startPoint) - toAngle(endPoint) + 360) % 360;
+        return centerlineGap - capCoverageDegrees * 2;
+      });
+    expect(visibleSegmentGap).toBeCloseTo(10, 1);
     await expect(
       scoreRing.locator('.fw-review-ring__badge circle').first(),
     ).toHaveCSS('stroke-width', '3px');
@@ -377,9 +425,50 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
       .getByRole('region', { name: '今天已判定', exact: true })
       .getByRole('button')
       .filter({ hasText: site.name });
-    await expect(decidedRow).toContainText('100 分');
+    await expect(decidedRow).toContainText('67 分');
     await decidedRow.click();
+    const missingItem = page
+      .getByRole('article')
+      .filter({ has: page.getByRole('heading', { name: /检查项三/ }) });
+    await expect(missingItem).toContainText('截止时未完成');
+    await expect(scoreRing).not.toHaveClass(/fw-review-ring--playing/);
+    await expect(scoreRing.locator('.fw-review-ring__arc')).toHaveCount(2);
+    await missingItem.getByRole('button', { name: '通过' }).click();
+    const blueArcs = scoreRing.locator('.fw-review-ring__arc--passed');
     await expect(scoreRing).toHaveAttribute('aria-label', '审核评分100 分');
+    await expect(blueArcs).toHaveCount(3);
+    await expect(blueArcs.last()).toHaveCSS(
+      'animation-name',
+      'fw-review-ring-draw',
+    );
+    const matchesBrandColor = await blueArcs.last().evaluate((arc) => {
+      const style = getComputedStyle(arc);
+      const context = document.createElement('canvas').getContext('2d')!;
+      context.fillStyle = style.getPropertyValue('--fw-primary').trim();
+      const expected = context.fillStyle;
+      context.fillStyle = style.stroke;
+      return context.fillStyle === expected;
+    });
+    expect(matchesBrandColor).toBe(true);
+    await page.getByRole('button', { name: '返回队列' }).click();
+    await decidedRow.click();
+    await expect(blueArcs).toHaveCount(3);
+    await expect(scoreRing).toHaveAttribute('aria-label', '审核评分100 分');
+    await expect(missingItem).toContainText('截止时未完成');
+    await expect(scoreRing).not.toHaveClass(/fw-review-ring--playing/);
+    await missingItem.getByRole('button', { name: '不合格' }).click();
+    const redArcs = scoreRing.locator('.fw-review-ring__arc--failed');
+    await expect(scoreRing).toHaveAttribute('aria-label', '审核评分67 分');
+    await expect(redArcs).toHaveCount(1);
+    await expect(missingItem).toContainText('截止时未完成');
+    await page.getByRole('button', { name: '返回队列' }).click();
+    await decidedRow.click();
+    await expect(redArcs).toHaveCount(1);
+    await expect(scoreRing).not.toHaveClass(/fw-review-ring--playing/);
+    await expect(missingItem).toContainText('截止时未完成');
+    await missingItem.getByRole('button', { name: '通过' }).click();
+    await expect(scoreRing).toHaveAttribute('aria-label', '审核评分100 分');
+    await expect(blueArcs).toHaveCount(3);
     await expect(scoreRing).not.toHaveClass(/fw-review-ring--playing/);
     await pool.query(
       `UPDATE floorwalk.inspection_tasks
@@ -388,8 +477,10 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
     );
     await secondItem.getByRole('button', { name: '不合格' }).click();
     await expect(summary).toContainText('不合格');
-    await expect(scoreRing).toHaveAttribute('aria-label', '审核评分50 分');
-    await expect(scoreRing).toHaveClass(/fw-review-ring--playing/);
+    await expect(scoreRing.locator('.fw-review-ring__arc--failed')).toHaveCount(
+      1,
+    );
+    await expect(scoreRing).toHaveAttribute('aria-label', '审核评分67 分');
     await expect(
       firstItem.getByRole('button', { name: '打回' }),
     ).toBeDisabled();
