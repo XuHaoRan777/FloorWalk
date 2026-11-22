@@ -1,8 +1,11 @@
 #!/bin/sh
-# commit-msg 钩子（AGENTS.md 第 3 节），只做两件事，不改提交信息、不碰 specs：
+# commit-msg 钩子（AGENTS.md 第 3、6 节），只检查，不改提交信息、不碰 specs：
 #   1. 提交信息任意位置有 `Mode: fix`（含写在标题末尾），改了代码却没追加 docs/testlog.md，拒绝。
 #   2. 暂存区改到 scripts/workflow.conf 登记的 hardline 路径，提交信息没有一行 `硬线：<动了什么>`，拒绝。
-# 注释行和 `git commit -v` 附带的 diff 不算提交信息。安装：git config core.hooksPath scripts/hooks
+#   3. 改了代码的提交要有归属：一个存在的单元号、`Mode: fix`、或一行 `Unit: none`，都没有就拒绝。
+#      只有一个单元 in_progress 时 prepare-commit-msg 会自动补 `Unit: <单元号>`。
+# 「代码」指 docs/ 和 *.md 以外的文件。注释行和 `git commit -v` 附带的 diff 不算提交信息。
+# 安装：git config core.hooksPath scripts/hooks
 
 msg_file="$1"
 conf="scripts/workflow.conf"
@@ -17,11 +20,30 @@ staged=$(git -c core.quotepath=off diff --cached --name-only --no-renames)
 [ -n "$staged" ] || exit 0
 status=0
 
-# 1. 修正模式提交要追加 testlog。左边不设词边界：errand 出现过把 "\n\nMode: fix" 原样写进标题的提交
-if printf '%s\n' "$msg" | grep -qiE 'mode: *fix([^[:alnum:]]|$)'; then
-  if printf '%s\n' "$staged" | grep -qvE '^docs/|\.md$' &&
-     ! printf '%s\n' "$staged" | grep -qx 'docs/testlog.md'; then
-    echo "commit-msg: Mode: fix 提交改了代码但未追加 docs/testlog.md（AGENTS.md 第 3 节；活动单元的回修不写 Mode: fix，写单元号）" >&2
+code_changed=0
+printf '%s\n' "$staged" | grep -qvE '^docs/|\.md$' && code_changed=1
+fix_mode=0
+# 左边不设词边界：errand 出现过把 "\n\nMode: fix" 原样写进标题的提交
+printf '%s\n' "$msg" | grep -qiE 'mode: *fix([^[:alnum:]]|$)' && fix_mode=1
+
+# 1. 修正模式提交要追加 testlog
+if [ "$fix_mode" = 1 ] && [ "$code_changed" = 1 ] &&
+   ! printf '%s\n' "$staged" | grep -qx 'docs/testlog.md'; then
+  echo "commit-msg: Mode: fix 提交改了代码但未追加 docs/testlog.md（AGENTS.md 第 3 节；活动单元的回修不写 Mode: fix，写单元号）" >&2
+  status=1
+fi
+
+# 3. 改了代码的提交要有归属。仓库的第一个提交不查（套模板、出包的初始提交）
+if [ "$code_changed" = 1 ] && [ "$fix_mode" = 0 ] && git rev-parse -q --verify HEAD >/dev/null 2>&1 &&
+   ! printf '%s\n' "$msg" | grep -qiE '^Unit:[[:space:]]*none[[:space:]]*$'; then
+  owned=0
+  for id in $(printf '%s\n' "$msg" | grep -oE '[A-Z][A-Z0-9]{1,5}-[0-9]{3}' | sort -u); do
+    for dir in docs/work/"$id"-*/; do
+      [ -d "$dir" ] && owned=1
+    done
+  done
+  if [ "$owned" = 0 ]; then
+    echo "commit-msg: 改了代码的提交要有归属（AGENTS.md 第 6 节）：提交信息带 docs/work/ 里存在的单元号，或 Mode: fix，或单独一行 Unit: none" >&2
     status=1
   fi
 fi
