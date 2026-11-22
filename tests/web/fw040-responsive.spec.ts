@@ -414,3 +414,39 @@ test('FW-040 AC-04 侧栏账户姓名在窄屏内截断显示', async ({ page })
       .click();
   }
 });
+
+test('FW-044 AC-10 控制台顶栏固定且功能页独立滚动', async ({ page }) => {
+  await loginAsAdmin(page);
+  await openSection(page, '门店日程安排');
+
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 600 });
+    const main = page.locator('#main');
+    const header = page.locator(
+      '.fw-console [data-slot="sidebar-inset"] > header',
+    );
+    await expect(main).toHaveCSS('overflow-y', 'auto');
+    await expect
+      .poll(() => main.evaluate((element) => element.scrollHeight))
+      .toBeGreaterThan(await main.evaluate((element) => element.clientHeight));
+
+    const initialHeaderTop = await header.evaluate(
+      (element) => element.getBoundingClientRect().top,
+    );
+    await main.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await expect
+      .poll(() => main.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+
+    const result = await page.evaluate(() => ({
+      headerTop: document
+        .querySelector('.fw-console [data-slot="sidebar-inset"] > header')
+        ?.getBoundingClientRect().top,
+      documentScrollTop: document.scrollingElement?.scrollTop,
+    }));
+    expect(result.headerTop).toBeCloseTo(initialHeaderTop, 0);
+    expect(result.documentScrollTop).toBe(0);
+  }
+});

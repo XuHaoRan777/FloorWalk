@@ -1,5 +1,7 @@
 .fw-console {
-  min-height: 100dvh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   background: var(--fw-ground);
   color: var(--fw-foreground);
   font-variant-numeric: tabular-nums;
@@ -67,6 +69,8 @@
 
 .fw-console [data-slot='sidebar-inset'] {
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   background: var(--fw-ground);
   box-shadow: none;
 }
@@ -87,15 +91,19 @@
 }
 
 .fw-console #main {
+  flex: 1 1 0%;
   width: 100%;
   max-width: none;
-  min-height: calc(100dvh - 82px);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 16px 22px 24px;
 }
 
 .fw-console-sheet {
   container-type: inline-size;
-  min-height: calc(100dvh - 98px);
+  min-height: 100%;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -1792,10 +1800,6 @@
 @media (max-width: 767px) {
   .fw-console #main {
     padding: 12px 12px 16px;
-  }
-
-  .fw-console-sheet {
-    min-height: calc(100dvh - 82px);
   }
 
   .fw-page-heading {

@@ -320,7 +320,7 @@ export function ConsolePage() {
             </Button>
           )}
         </Header>
-        <Main id="main">
+        <Main id="main" fixed>
           <div className="fw-console-sheet">
             <ErrorBanner message={error} />
             {selectedNotification ? (
