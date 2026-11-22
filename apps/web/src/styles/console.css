@@ -103,6 +103,7 @@
 
 .fw-console-sheet {
   container-type: inline-size;
+  width: 100%;
   min-height: 100%;
   padding: 0;
   border: 0;

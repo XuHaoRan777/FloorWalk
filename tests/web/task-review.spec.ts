@@ -229,6 +229,19 @@ test('FW-031 AC-01～04 假模型失败转人工、打回重传、判定与改�
     await expect(taskRow).toContainText('提交于');
     await expect(taskRow).toContainText('AI 调用失败，请人工审核。');
     await taskRow.click();
+    const detailSheet = page.locator('.fw-console-sheet');
+    const detailSheetWidth = await detailSheet.evaluate(
+      (element) => element.getBoundingClientRect().width,
+    );
+    const mainContentWidth = await page.locator('#main').evaluate((element) => {
+      const style = getComputedStyle(element);
+      return (
+        element.clientWidth -
+        Number.parseFloat(style.paddingLeft) -
+        Number.parseFloat(style.paddingRight)
+      );
+    });
+    expect(detailSheetWidth).toBeCloseTo(mainContentWidth, 0);
     await expect(page.getByRole('heading', { name: site.name })).toBeVisible();
     const scoreRing = page.locator('.fw-review-ring');
     await expect(scoreRing).toBeVisible();
