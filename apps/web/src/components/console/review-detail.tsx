@@ -245,7 +245,7 @@ export function ReviewDetail({
                       </p>
                     )}
                     {item.aiReason && (
-                      <p className="mt-3 break-all border-l-2 border-accent bg-raised px-3 py-2 text-sm">
+                      <p className="mt-3 break-all border-l-2 border-primary bg-raised px-3 py-2 text-sm">
                         AI 理由：{item.aiReason}
                       </p>
                     )}
@@ -255,7 +255,7 @@ export function ReviewDetail({
                       </p>
                     )}
                     {item.note && (
-                      <p className="mt-3 break-all border-l-2 border-accent bg-raised px-3 py-2 text-sm">
+                      <p className="mt-3 break-all border-l-2 border-primary bg-raised px-3 py-2 text-sm">
                         备注：{item.note}
                       </p>
                     )}

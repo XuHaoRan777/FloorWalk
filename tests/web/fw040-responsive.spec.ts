@@ -272,6 +272,25 @@ test('FW-040 AC-05/08 与 FW-041 AC-07 Web 页面宽度和改版前截图', asyn
   await openSection(page, '门店日程安排');
   await inspectScreen(page, 'site-schedules', observations);
 
+  const accountMenu = page.locator('.fw-sidebar-user');
+  await page.locator('.fw-sidebar-user > summary').click();
+  await expect(accountMenu).toHaveJSProperty('open', true);
+  await page.locator('#main .fw-page-heading').click();
+  await expect(accountMenu).toHaveJSProperty('open', false);
+
+  await openSection(page, '总部看板');
+  const secondaryAction = page.getByRole('button', {
+    name: '本月',
+    exact: true,
+  });
+  await secondaryAction.hover();
+  await expect(secondaryAction).toHaveCSS('color', 'rgb(54, 93, 232)');
+
+  await page.locator('.fw-sidebar-user > summary').click();
+  await page.keyboard.press('Escape');
+  await expect(accountMenu).toHaveJSProperty('open', false);
+  await expect(page.locator('.fw-sidebar-user > summary')).toBeFocused();
+
   await page.locator('.fw-sidebar-user > summary').click();
   await page.getByRole('button', { name: '账户设置', exact: true }).click();
   await expect(

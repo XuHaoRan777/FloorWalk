@@ -96,7 +96,7 @@ export function QueueView({
                   {statusLabel[status]}
                 </span>
               </span>
-              <span className="inline-flex items-center gap-1 text-sm text-accent xl:justify-self-end">
+              <span className="inline-flex items-center gap-1 text-sm text-primary xl:justify-self-end">
                 {canReview ? '查看任务' : '查看详情'}
                 <ArrowRight className="size-4" aria-hidden="true" />
               </span>

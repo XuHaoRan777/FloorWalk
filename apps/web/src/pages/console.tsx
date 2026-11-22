@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
   ClipboardCheck,
@@ -73,6 +73,7 @@ export function ConsolePage() {
   const [selectedNotification, setSelectedNotification] =
     useState<Notification | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const accountMenuRef = useRef<HTMLDetailsElement>(null);
   const userId = session?.user.id;
   const handleUserChange = useCallback(
     (nextUser: CurrentUser) => {
@@ -102,6 +103,30 @@ export function ConsolePage() {
       active = false;
     };
   }, [userId]);
+  useEffect(() => {
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const menu = accountMenuRef.current;
+      if (
+        menu?.open &&
+        event.target instanceof Node &&
+        !menu.contains(event.target)
+      )
+        menu.open = false;
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      const menu = accountMenuRef.current;
+      if (event.key === 'Escape' && menu?.open) {
+        menu.open = false;
+        menu.querySelector('summary')?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, []);
   useEffect(() => {
     if (session?.user.mustChangePassword)
       void navigate({ to: '/change-password', replace: true });
@@ -228,7 +253,7 @@ export function ConsolePage() {
           </nav>
         </SidebarContent>
         <SidebarFooter className="fw-sidebar-footer">
-          <details className="fw-sidebar-user">
+          <details ref={accountMenuRef} className="fw-sidebar-user">
             <summary
               aria-label={`账户菜单，${user.displayName}`}
               title={user.displayName}
