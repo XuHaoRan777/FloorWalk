@@ -36,7 +36,6 @@
 
 | ID | 工作单元 | 状态 | 依赖 | 下一步 |
 | --- | --- | --- | --- | --- |
-| FW-044 | [Web 品牌与点缀](work/FW-044-web-brand-accents/spec.md) | in_progress | FW-043 | 方式 A 人工验收，确认后 Promote 与归档 |
 
 ## 待开单元（未批准，按建议顺序）
 
@@ -51,7 +50,6 @@
 
 | 单元 | 待验收内容 | 证据 |
 | --- | --- | --- |
-| FW-044 | 方式 A：确认本地 Web 的 L1/favicon、H5 四页主视觉和动效、七处 E1 空态、R2 当前分数和结果、圆头线帽后的可见间隙为 10°及 12 条以上合并效果；查看巡检详情在桌面与 390px/320px 窄屏下的页头和主体宽度、侧栏用户菜单的外部点击/Escape 关闭、功能页次级按钮的蓝色悬浮、通知详情后侧栏切页，以及桌面和窄屏下功能页滚动时顶栏固定 | [`FW-044 plan.md`](work/FW-044-web-brand-accents/plan.md) |
 
 方式 A 交接里「需要你测的」那一行登记在这里；用户一句确认即归档对应单元，不设集中验收单元。并行组的单元在集成单元合并后才登记（[`howto/parallel.md`](howto/parallel.md)）。
 
@@ -105,3 +103,4 @@
 | FW-041 | [Web 控制台视觉基础（阶段一）](work/FW-041-web-visual-foundation/spec.md)             | 2026-11-20 | Promote 与归档提交（见 git log）                              |
 | FW-042 | [Web 控制台剩余页面布局整理](work/FW-042-web-console-pages/spec.md) | 2026-11-20 | 实现、Promote 与归档提交（见 git log） |
 | FW-043 | [Web 控制台剩余页面布局整理（二）](work/FW-043-web-remaining-pages/spec.md) | 2026-11-20 | 实现、方式 A 验收、Promote 与归档提交（见 git log） |
+| FW-044 | [Web 品牌与点缀](work/FW-044-web-brand-accents/spec.md) | 2026-11-22 | 实现、方式 A 验收、Promote 与归档提交（见 git log） |

@@ -36,6 +36,16 @@
 - 失效条件：Tailwind 升级后 max-width 的主题解析优先级改变，或 spacing 与 container 命名不再冲突时重新核对。
 - 首次记录：`FW-036`
 
+### 内联尺寸容器作为 flex 子项时宽度收缩为零
+
+- 触发条件：Tailwind CSS 4.2.2 中，`container-type: inline-size` 的元素作为 flex 子项，使用自动内联尺寸和 `margin-inline: auto`。
+- 现象：元素及后代内容被压缩到零宽，页面看起来严重挤窄。
+- 根因：自动交叉轴边距使 flex 项不执行拉伸；内联尺寸 containment 又令其内容固有宽度为零。
+- 规避方式：需要占满主区时显式设 `width: 100%`，最大宽度与自动边距继续用于宽屏居中。
+- 验证方式：浏览器测试比较容器宽度与父级内容宽度，并覆盖桌面、窄屏和宽屏。
+- 失效条件：元素不再是带自动边距的 flex 子项，或移除 inline-size containment 后重新核对。
+- 首次记录：`FW-044`
+
 ### 旧 Web 回归用例仍依赖邮箱登录与主管角色
 
 - 触发条件：运行 `pnpm exec playwright test --config=playwright.web.config.ts --workers=1`，而 `tests/web/chat.spec.ts`、`console.spec.ts`、`protocol.spec.ts`、`site-supervisors.spec.ts`、`ui-foundation.spec.ts` 尚未迁移到两层角色和登录名契约。
