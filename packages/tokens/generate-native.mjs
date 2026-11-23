@@ -34,6 +34,53 @@ const fontRegistrations = {
   'IBM Plex Mono': { regular: 'IBMPlexMono_400Regular' },
 };
 
+const colorNames = [
+  'background',
+  'foreground',
+  'card',
+  'card-foreground',
+  'primary',
+  'primary-foreground',
+  'secondary',
+  'secondary-foreground',
+  'muted',
+  'muted-foreground',
+  'accent',
+  'accent-foreground',
+  'destructive',
+  'destructive-foreground',
+  'success',
+  'success-foreground',
+  'warning',
+  'warning-foreground',
+  'border',
+  'input',
+  'ring',
+  'ground',
+  'surface',
+  'raised',
+  'active',
+  'rule',
+  'positive-background',
+  'positive-foreground',
+  'negative-background',
+  'negative-foreground',
+  'warning-background',
+  'neutral-background',
+  'neutral-foreground',
+  'chart-1',
+  'chart-2',
+  'chart-3',
+];
+
+function color(name) {
+  const value = values.get(name);
+  if (!value || !/^#[\da-f]{6}$/i.test(value)) {
+    throw new Error(`Unsupported native color: --fw-${name}`);
+  }
+  return value;
+}
+
 function font(name) {
   const family = values.get(`font-${name}`)?.split(',')[0].replaceAll("'", '');
   const registration = fontRegistrations[family];
@@ -44,6 +91,12 @@ function font(name) {
 }
 
 const nativeTokens = {
+  colors: Object.fromEntries(
+    colorNames.map((name) => [
+      name.replace(/-([a-z\d])/g, (_, letter) => letter.toUpperCase()),
+      color(name),
+    ]),
+  ),
   font: { sans: font('sans'), mono: font('mono') },
   radius: Object.fromEntries(
     ['control', 'card', 'sheet'].map((name) => [

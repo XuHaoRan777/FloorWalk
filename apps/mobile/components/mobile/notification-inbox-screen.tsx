@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import type { Notification, User } from '@libs/shared';
 import {
   ActivityIndicator,
@@ -80,7 +80,13 @@ function notificationTarget(notification: Notification, role: User['role']) {
   if (role === 'admin')
     return notification.type === 'task_overdue'
       ? ('/admin/review' as const)
-      : (`/admin/review/${notification.payload.taskId}` as const);
+      : ({
+          pathname: '/admin/review/[id]',
+          params: {
+            id: notification.payload.taskId,
+            returnTo: 'notifications',
+          },
+        } as Href);
   if (
     notification.type === 'item_rework' ||
     notification.type === 'inspection_overridden'
@@ -269,7 +275,9 @@ export function NotificationInboxScreen({
           <Pressable
             accessibilityRole="button"
             onPress={() =>
-              router.canGoBack() ? router.back() : router.replace('/admin')
+              router.canGoBack()
+                ? router.back()
+                : router.replace('/admin/today')
             }
             style={styles.touchTarget}
           >

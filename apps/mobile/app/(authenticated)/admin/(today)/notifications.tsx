@@ -1,5 +1,5 @@
-import { NotificationInboxScreen } from '../../../components/mobile/notification-inbox-screen';
-import { useSession } from '../../../components/mobile/session-provider';
+import { NotificationInboxScreen } from '../../../../components/mobile/notification-inbox-screen';
+import { useSession } from '../../../../components/mobile/session-provider';
 
 export default function AdminNotificationsPage() {
   const { session } = useSession();

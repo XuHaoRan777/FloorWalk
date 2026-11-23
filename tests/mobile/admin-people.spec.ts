@@ -92,7 +92,7 @@ test('AC-02、AC-03 账号和门店的完整配置与刷新持久化', async ({ 
       .click();
     await expect(firstSite).not.toContainText('已停用');
 
-    await page.getByRole('button', { name: '返回管理主页' }).click();
+    await page.getByRole('button', { name: '返回', exact: true }).click();
     await page.getByTestId('admin-entry-accounts').click();
     await page.getByRole('button', { name: '新建店长', exact: true }).click();
     const loginName = `fw033-${Date.now()}@example.test`;
@@ -153,7 +153,7 @@ test('AC-02、AC-03 账号和门店的完整配置与刷新持久化', async ({ 
     await expect(card).toContainText('移动改名店长');
     await expect(card).toContainText(sites[1].name);
     await expect(card).toContainText('待首次改密');
-    await page.getByRole('button', { name: '返回管理主页' }).click();
+    await page.getByRole('button', { name: '返回', exact: true }).click();
     await page.getByTestId('admin-entry-sites').click();
     await expect(page.getByTestId(`site-${sites[1].id}`)).toContainText(
       '店长：移动改名店长',

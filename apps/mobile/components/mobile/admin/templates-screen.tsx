@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react';
 import type { AiStandard, QuickSetupTemplateRequest } from '@libs/shared';
 import { adminApi, type AdminTemplate } from '../../../lib/api/admin';
+import { Pressable, Text, View } from 'react-native';
+import tokens from '../../../../../packages/tokens/native.json';
+import { EmptyIllustration } from '../empty-illustration';
 import { PrimaryButton } from '../primary-button';
 import {
-  AdminCard,
   AdminField,
   AdminPage,
   AdminSelect,
@@ -11,6 +13,8 @@ import {
   AdminToggle,
 } from './admin-ui';
 import { useAdminAction, useAdminResource } from './use-admin-data';
+import { classes, styles } from '../styles';
+import { useTabColors } from '../use-tab-colors';
 
 type DraftItem = {
   key: string;
@@ -31,13 +35,10 @@ const quickOptions = [
   ['restaurant', '餐馆'],
   ['florist', '花店'],
 ] as const;
-const loadTemplates = async () => {
-  const [templates, standards] = await Promise.all([
-    adminApi.templates(),
-    adminApi.aiStandards(),
-  ]);
-  return { templates, standards };
-};
+const loadTemplates = () =>
+  Promise.all([adminApi.templates(), adminApi.aiStandards()]).then(
+    ([templates, standards]) => ({ templates, standards }),
+  );
 
 export function TemplatesScreen() {
   const resource = useAdminResource(loadTemplates, {
@@ -45,6 +46,7 @@ export function TemplatesScreen() {
     standards: [] as AiStandard[],
   });
   const action = useAdminAction();
+  const colors = useTabColors();
   const [draft, setDraft] = useState<Draft | null>(null);
   const nextKey = useRef(0);
   const newItem = (): DraftItem => ({
@@ -132,25 +134,47 @@ export function TemplatesScreen() {
   }
   return (
     <AdminPage
-      title="模板"
+      title={draft ? '模板编辑' : '模板'}
       loading={resource.loading}
       busy={action.busy}
       error={action.error ?? resource.error}
       message={action.message}
       onRefresh={() => void resource.load()}
+      fixedFooter={
+        draft ? (
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <PrimaryButton
+                disabled={action.busy}
+                onPress={() => setDraft(null)}
+                variant="secondary"
+              >
+                取消
+              </PrimaryButton>
+            </View>
+            <View style={{ flex: 1.4 }}>
+              <PrimaryButton disabled={action.busy || invalid} onPress={save}>
+                {action.busy ? '保存中…' : draft.id ? '保存模板' : '创建模板'}
+              </PrimaryButton>
+            </View>
+          </View>
+        ) : undefined
+      }
     >
       {draft ? (
         <>
-          <AdminCard>
-            <AdminText>{draft.id ? '编辑模板' : '新建模板'}</AdminText>
+          <View style={{ gap: tokens.space.md }}>
             <AdminField
               label="模板名称"
               value={draft.name}
               onChangeText={(name) => update({ name })}
               disabled={action.busy}
+              maxLength={80}
             />
+            <View className="border-t border-border" />
+            <AdminText>审核设置</AdminText>
             <AdminToggle
-              label="启用 AI"
+              label="启用 AI 审核"
               value={draft.aiEnabled}
               onChange={(aiEnabled) => update({ aiEnabled })}
               disabled={action.busy}
@@ -165,17 +189,66 @@ export function TemplatesScreen() {
                 label: standard.name,
               }))}
             />
-            <AdminText>
+            <Text className={classes.muted} style={styles.muted}>
               {resource.data.standards.length
                 ? '启用 AI 时必须选择审核标准；关闭时可不选。'
                 : '暂无审核标准，请先创建标准，或取消编辑后使用快捷配置。'}
-            </AdminText>
-          </AdminCard>
-          <AdminText>
-            最少照片张数为 0 时不拍照，提交巡检时必须填写备注。
-          </AdminText>
+            </Text>
+            <View className="border-t border-border" />
+            <View
+              style={{
+                alignItems: 'center',
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+              }}
+            >
+              <AdminText>检查项</AdminText>
+              <Text className={classes.muted} style={styles.muted}>
+                {draft.items.length} 项
+              </Text>
+            </View>
+            <Text className={classes.muted} style={styles.muted}>
+              最少照片数为 0 时不需拍照，巡检提交时必须填写备注。
+            </Text>
+          </View>
           {draft.items.map((item, index) => (
-            <AdminCard key={item.key} testID={`template-item-${index + 1}`}>
+            <View
+              key={item.key}
+              style={{
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+                gap: tokens.space.md,
+                paddingVertical: tokens.space.md,
+              }}
+              testID={`template-item-${index + 1}`}
+            >
+              <View
+                style={{
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text className={classes.foreground} style={styles.cardTitle}>
+                  {`${String(index + 1).padStart(2, '0')} / ${String(draft.items.length).padStart(2, '0')}`}
+                </Text>
+                <View style={{ flexDirection: 'row', gap: tokens.space.xs }}>
+                  <PrimaryButton
+                    variant="secondary"
+                    disabled={action.busy || index === 0}
+                    onPress={() => moveItem(index, -1)}
+                  >
+                    上移
+                  </PrimaryButton>
+                  <PrimaryButton
+                    variant="secondary"
+                    disabled={action.busy || index === draft.items.length - 1}
+                    onPress={() => moveItem(index, 1)}
+                  >
+                    下移
+                  </PrimaryButton>
+                </View>
+              </View>
               <AdminField
                 label={`检查项 ${index + 1} 标题`}
                 value={item.title}
@@ -210,16 +283,6 @@ export function TemplatesScreen() {
               />
               <PrimaryButton
                 variant="secondary"
-                disabled={action.busy || index === 0}
-                onPress={() => moveItem(index, -1)}
-              >{`检查项 ${index + 1} 上移`}</PrimaryButton>
-              <PrimaryButton
-                variant="secondary"
-                disabled={action.busy || index === draft.items.length - 1}
-                onPress={() => moveItem(index, 1)}
-              >{`检查项 ${index + 1} 下移`}</PrimaryButton>
-              <PrimaryButton
-                variant="secondary"
                 disabled={action.busy || draft.items.length === 1}
                 onPress={() =>
                   update({
@@ -231,7 +294,7 @@ export function TemplatesScreen() {
               >
                 移除检查项
               </PrimaryButton>
-            </AdminCard>
+            </View>
           ))}
           <PrimaryButton
             variant="secondary"
@@ -239,16 +302,6 @@ export function TemplatesScreen() {
             onPress={() => update({ items: [...draft.items, newItem()] })}
           >
             添加检查项
-          </PrimaryButton>
-          <PrimaryButton disabled={action.busy || invalid} onPress={save}>
-            {draft.id ? '保存模板' : '创建模板'}
-          </PrimaryButton>
-          <PrimaryButton
-            variant="secondary"
-            disabled={action.busy}
-            onPress={() => setDraft(null)}
-          >
-            取消编辑
           </PrimaryButton>
         </>
       ) : (
@@ -267,34 +320,79 @@ export function TemplatesScreen() {
           >
             新建模板
           </PrimaryButton>
-          <AdminCard>
-            <AdminText>快捷配置：一键生成模板和 AI 审核标准</AdminText>
+          <View
+            style={{
+              alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+            }}
+          >
+            <AdminText>快捷配置</AdminText>
+            <Text className={classes.muted} style={styles.muted}>
+              模板与审核标准
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {quickOptions.map(([kind, label]) => (
-              <PrimaryButton
-                key={kind}
-                variant="secondary"
-                disabled={resource.loading || action.busy}
-                onPress={() => quickSetup(kind)}
-              >
-                {label}
-              </PrimaryButton>
+              <View key={kind} style={{ flex: 1, minWidth: 100 }}>
+                <PrimaryButton
+                  variant="secondary"
+                  disabled={resource.loading || action.busy}
+                  onPress={() => quickSetup(kind)}
+                >
+                  {label}
+                </PrimaryButton>
+              </View>
             ))}
-          </AdminCard>
+          </View>
           {!resource.loading && !resource.data.templates.length ? (
-            <AdminText>暂无模板</AdminText>
+            <View
+              style={{
+                alignItems: 'center',
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+                gap: tokens.space.sm,
+                paddingVertical: tokens.space.xl,
+              }}
+            >
+              <EmptyIllustration variant="template" />
+              <Text className={classes.foreground} style={styles.cardTitle}>
+                暂无模板
+              </Text>
+              <Text className={classes.muted} style={styles.muted}>
+                使用快捷配置生成模板，或新建模板。
+              </Text>
+            </View>
           ) : null}
           {resource.data.templates.map((template) => (
-            <AdminCard key={template.id} testID={`template-${template.id}`}>
-              <AdminText>{template.name}</AdminText>
-              <AdminText>{`${template.items.length} 项 · AI ${template.aiEnabled ? '启用' : '关闭'}`}</AdminText>
-              <PrimaryButton
-                variant="secondary"
-                disabled={action.busy}
-                onPress={() => edit(template)}
-              >
+            <Pressable
+              accessibilityRole="button"
+              className="border-b border-border"
+              key={template.id}
+              onPress={() => edit(template)}
+              style={({ pressed }) => [
+                {
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  minHeight: 64,
+                  paddingVertical: tokens.space.sm,
+                },
+                pressed && styles.pressedRow,
+              ]}
+              testID={`template-${template.id}`}
+            >
+              <View style={{ flex: 1, gap: tokens.space.xs }}>
+                <Text className={classes.foreground} style={styles.cardTitle}>
+                  {template.name}
+                </Text>
+                <Text className={classes.muted} style={styles.muted}>
+                  {`${template.items.length} 项 · AI ${template.aiEnabled ? '启用' : '关闭'}`}
+                </Text>
+              </View>
+              <Text className={classes.link} style={styles.link}>
                 编辑
-              </PrimaryButton>
-            </AdminCard>
+              </Text>
+            </Pressable>
           ))}
         </>
       )}

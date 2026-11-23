@@ -2,6 +2,7 @@ import { Host, Picker, Switch, TextInput, useNativeState } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import {
+  Pressable,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -15,6 +16,9 @@ import { ErrorBanner } from '../error-banner';
 import { PrimaryButton } from '../primary-button';
 import { classes, styles } from '../styles';
 import { useTabColors } from '../use-tab-colors';
+import { BrandMark } from '../brand-mark';
+import { useNotifications } from '../notification-provider';
+import { Bell } from 'lucide-react-native';
 
 export function AdminPage({
   title,
@@ -24,6 +28,11 @@ export function AdminPage({
   error,
   message,
   onRefresh,
+  showBack = true,
+  backLabel = '返回',
+  onBack,
+  homeHeader = false,
+  fixedFooter,
 }: {
   title: string;
   children: ReactNode;
@@ -32,52 +41,167 @@ export function AdminPage({
   error: string | null;
   message?: string | null;
   onRefresh: () => void;
+  showBack?: boolean;
+  backLabel?: string;
+  onBack?: () => void;
+  homeHeader?: boolean;
+  fixedFooter?: ReactNode;
 }) {
   const router = useRouter();
+  const colors = useTabColors();
+  const { unreadCount } = useNotifications();
+
+  function goBack() {
+    if (onBack) {
+      onBack();
+      return;
+    }
+    if (router.canGoBack()) router.back();
+    else router.replace('/admin');
+  }
+
   return (
-    <SafeAreaView className={classes.background} style={{ flex: 1 }}>
+    <SafeAreaView
+      className={classes.background}
+      edges={['top']}
+      style={{ flex: 1 }}
+    >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={
+          Platform.OS === 'ios' ? 'padding' : fixedFooter ? 'height' : undefined
+        }
         style={{ flex: 1 }}
       >
-        <ScrollView
-          contentContainerStyle={styles.page}
-          keyboardShouldPersistTaps="handled"
-        >
-          <PrimaryButton
-            onPress={() =>
-              router.canGoBack() ? router.back() : router.replace('/admin')
-            }
-            variant="secondary"
+        {homeHeader ? (
+          <View
+            className={`${classes.card} border-b border-border`}
+            style={{
+              alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              minHeight: 52,
+              paddingHorizontal: tokens.space.md,
+            }}
           >
-            返回管理主页
-          </PrimaryButton>
-          <Text
-            accessibilityRole="header"
-            className={classes.foreground}
-            style={styles.heading}
-          >
-            {title}
-          </Text>
-          <PrimaryButton
-            disabled={loading || busy}
-            onPress={onRefresh}
-            variant="secondary"
-          >
-            {loading ? '加载中…' : '刷新'}
-          </PrimaryButton>
-          <ErrorBanner message={error} />
-          {message ? (
-            <Text
-              accessibilityRole="alert"
-              className={classes.success}
-              style={styles.success}
+            <View
+              style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}
             >
-              {message}
-            </Text>
+              <BrandMark size={26} />
+              <Text className={classes.foreground} style={styles.cardTitle}>
+                FloorWalk
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`通知${unreadCount ? `，${unreadCount} 条未读` : ''}`}
+              onPress={() => router.push('/admin/notifications')}
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 44,
+                minWidth: 44,
+                position: 'relative',
+              }}
+              testID="admin-notifications"
+            >
+              <Bell color={colors.primary} size={22} />
+              {unreadCount > 0 ? (
+                <View
+                  className={classes.notificationBadge}
+                  style={styles.adminNotificationBadge}
+                >
+                  <Text
+                    className={classes.notificationBadgeText}
+                    style={styles.adminNotificationBadgeText}
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
+          </View>
+        ) : null}
+        <View style={{ flex: 1 }}>
+          <ScrollView
+            contentContainerStyle={[
+              styles.page,
+              fixedFooter ? { paddingBottom: tokens.space.md } : undefined,
+            ]}
+            contentInsetAdjustmentBehavior="automatic"
+            keyboardShouldPersistTaps="handled"
+          >
+            <View
+              style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}
+            >
+              {showBack ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={backLabel}
+                  onPress={goBack}
+                  style={({ pressed }) => [
+                    {
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: 44,
+                      minWidth: 44,
+                    },
+                    pressed && styles.pressedRow,
+                  ]}
+                >
+                  <Text className={classes.link} style={styles.link}>
+                    {backLabel}
+                  </Text>
+                </Pressable>
+              ) : null}
+              <Text
+                accessibilityRole="header"
+                className={classes.foreground}
+                style={[styles.heading, { flex: 1, marginTop: 0 }]}
+              >
+                {title}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={loading ? '正在刷新' : '刷新'}
+                accessibilityState={{ disabled: loading || busy }}
+                disabled={loading || busy}
+                onPress={onRefresh}
+                style={({ pressed }) => [
+                  {
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: 44,
+                    minWidth: 44,
+                  },
+                  pressed && styles.pressedRow,
+                ]}
+              >
+                <Text className={classes.link} style={styles.link}>
+                  {loading ? '…' : '刷新'}
+                </Text>
+              </Pressable>
+            </View>
+            <ErrorBanner message={error} />
+            {message ? (
+              <Text
+                accessibilityRole="alert"
+                className={classes.success}
+                style={styles.success}
+              >
+                {message}
+              </Text>
+            ) : null}
+            {children}
+          </ScrollView>
+          {fixedFooter ? (
+            <View
+              className="border-t border-border bg-card"
+              style={{ borderTopWidth: 1, padding: tokens.space.sm }}
+            >
+              {fixedFooter}
+            </View>
           ) : null}
-          {children}
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

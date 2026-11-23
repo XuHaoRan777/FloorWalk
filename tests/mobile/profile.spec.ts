@@ -63,7 +63,7 @@ for (const account of [
         await page.getByTestId('login-button').click();
         if (account.canRename) {
           await expect(
-            page.getByRole('heading', { name: '管理员主页' }),
+            page.getByRole('heading', { name: '今日视图' }),
           ).toBeVisible();
         } else {
           await expect(
@@ -89,11 +89,9 @@ for (const account of [
           };
         }
 
-        if (account.canRename) {
-          await page.getByTestId('admin-entry-profile').click();
-        } else {
-          await page.getByRole('tab', { name: '我的' }).click();
-        }
+        await page
+          .getByRole('tab', { name: account.canRename ? '个人资料' : '我的' })
+          .click();
         await expect(
           page.getByRole('heading', { name: '账号信息', exact: true }),
         ).toBeVisible();
@@ -231,11 +229,9 @@ for (const account of [
       let otherContext: BrowserContext | undefined;
       const changedPassword = 'fw035-mobile-profile-password';
       const openProfile = async (target: Page) => {
-        if (account.canRename) {
-          await target.getByTestId('admin-entry-profile').click();
-        } else {
-          await target.getByRole('tab', { name: '我的' }).click();
-        }
+        await target
+          .getByRole('tab', { name: account.canRename ? '个人资料' : '我的' })
+          .click();
         await expect(
           target.getByRole('heading', { name: '账号信息', exact: true }),
         ).toBeVisible();
@@ -249,7 +245,7 @@ for (const account of [
         await target.getByTestId('login-button').click();
         if (account.canRename) {
           await expect(
-            target.getByRole('heading', { name: '管理员主页' }),
+            target.getByRole('heading', { name: '今日视图' }),
           ).toBeVisible();
         } else {
           await expect(
@@ -298,7 +294,7 @@ for (const account of [
         await page.getByRole('button', { name: '保存新密码' }).click();
         if (account.canRename) {
           await expect(
-            page.getByRole('heading', { name: '管理员主页' }),
+            page.getByRole('heading', { name: '今日视图' }),
           ).toBeVisible();
         } else {
           await expect(

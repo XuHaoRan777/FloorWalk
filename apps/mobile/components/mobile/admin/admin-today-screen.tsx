@@ -50,7 +50,10 @@ export function AdminTodayScreen() {
     }).format(new Date(value));
   }
   function openTask(id: string) {
-    router.push(`/admin/review/${id}`);
+    router.push({
+      pathname: '/admin/review/[id]',
+      params: { id, returnTo: 'today' },
+    });
   }
 
   return (
@@ -58,6 +61,8 @@ export function AdminTodayScreen() {
       title="今日视图"
       loading={resource.loading}
       error={resource.error}
+      homeHeader
+      showBack={false}
       onRefresh={() => void resource.load()}
     >
       {today && data ? (

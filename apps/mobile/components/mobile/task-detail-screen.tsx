@@ -148,7 +148,7 @@ export function TaskDetailScreen({
       testID="task-detail-screen"
     >
       <Pressable
-        accessibilityLabel="返回今日任务"
+        accessibilityLabel="返回上级页面"
         accessibilityRole="button"
         onPress={onBack}
         style={({ pressed }) => [
@@ -157,7 +157,7 @@ export function TaskDetailScreen({
         ]}
       >
         <Text className={classes.link} style={styles.link}>
-          ‹ 返回今日任务
+          ‹ 返回
         </Text>
       </Pressable>
       <View>

@@ -40,7 +40,7 @@ test('AC-04、AC-05 模板检查项、AI 标准、三套快捷配置与引用删
     expect(revised.name).toBe('移动审核标准修改');
     expect(revised.prompt).toContain('无法确认时说明原因');
 
-    await page.getByRole('button', { name: '返回管理主页' }).click();
+    await page.getByRole('button', { name: '返回', exact: true }).click();
     await page.getByTestId('admin-entry-templates').click();
     await page.getByRole('button', { name: '新建模板', exact: true }).click();
     await page.getByLabel('模板名称', { exact: true }).fill('移动模板');
@@ -56,7 +56,8 @@ test('AC-04、AC-05 模板检查项、AI 标准、三套快捷配置与引用删
     await page.getByRole('button', { name: '添加检查项', exact: true }).click();
     await page.getByLabel('检查项 2 标题', { exact: true }).fill('文字记录');
     await page
-      .getByRole('button', { name: '检查项 2 上移', exact: true })
+      .getByTestId('template-item-2')
+      .getByRole('button', { name: '上移', exact: true })
       .click();
     await expect(page.getByLabel('检查项 1 标题', { exact: true })).toHaveValue(
       '文字记录',
@@ -80,14 +81,12 @@ test('AC-04、AC-05 模板检查项、AI 标准、三套快捷配置与引用删
       acceptanceCriteria: '台面清洁，物品分类摆放。',
     });
     const templateCard = page.getByTestId(`template-${template.id}`);
-    await templateCard
-      .getByRole('button', { name: '编辑', exact: true })
-      .click();
+    await templateCard.click();
     await page.getByLabel('模板名称', { exact: true }).fill('移动模板修改');
     await page
       .getByLabel('检查项 1 标题', { exact: true })
       .fill('已编辑文字记录');
-    await page.getByText('启用 AI', { exact: true }).click();
+    await page.getByText('启用 AI 审核', { exact: true }).click();
     await page.getByLabel('AI 审核标准', { exact: true }).selectOption('');
     await page.getByRole('button', { name: '添加检查项', exact: true }).click();
     await page
@@ -105,16 +104,14 @@ test('AC-04、AC-05 模板检查项、AI 标准、三套快捷配置与引用删
     expect(updated.items).toHaveLength(2);
     expect(updated.items[0].title).toBe('已编辑文字记录');
     await page.reload();
-    await templateCard
-      .getByRole('button', { name: '编辑', exact: true })
-      .click();
+    await templateCard.click();
     await expect(page.getByLabel('模板名称', { exact: true })).toHaveValue(
       '移动模板修改',
     );
     await expect(
       page.getByLabel('检查项 2 最少照片张数', { exact: true }),
     ).toHaveValue('2');
-    await page.getByRole('button', { name: '取消编辑', exact: true }).click();
+    await page.getByRole('button', { name: '取消', exact: true }).click();
 
     const quickResults: QuickSetupTemplateResponse[] = [];
     for (const label of ['咖啡店', '餐馆', '花店']) {
@@ -132,7 +129,7 @@ test('AC-04、AC-05 模板检查项、AI 标准、三套快捷配置与引用删
       ).toContainText(result.template.name);
     }
     const quick = quickResults[0];
-    await page.getByRole('button', { name: '返回管理主页' }).click();
+    await page.getByRole('button', { name: '返回', exact: true }).click();
     await page.getByTestId('admin-entry-ai-standards').click();
     const referenced = page.getByTestId(`standard-${quick.standard.id}`);
     await referenced.getByRole('button', { name: '删除', exact: true }).click();

@@ -33,7 +33,7 @@ test('FW-034 AC-01、AC-02 审核队列、失败转人工、打回重传与改�
       201,
     );
     await fixture.waitForManual();
-    await page.getByTestId('admin-entry-review').click();
+    await page.getByRole('tab', { name: '审核队列' }).click();
     await expect(
       page.getByRole('heading', { name: '审核队列', exact: true }),
     ).toBeVisible();
@@ -88,7 +88,7 @@ test('FW-034 AC-01、AC-02 审核队列、失败转人工、打回重传与改�
     await decide(page, taskId, secondItem, '通过');
     await expect(summary).toContainText('100 分');
     await expect(summary).toContainText('通过');
-    await page.getByRole('button', { name: '返回队列', exact: true }).click();
+    await page.getByRole('button', { name: '返回', exact: true }).click();
     await expect(taskCard).toHaveCount(1);
     await expect(taskCard).toContainText('100 分');
     await expect(taskCard).toContainText(/判定于 \d{2}:\d{2}/);

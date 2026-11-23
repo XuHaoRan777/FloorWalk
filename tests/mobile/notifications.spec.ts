@@ -376,6 +376,53 @@ test('管理员通知入口标记逾期通知已读并进入审核队列', async
   }
 });
 
+test('管理员从待人工审核通知进入详情后返回通知收件箱', async ({ page }) => {
+  const admin = await playwrightRequest.newContext();
+  let fixture: Awaited<ReturnType<typeof createReviewFixture>> | undefined;
+  try {
+    const adminLogin = await admin.post(`${apiBase}/auth/session`, {
+      data: { loginName: 'hq@northbean.example', password },
+    });
+    expect(adminLogin.status()).toBe(201);
+    fixture = await createReviewFixture(admin, apiBase);
+    expect((await fixture.upload(1, '检查项已提交，请人工复核。')).status()).toBe(
+      201,
+    );
+    expect((await fixture.upload(2, '现场记录已提交。')).status()).toBe(201);
+    await fixture.waitForManual();
+    const notification = await fixture.pool.query<{ id: string }>(
+      `SELECT id FROM floorwalk.notifications
+       WHERE type = 'manual_review_needed' AND payload_json->>'taskId' = $1`,
+      [fixture.taskId],
+    );
+    expect(notification.rows.length).toBeGreaterThan(0);
+    const notificationId = notification.rows[0]?.id;
+    if (!notificationId) throw new Error('测试任务没有人工审核通知。');
+
+    await login(page, 'hq@northbean.example');
+    await page.getByTestId('admin-notifications').click();
+    await expect(
+      page.getByRole('heading', { name: '通知', exact: true }),
+    ).toBeVisible();
+    await page.getByTestId(`notification-${notificationId}`).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/admin/review/${fixture.taskId}\\?returnTo=notifications$`),
+    );
+    await expect(
+      page.getByRole('heading', { name: '任务审核', exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: '返回', exact: true }).click();
+    await expect(page).toHaveURL(/\/admin\/notifications$/);
+    await expect(
+      page.getByRole('heading', { name: '通知', exact: true }),
+    ).toBeVisible();
+  } finally {
+    await fixture?.cleanup();
+    await admin.delete(`${apiBase}/auth/session`).catch(() => undefined);
+    await admin.dispose();
+  }
+});
+
 test('店长聊天通知已读后进入对应聊天', async ({ page }) => {
   const pool = testPool();
   const notificationId = randomUUID();

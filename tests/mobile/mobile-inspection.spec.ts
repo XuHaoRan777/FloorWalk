@@ -203,6 +203,18 @@ test('今日任务显示模板、四种状态和商家时区的跨零点时间',
   await expect(page.getByText('状态：进行中')).toBeVisible();
   await expect(page.getByText('状态：已提交')).toBeVisible();
   await expect(page.getByText('状态：逾期')).toBeVisible();
+
+  const resumeButton = page.getByTestId('today-resume-task');
+  for (const width of [390, 360]) {
+    await page.setViewportSize({ width, height: 844 });
+    const bounds = await resumeButton.boundingBox();
+    expect(bounds?.width).toBe(280);
+    expect(bounds?.height).toBe(48);
+    expect((bounds?.x ?? 0) + (bounds?.width ?? 0) / 2).toBeCloseTo(
+      width / 2,
+      0,
+    );
+  }
 });
 
 test('任务详情显示检查项结论、操作时间和巡检聊天', async ({ page }) => {
@@ -704,7 +716,7 @@ test('逐项拍照上传、零照片备注门槛及提交后刷新', async ({ pa
   await noteSubmit.click();
   expect((await noteUploadPromise).status()).toBe(201);
   await expect(noteItem).toContainText('最后提交：李店长');
-  await page.getByRole('button', { name: '返回今日任务' }).click();
+  await page.getByRole('button', { name: '返回上级页面' }).click();
   await expect(page.getByTestId(`today-task-${taskId}`)).toContainText(
     '状态：已提交',
   );

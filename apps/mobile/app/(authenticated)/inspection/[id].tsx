@@ -19,7 +19,9 @@ export default function InspectionPage() {
       focusPosition={position ? Number(position) : undefined}
       onUnauthorized={expire}
       onTaskUpdated={loadToday}
-      onBack={() => router.dismissTo('/today')}
+      onBack={() =>
+        router.canGoBack() ? router.back() : router.replace('/today')
+      }
     />
   );
 }

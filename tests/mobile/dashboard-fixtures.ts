@@ -230,7 +230,7 @@ export async function createDashboardFixture(page: Page, apiBase: string) {
     const open = async () => {
       await page.goto('/admin');
       await expect(
-        page.getByRole('heading', { name: '管理员主页', exact: true }),
+        page.getByRole('heading', { name: '管理配置', exact: true }),
       ).toBeVisible();
     };
     return {

@@ -1,9 +1,26 @@
-import { useNativeVariable } from 'react-native-css/native';
+import tokens from '../../../../packages/tokens/native.json';
 
 export function useTabColors() {
   return {
-    accent: useNativeVariable('--fw-accent'),
-    mutedForeground: useNativeVariable('--fw-muted-foreground'),
-    background: useNativeVariable('--fw-background'),
+    primary: tokens.colors.primary,
+    primaryForeground: tokens.colors.primaryForeground,
+    accent: tokens.colors.accent,
+    success: tokens.colors.successForeground,
+    successMark: tokens.colors.success,
+    warning: tokens.colors.warningForeground,
+    danger: tokens.colors.destructive,
+    dangerForeground: tokens.colors.destructiveForeground,
+    border: tokens.colors.border,
+    muted: tokens.colors.mutedForeground,
+    mutedForeground: tokens.colors.mutedForeground,
+    background: tokens.colors.background,
+    foreground: tokens.colors.foreground,
+    surface: tokens.colors.card,
+    raised: tokens.colors.raised,
+    positiveBackground: tokens.colors.positiveBackground,
+    negativeBackground: tokens.colors.negativeBackground,
+    warningBackground: tokens.colors.warningBackground,
+    neutralBackground: tokens.colors.neutralBackground,
+    neutralForeground: tokens.colors.neutralForeground,
   };
 }

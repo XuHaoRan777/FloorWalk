@@ -40,7 +40,7 @@ test('FW-034 AC-03 今日任务、汇总、警告和人工待处理', async ({ p
       status: 'submitted',
     });
     await dashboard.open();
-    await page.getByTestId('admin-entry-today').click();
+    await page.getByRole('tab', { name: '今日视图' }).click();
     await expect(
       page.getByRole('heading', { name: '今日视图', exact: true }),
     ).toBeVisible();

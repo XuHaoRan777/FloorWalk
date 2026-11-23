@@ -108,7 +108,7 @@ test('AC-06 七天任务、跨夜时间窗、批量方案和跳过区间刷新�
       page.getByLabel('周一任务 1结束时刻', { exact: true }),
     ).toHaveValue('01:15');
     await page.getByRole('button', { name: '取消编辑', exact: true }).click();
-    await page.getByRole('button', { name: '返回管理主页' }).click();
+    await page.getByRole('button', { name: '返回', exact: true }).click();
     await page.getByTestId('admin-entry-site-schedules').click();
     for (const site of sites)
       await page.getByText(`选择门店 ${site.code}`, { exact: true }).click();

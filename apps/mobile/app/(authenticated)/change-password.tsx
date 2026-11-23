@@ -13,7 +13,9 @@ export default function ChangePasswordPage() {
             ...session,
             user: { ...session.user, mustChangePassword: false },
           });
-        router.replace(session?.user.role === 'admin' ? '/admin' : '/today');
+        router.replace(
+          session?.user.role === 'admin' ? '/admin/today' : '/today',
+        );
       }}
     />
   );

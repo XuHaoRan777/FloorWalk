@@ -22,9 +22,9 @@ export default function TabLayout() {
         screenOptions={{
           headerShown: false,
           sceneStyle: { backgroundColor: tabColors.background },
-          tabBarActiveTintColor: tabColors.accent,
+          tabBarActiveTintColor: tabColors.primary,
           tabBarInactiveTintColor: tabColors.mutedForeground,
-          tabBarLabelStyle: { fontSize: 14, fontWeight: '700' },
+          tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
         }}
       >
         <Tabs.Screen
@@ -48,16 +48,6 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="profile"
-          options={{
-            title: '我的',
-            tabBarAccessibilityLabel: '我的',
-            tabBarIcon: ({ color, size }) => (
-              <UserRound color={color} size={size} />
-            ),
-          }}
-        />
-        <Tabs.Screen
           name="notifications"
           options={{
             title: '通知',
@@ -69,6 +59,16 @@ export default function TabLayout() {
                   ? unreadCount
                   : undefined,
             tabBarIcon: ({ color, size }) => <Bell color={color} size={size} />,
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: '我的',
+            tabBarAccessibilityLabel: '我的',
+            tabBarIcon: ({ color, size }) => (
+              <UserRound color={color} size={size} />
+            ),
           }}
         />
       </Tabs>

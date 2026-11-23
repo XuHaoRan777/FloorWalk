@@ -22,7 +22,7 @@ export default function NotificationChatPage() {
         onPress={() =>
           router.canGoBack()
             ? router.back()
-            : router.replace(isManager ? '/today' : '/admin')
+            : router.replace(isManager ? '/today' : '/admin/today')
         }
         style={styles.touchTarget}
       >

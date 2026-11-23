@@ -48,7 +48,12 @@ export function ReviewQueueScreen() {
                 ))
             : null}
           <PrimaryButton
-            onPress={() => router.push(`/admin/review/${task.id}`)}
+            onPress={() =>
+              router.push({
+                pathname: '/admin/review/[id]',
+                params: { id: task.id, returnTo: 'review' },
+              })
+            }
           >
             查看任务
           </PrimaryButton>

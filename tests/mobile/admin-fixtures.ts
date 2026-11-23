@@ -9,7 +9,8 @@ export async function loginAdmin(page: Page) {
   await page.getByLabel('登录名', { exact: true }).fill('hq@northbean.example');
   await page.getByLabel('密码', { exact: true }).fill('northbean-demo');
   await page.getByTestId('login-button').click();
-  await expect(page.getByRole('heading', { name: '管理员主页' })).toBeVisible();
+  await page.getByRole('tab', { name: '管理' }).click();
+  await expect(page.getByRole('heading', { name: '管理配置' })).toBeVisible();
 }
 
 export async function saveAdmin<T>(

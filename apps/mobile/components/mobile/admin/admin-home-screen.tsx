@@ -1,24 +1,19 @@
 import {
   ArrowRight,
-  BarChart3,
   CalendarDays,
   CalendarRange,
   ClipboardList,
-  ClipboardCheck,
-  Bell,
   SlidersHorizontal,
   Store,
-  UserRound,
+  Users,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useRouter, type Href } from 'expo-router';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { ErrorBanner } from '../error-banner';
-import { PrimaryButton } from '../primary-button';
-import { useSession } from '../session-provider';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import tokens from '../../../../../packages/tokens/native.json';
 import { classes, styles } from '../styles';
 import { useTabColors } from '../use-tab-colors';
-import { useNotifications } from '../notification-provider';
 
 const entries: {
   href: Href;
@@ -27,27 +22,9 @@ const entries: {
   testID: string;
 }[] = [
   {
-    href: '/admin/dashboard',
-    label: '总部看板',
-    icon: BarChart3,
-    testID: 'admin-entry-dashboard',
-  },
-  {
-    href: '/admin/today',
-    label: '今日视图',
-    icon: CalendarDays,
-    testID: 'admin-entry-today',
-  },
-  {
-    href: '/admin/review',
-    label: '审核队列',
-    icon: ClipboardCheck,
-    testID: 'admin-entry-review',
-  },
-  {
     href: '/admin/accounts',
-    label: '账号',
-    icon: UserRound,
+    label: '人员管理',
+    icon: Users,
     testID: 'admin-entry-accounts',
   },
   {
@@ -64,13 +41,13 @@ const entries: {
   },
   {
     href: '/admin/ai-standards',
-    label: 'AI 标准',
+    label: 'AI 审核标准',
     icon: SlidersHorizontal,
     testID: 'admin-entry-ai-standards',
   },
   {
     href: '/admin/schedules',
-    label: '日程',
+    label: '日程方案',
     icon: CalendarDays,
     testID: 'admin-entry-schedules',
   },
@@ -80,87 +57,55 @@ const entries: {
     icon: CalendarRange,
     testID: 'admin-entry-site-schedules',
   },
-  {
-    href: '/admin/profile',
-    label: '我的',
-    icon: UserRound,
-    testID: 'admin-entry-profile',
-  },
 ];
 
-export function AdminHomeScreen({ displayName }: { displayName: string }) {
+export function AdminHomeScreen() {
   const router = useRouter();
-  const tabColors = useTabColors();
-  const { logout, logoutError } = useSession();
-  const { unreadCount } = useNotifications();
+  const colors = useTabColors();
 
   return (
-    <ScrollView
+    <SafeAreaView
       className={classes.background}
-      contentContainerStyle={styles.page}
+      edges={['top']}
+      style={{ flex: 1 }}
     >
-      <View style={styles.adminHomeHeader}>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text
-            accessibilityRole="header"
-            className={classes.foreground}
-            style={styles.heading}
-          >
-            管理员主页
-          </Text>
-          <Text className={classes.muted} style={styles.muted}>
-            {displayName}
-          </Text>
-        </View>
-        <Pressable
-          accessibilityLabel={`通知${unreadCount ? `，${unreadCount} 条未读` : ''}`}
-          accessibilityRole="button"
-          onPress={() => router.push('/admin/notifications')}
-          style={styles.adminNotificationButton}
-          testID="admin-notifications"
+      <ScrollView
+        className={classes.background}
+        contentContainerStyle={styles.page}
+      >
+        <Text
+          accessibilityRole="header"
+          className={classes.foreground}
+          style={styles.heading}
         >
-          <Bell color={tabColors.accent} size={22} />
-          {unreadCount > 0 ? (
-            <View
-              className={classes.notificationBadge}
-              style={styles.adminNotificationBadge}
+          管理配置
+        </Text>
+        <View>
+          {entries.map(({ href, label, icon: Icon, testID }) => (
+            <Pressable
+              accessibilityRole="button"
+              className={`${classes.background} active:bg-active flex-row items-center border-b border-border`}
+              key={testID}
+              onPress={() => router.push(href)}
+              style={{
+                alignItems: 'center',
+                flexDirection: 'row',
+                gap: tokens.space.md,
+                height: 64,
+                paddingHorizontal: tokens.space.xs,
+              }}
+              testID={testID}
             >
-              <Text
-                className={classes.notificationBadgeText}
-                style={styles.adminNotificationBadgeText}
-              >
-                {unreadCount > 99 ? '99+' : unreadCount}
+              <Icon color={colors.primary} size={20} />
+              <Text className={classes.foreground} style={styles.cardTitle}>
+                {label}
               </Text>
-            </View>
-          ) : null}
-        </Pressable>
-      </View>
-      <View style={{ gap: 8 }}>
-        {entries.map(({ href, label, icon: Icon, testID }) => (
-          <Pressable
-            accessibilityRole="button"
-            className={classes.card}
-            key={testID}
-            onPress={() => router.push(href)}
-            style={({ pressed }) => [
-              styles.adminEntry,
-              pressed && styles.pressedRow,
-            ]}
-            testID={testID}
-          >
-            <Icon color={tabColors.accent} size={20} />
-            <Text className={classes.foreground} style={styles.cardTitle}>
-              {label}
-            </Text>
-            <View style={{ flex: 1 }} />
-            <ArrowRight color={tabColors.mutedForeground} size={18} />
-          </Pressable>
-        ))}
-      </View>
-      <ErrorBanner message={logoutError} />
-      <PrimaryButton onPress={logout} variant="secondary" testID="admin-logout">
-        退出登录
-      </PrimaryButton>
-    </ScrollView>
+              <View style={{ flex: 1 }} />
+              <ArrowRight color={colors.mutedForeground} size={18} />
+            </Pressable>
+          ))}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }

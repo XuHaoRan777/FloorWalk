@@ -31,7 +31,7 @@ test('FW-034 AC-04 周月指标与门店、店长和日期趋势', async ({ page
       results: ['pass'],
     });
     await dashboard.open();
-    await page.getByTestId('admin-entry-dashboard').click();
+    await page.getByRole('tab', { name: '总部看板' }).click();
     await expect(page.getByRole('heading', { name: '总部看板' })).toBeVisible();
     await expect(page.getByText('本周暂无数据')).toBeVisible();
     await expect(page.getByLabel('每日完成率与平均分折线图')).toHaveCount(0);
@@ -141,7 +141,7 @@ test('FW-034 AC-04 慢请求完成后仍能显示看板', async ({ page }) => {
         await route.continue().catch(() => undefined);
       },
     );
-    await page.getByTestId('admin-entry-dashboard').click();
+    await page.getByRole('tab', { name: '总部看板' }).click();
     await expect(page.getByTestId('admin-dashboard-summary')).toContainText(
       '本周应完成 1 项',
       { timeout: 25_000 },
