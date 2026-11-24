@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- 工作单元状态：`in_progress`
-- 归档状态：`active`
-- 当前任务：等待方式 A 人工验收，T01–T08 已完成
-- 当前进展：T07 状态与录像取证完成，槽位 1 fixture 及照片已清理。最终独立审查的三项 finding 已修复并定点复核关闭；最终代码的 API 183 通过、5 跳过，Mobile E2E 43 项全部通过，Web E2E 34 通过、1 跳过、五项批准例外失败，符合更新后的 AC-07。类型、lint、格式、构建和 token 生成检查通过。
-- 下一步：用户确认后 Promote、归档并清理验收资源。
+- 工作单元状态：`verified`
+- 归档状态：`archived`
+- 当前任务：已归档
+- 当前进展：用户确认后完成 Promote、归档提交和推送。
+- 下一步：无
 
 ## 技能加载证明
 
@@ -62,8 +62,8 @@ ui-ux-pro-max 的设计系统检索按其规则做了两次，查询分别为 `m
 | T05 AC-05 | passed | Android 模拟器截图、UI 层级与滚动走查 | `docs/work/FW-046-mobile-visual-language/evidence/after/admin-review-colors-390.png`、`docs/work/FW-046-mobile-visual-language/evidence/after/admin-review-360.png`、`docs/work/FW-046-mobile-visual-language/evidence/after/admin-review-scrolled-390.png`、`docs/work/FW-046-mobile-visual-language/evidence/after/admin-review-history-360.png` | 390/360 dp 展示摘要、分数、检查项、证据与判定区；360 dp 三个判定按钮各实测 110×48 dp，滚动后标题与判定区固定。真实改判截图显示首次通过、当前不合格和「完成后人工改判」。测试 fixture 调用其 cleanup 删除本次数据与照片。曾误加的测试断言与用例已撤除。 |
 | T05 machine | passed | `pnpm --filter @apps/mobile typecheck` | `apps/mobile/components/mobile/admin/review-detail-screen.tsx` | Mobile TypeScript 检查通过。Web 不注册 Android BackHandler。 |
 | T06 AC-07 | passed | `FW_SLOT=1 pnpm e2e:mobile`；`FW_SLOT=1 pnpm exec playwright test --config=playwright.web.config.ts --reporter=line` | `tests/mobile/admin.spec.ts`、`tests/web-results/mobile-slot-1/`、`tests/web-results/slot-1/` | T08 三项修复后的完整重跑，Mobile 43 项全部通过，用时 3.2 分钟。Web 34 项通过、1 项跳过、5 项失败，用时 9.7 分钟，命令退出码为 1；五项名称与「决策与偏差」逐项一致，四项旧退出按钮定位超时，一项账户菜单焦点轮廓为 1px。按用户批准的 AC-07 例外口径通过。 |
-| T06 Android | passed | Android 模拟器点击与系统返回；使用现有 `createReviewFixture` 创建并清理隔离数据 | `docs/work/FW-046-mobile-visual-language/evidence/after/admin-dashboard-390.png`、`docs/work/FW-046-mobile-visual-language/evidence/after/admin-notification-target-390.png` | 今日入口打开总部看板，Android 返回今日；人工审核通知打开对应有效任务的第一项，Android 返回通知收件箱。fixture 调用其 cleanup 删除本次任务、通知、照片与关联数据。 |
-| T06 cleanup | passed | 槽位 1 API 取消 NB-001 的 `FW046-visual` 日程并删除方案；查询 `floorwalk_e2e_1` 本次任务 | `docs/work/FW-046-mobile-visual-language/evidence/after/inspector-pending-360.png` | 门店已恢复未选方案，临时方案数与该门店本次任务数均为 0。 |
+| T06 Android | passed | Android 模拟器点击与系统返回；使用现有 `createReviewFixture` 创建并清理隔离数据 | `evidence/after/admin-dashboard-390.png`、`evidence/after/admin-notification-target-390.png` | 今日入口打开总部看板，Android 返回今日；人工审核通知打开对应有效任务的第一项，Android 返回通知收件箱。fixture 调用其 cleanup 删除本次任务、通知、照片与关联数据。归档清理时删除 `evidence/`。 |
+| T06 cleanup | passed | 槽位 1 API 取消 NB-001 的 `FW046-visual` 日程并删除方案；查询 `floorwalk_e2e_1` 本次任务 | `evidence/after/inspector-pending-360.png` | 门店已恢复未选方案，临时方案数与该门店本次任务数均为 0。 |
 | T06 machine | passed | `pnpm lint`；`pnpm format:check` | `apps/mobile/components/mobile/today-screen.tsx`、`apps/mobile/components/mobile/today-format.ts`、`apps/mobile/components/mobile/today-progress.tsx` | 初次运行发现格式与 400 行限制问题，格式化并拆出日期格式及进度展示后，T08 最终代码的完整 lint、格式检查均通过。 |
 | T07 AC-08 | passed | Android 模拟器实际触发；新盲评 Subagent 限定按钮复评 | `docs/work/FW-046-mobile-visual-language/evidence/blind-buttons-third.md`、`docs/work/FW-046-mobile-visual-language/evidence/after/t07-camera-third-default.png`、`docs/work/FW-046-mobile-visual-language/evidence/after/t07-camera-third-pressed.png`、`docs/work/FW-046-mobile-visual-language/evidence/after/t07-camera-third-disabled.png`、`docs/work/FW-046-mobile-visual-language/evidence/after/t07-camera-loading-final.png`、`docs/work/FW-046-mobile-visual-language/evidence/after/t07-submit-enabled-normal-scrolled.png`、`docs/work/FW-046-mobile-visual-language/evidence/after/t07-submit-loading-final.png`、`docs/work/FW-046-mobile-visual-language/evidence/after/t07-long-names-mobile-future.png` | 按用户授权的第三次方案，拍照按下改 Mobile 按下底色，图标文字原色。限定复评为挡使用 0、难看 0、小毛病 1，差异较小但不像禁用。提交区用滚动后截图，可用主按钮为蓝底白字，旧图确为禁用。使用滨江门店、开店巡检，长名称保留为铺开待处理用例。 |
 | T07 AC-06 | passed | 状态逐项触发与有效过程录像逐帧核对 | `docs/context/mobile-design.md`、`docs/work/FW-046-mobile-visual-language/evidence/after/t07-motion-reduced-entry.mp4`、`docs/work/FW-046-mobile-visual-language/evidence/after/t07-score-reduced.mp4` | 十类组件状态表完整，实际路径的适用状态与不适用理由见下表。主按钮和评分环减少动态以相邻帧和直接终值代码分支交叉核对。 |
@@ -71,8 +71,8 @@ ui-ux-pro-max 的设计系统检索按其规则做了两次，查询分别为 `m
 | T07 cleanup | passed | 槽位 1 精确 fixture 归属事务清理；独立连接计数与文件存在性复核 | `tests/mobile/review-fixtures.ts` | 原 cleanup 未覆盖刷新生成的第二个任务而外键回滚。先移除门店日程，再删除该门店全部任务的通知、照片、AI jobs、判定、聊天、review、参与人、检查项及巡检，最后删除账号、日程、模板、标准、门店。关联实体复查均为 0，1 张照片经 LocalStorageDriver 删除后不存在。过渡动画设置已恢复 1.0，API/Metro 已由 proc.mjs 暂停，避免最终槽位套件冲突。 |
 | T08 API | passed | `FW_SLOT=1 pnpm --filter @apps/api test` | `apps/api/src/tests/` | 三项审查修复落盘后重新运行，29 个文件通过、1 个文件跳过；183 项通过、5 项跳过，用时 96.47 秒。 |
 | T08 machine | passed | `python scripts/gate.py`；`pnpm typecheck`；`pnpm lint`；`pnpm format:check`；`pnpm build`；`pnpm --filter @apps/mobile typecheck`；`pnpm --filter @apps/mobile build`；`node packages/tokens/generate-native.mjs`；`node packages/tokens/generate-native.mjs --check` | `.git/workflow/gate.json`、`apps/mobile/dist/`、`packages/tokens/native.json` | 最终代码的全部命令退出码为 0，代码指纹为 `112f48596ce67cb7`，门记录基准 HEAD 为 `2ceda10`。docs、workflow 机器门通过；Mobile Android Hermes bundle 导出成功。 |
-| T08 environment | passed | `node scripts/dev/proc.mjs status`；开发端口监听检查；ADB 原生冷启动与登录 | `docs/work/FW-046-mobile-visual-language/plan.md` | 套件退出后 3018、3019、3020、3110、3111、3112 均无监听，再经 proc.mjs 启动验收 API 3110 与 Metro 3112。现有模拟器成功载入最终 bundle 并以种子店长进入今日页；Tools button 已恢复开启，系统过渡动画为 1.0。验收环境详见下文。 |
-| T08 人工验收 | blocked | 用户在 Android 模拟器体验两张样板与原生任务路径 | `docs/work/FW-046-mobile-visual-language/plan.md` | 等待方式 A 人工确认，验收范围见「交接」。 |
+| T08 environment | passed | `node scripts/dev/proc.mjs status`；开发端口监听检查；ADB 原生冷启动与登录 | `docs/work/FW-046-mobile-visual-language/plan.md` | E2E 结束时开发端口及槽位端口均空，再经 proc.mjs 启动验收 API 3110 与 Metro 3112。模拟器成功载入最终 bundle 并以种子店长进入今日页；Tools button 已恢复开启，系统过渡动画为 1.0。归档检查曾发现未登记的开发服务 API 3018、Web 3019、Metro 3020 分别由 PID 169268、88616、160648 监听，命令行显示为仓库开发入口，未终止；最终复查时它们已自行退出，`proc.mjs status` 为空，3018–3020 与 3110–3112 均无监听。 |
+| T08 人工验收 | passed | 用户指示「直接归档提交推送」 | `docs/work/FW-046-mobile-visual-language/plan.md` | 用户原话「直接归档提交推送」；按明确指示完成方式 A 交接和归档，未另外等待一次模拟器复验。 |
 | T08 review | passed | 独立 Subagent 按 `docs/howto/final-review.md` 审查完整差异；修复后三项定点复核 | `apps/mobile/components/mobile/admin/review-detail-screen.tsx`、`apps/mobile/components/mobile/admin/admin-today-screen.tsx`、`apps/mobile/components/mobile/admin/review-item.tsx` | 独立 Subagent。P1 打回草稿随默认 pending 变化错绑，修为草稿固定 itemId、输入按 ID 隔离、明确提交草稿 ID；P2 今日请求失败导致看板入口消失，入口移出数据条件；P2 漏掉 incomplete 标识，恢复可见与无障碍文字。三项复核关闭，无其余确定 finding。八个失败域见下表。 |
 
 ## T08 审查的八个失败域
@@ -110,9 +110,9 @@ ui-ux-pro-max 的设计系统检索按其规则做了两次，查询分别为 `m
 
 ### 验收环境
 
-- 当前模拟器停留在 Northbean Coffee 2 的店长今日页，使用已有种子任务，可从路线行查看详情。槽位为 1，API 为 `http://127.0.0.1:3110`，Expo 为 `exp://127.0.0.1:3112`。
+- 人工验收时模拟器停留在 Northbean Coffee 2 的店长今日页，使用已有种子任务，可从路线行查看详情。槽位为 1，API 为 `http://127.0.0.1:3110`，Expo 为 `exp://127.0.0.1:3112`。用户直接要求归档后，受管槽位服务已停止。
 - 店长种子账号为 `inspector+nb-002@northbean.example`，管理员为 `hq@northbean.example`，均使用仓库公开演示密码 `northbean-demo`。
-- 当前分辨率为 780×1688 px、density 320，对应 390×844 dp，与改前截图像素尺寸相同。Expo Go Tools button 已开启，`transition_animation_scale` 已恢复 `1.0`。模拟器与受管 API/Metro 用于本次人工验收，归档时按资源归属收尾。
+- 验收分辨率为 780×1688 px、density 320，对应 390×844 dp，与改前截图像素尺寸相同。Expo Go Tools button 已开启，`transition_animation_scale` 已恢复 `1.0`。受管 API/Metro 已在归档时停止。
 - 店长样板改前 `evidence/before/manager-today.png`，改后 `evidence/after/t07-normal-names-home.png`；管理员审核改前 `evidence/before/admin-review.png`，改后 `evidence/after/admin-review-colors-390.png`。
 
 ## 回修

@@ -1,6 +1,6 @@
 # Mobile 店长巡检
 
-代码（归档时再生成）：`apps/mobile/`
+代码：[店长 Tabs](<../../apps/mobile/app/(authenticated)/(tabs)/_layout.tsx>)、[今日页](../../apps/mobile/components/mobile/today-screen.tsx)、[任务详情](../../apps/mobile/components/mobile/task-detail-screen.tsx)及[API 客户端](../../apps/mobile/lib/api/)。
 
 ## 登录与今日巡检
 
@@ -12,7 +12,9 @@
 
 未登录时只显示登录页，直接打开其他地址会回到登录页。登录后使用 Expo Router Tabs 底部栏切换「今日待巡」「记录」「通知」「我的」，个人资料固定在最右侧末项。只有「今日待巡」首页固定显示 Logo 与通知入口，标题、刷新和任务列表随正文滚动。任务详情是叠在 Tabs 上的独立页面，不显示底部栏；屏幕内返回入口和系统返回键均回到导航来源。通知打开任务后，其返回目标为通知收件箱。Expo Web 地址随页面切换：`/today`、`/records`、`/notifications`、`/profile`、`/inspection/:id`。
 
-今日页显示当前门店当天的任务、模板名、时间窗和任务状态。跨零点的窗口显示「次日」；下拉刷新重新读取任务，没有任务时显示「今天没有巡检任务」。点任务进入详情，按需读取检查项、验收要点、最低照片数、当前结论、最后提交人和上传时间；结论显示待审、通过、打回或不合格，不显示打回理由、自评、备注或存储信息。
+今日页显示当前门店当天的任务、模板名、时间窗和任务状态。跨零点的窗口显示「次日」；下拉刷新重新读取任务，没有任务时显示「今天没有巡检任务」。今日主操作优先进入第一项 `in_progress` 任务，没有进行中任务时进入第一项 `not_started` 任务，不选择 `overdue` 或 `submitted`；入口只使用 Today API 的现有 `status`，不在客户端按时间重算截止。没有可继续任务时显示「今日无可继续的任务」和「查看通知」，逾期或已提交任务仍留在列表中供查看。打回后截止后一小时宽限期内的任务在列表仍为 `overdue`，主入口不会指向该任务，需从打回通知进入详情。
+
+点任务进入详情，按需读取检查项、验收要点、最低照片数、当前结论、最后提交人和上传时间；结论显示待审、通过、打回或不合格，不显示打回理由、自评、备注或存储信息。
 
 任务开始前一小时起可上传。更早时显示可开始时间；截止后未上传项不可操作，打回项可在截止后一小时内重传，超过宽限期后不可操作。服务端拒绝时显示中文提示。每项的照片入口只调起系统相机，不提供相册选择；达到最低照片数后才能提交，零照片项须填写备注。需照片的条目须选择自评结果。任务图片之外，聊天图片仍可使用系统相册。
 
@@ -38,7 +40,7 @@
 
 | 入口        | 当前契约                                                           | 代码（归档时再生成）                                                                                                                                                                                                                                                                                                                                                                                    |
 | ----------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mobile 巡检 | 登录、今日任务、按需任务详情、相机逐项上传/重传、聊天、任务记录分页与只读详情 | [导航布局](../../apps/mobile/app/_layout.tsx)、[Tabs](<../../apps/mobile/app/(authenticated)/(tabs)/_layout.tsx>)、[今日任务](../../apps/mobile/components/mobile/today-screen.tsx)、[任务详情](../../apps/mobile/components/mobile/task-detail-screen.tsx)、[任务条目](../../apps/mobile/components/mobile/task-item-card.tsx)、[记录屏幕](../../apps/mobile/components/mobile/records-screen.tsx)、[API 入口](../../apps/mobile/lib/api.ts)、[功能客户端](../../apps/mobile/lib/api/) |
+| Mobile 巡检 | 登录、按状态选择今日继续任务、按需任务详情、相机逐项上传/重传、聊天、任务记录分页与只读详情 | [导航布局](../../apps/mobile/app/_layout.tsx)、[Tabs](<../../apps/mobile/app/(authenticated)/(tabs)/_layout.tsx>)、[今日任务](../../apps/mobile/components/mobile/today-screen.tsx)、[任务进度](../../apps/mobile/components/mobile/today-progress.tsx)、[日期格式](../../apps/mobile/components/mobile/today-format.ts)、[任务详情](../../apps/mobile/components/mobile/task-detail-screen.tsx)、[任务条目](../../apps/mobile/components/mobile/task-item-card.tsx)、[记录屏幕](../../apps/mobile/components/mobile/records-screen.tsx)、[API 入口](../../apps/mobile/lib/api.ts)、[功能客户端](../../apps/mobile/lib/api/) |
 
 ## 修订记录
 
@@ -58,3 +60,4 @@
 | 2026-11-18 | FW-033 管理员登录后进入独立管理端，店长保留今日巡检入口；FW-035 增加本人资料、头像与改密入口；FW-037 增加通知收件箱和未读角标。 |
 | 2026-11-20 | 收拢修正记录，登记店长巡检详情的 `Unexpected text node` 显示问题与后续维护安排。 |
 | 2026-11-22 | FW-045 定稿店长首页品牌/通知栏和底栏；任务详情与其他非首页标题随内容滚动，通知目标按导航来源返回。 |
+| 2026-11-24 | FW-046 统一 Mobile 视觉与交互表达；今日主操作按 API 状态优先指向进行中、再指向未开始任务，无可继续任务时提供通知入口，保留逾期和已提交任务供查看。 |

@@ -1,10 +1,10 @@
 # Mobile 管理端
 
-代码（归档时再生成）：`apps/mobile/components/mobile/admin/`、`apps/mobile/components/mobile/notification-inbox-screen.tsx`、`apps/mobile/app/(authenticated)/admin/`、`apps/mobile/lib/api/`
+代码：[管理端路由](<../../apps/mobile/app/(authenticated)/admin/>)、[管理端组件](../../apps/mobile/components/mobile/admin/)、[通知收件箱](../../apps/mobile/components/mobile/notification-inbox-screen.tsx)、[API 客户端](../../apps/mobile/lib/api/)。
 
 ## 入口与配置
 
-管理员登录及首次改密后进入 `/admin/today`。管理员底部 Tab 依次为「今日、审核、看板、管理、我的」，个人资料固定末项；店长无法进入管理页面。管理员「今日」首页固定显示 Logo 和通知入口，其他页面标题与返回入口随正文滚动。`/admin` 是 Web「管理配置」分组对应的配置首页，入口为人员管理、门店、模板、AI 审核标准、日程方案和门店日程安排。会话、账号与权限规则见[巡检主链](inspection.md)。
+管理员登录及首次改密后进入 `/admin/today`。管理员底部 Tab 依次为「今日、审核、管理、我的」，个人资料固定末项；总部看板从「今日」页的「总部看板」入口打开，路由仍为 `/admin/dashboard`，Android 返回回到打开前的「今日」页。店长无法进入管理页面。管理员「今日」首页固定显示 Logo 和通知入口，其他页面标题与返回入口随正文滚动。`/admin` 是 Web「管理配置」分组对应的配置首页，入口为人员管理、门店、模板、AI 审核标准、日程方案和门店日程安排。会话、账号与权限规则见[巡检主链](inspection.md)。
 
 Mobile 复用[门店与模板管理](admin.md)和[日程方案与门店安排](schedules.md)的接口与规则：账号支持创建店长、改昵称、调店、停启和重置密码；门店支持创建、改名、停启和查看店长；模板支持检查项与 AI 配置、三套快捷配置；AI 标准支持增改删；日程支持七天任务与跨日时间窗，门店安排支持批量选方案和跳过日期区间。
 
@@ -20,7 +20,7 @@ Mobile 复用[门店与模板管理](admin.md)和[日程方案与门店安排](s
 
 ## 数据契约（归档时再生成）
 
-复用 Web 管理、本人资料和通知 API，不新增端点或共享字段。页面与客户端位于 [`管理端路由`](<../../apps/mobile/app/(authenticated)/admin/>)、[`管理端组件`](../../apps/mobile/components/mobile/admin/)、[`通知收件箱`](../../apps/mobile/components/mobile/notification-inbox-screen.tsx) 和 [`API 客户端`](../../apps/mobile/lib/api/)。
+复用 Web 管理、本人资料和通知 API，不新增端点或共享字段。管理员导航入口为 [`管理端 Tabs`](<../../apps/mobile/app/(authenticated)/admin/_layout.tsx>)，今日看板入口由 [`管理员今日页`](../../apps/mobile/components/mobile/admin/admin-today-screen.tsx)呈现；审核由[`审核队列`](../../apps/mobile/components/mobile/admin/review-queue-screen.tsx)、[`审核详情`](../../apps/mobile/components/mobile/admin/review-detail-screen.tsx)和[`审核条目`](../../apps/mobile/components/mobile/admin/review-item.tsx)呈现。管理配置、本人资料和通知仍位于管理端路由、组件与 API 客户端目录。
 
 ## 修订记录
 
@@ -28,3 +28,4 @@ Mobile 复用[门店与模板管理](admin.md)和[日程方案与门店安排](s
 | --- | --- |
 | 2026-11-18 | FW-033 增加管理员 Mobile 配置入口；FW-034 增加管理员审核、今日视图与看板；FW-035 增加本人资料页；FW-037 增加通知入口和未读角标。 |
 | 2026-11-22 | FW-045 定稿管理员底栏、配置首页、今日首页通知入口、子页滚动标题及模板编辑键盘布局；通知目标按来源返回。 |
+| 2026-11-24 | FW-046 将管理员底栏调整为今日、审核、管理、我的四项；总部看板改由今日页入口打开并保留原路由和返回行为，统一 Mobile 视觉语言与审核详情呈现。 |
