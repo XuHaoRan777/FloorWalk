@@ -32,7 +32,7 @@
 
 ## 当前工作
 
-只列 `归档状态：active` 的单元，个数上限与状态一致性由 `python scripts/validate_docs.py` 校验。
+只列 `归档状态：active` 的单元；表格由 `python scripts/validate_docs.py --sync-backlog` 按各单元 `plan.md` 生成，普通校验检查个数上限与状态一致性。
 
 | ID | 工作单元 | 状态 | 依赖 | 下一步 |
 | --- | --- | --- | --- | --- |

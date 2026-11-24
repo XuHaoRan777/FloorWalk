@@ -6,7 +6,7 @@
 2. 合审：`待审查` 行连同对应提交，合起来交给没写过这些代码的上下文，按 [`final-review.md`](final-review.md) 审一轮；有 finding 先修，修完只复核那几条。
 3. Promote：所有 `待同步 <文件>「<小节>」` 行合并进对应 `docs/specs/` 小节，每份加一行修订记录。
 4. 升迁：用户当场做的产品决定里值得留的升 `docs/adr/`；可复现的坑升 `docs/pitfalls.md`。
-5. 清空：删掉 testlog 全部数据行，保留表头。开发期进程按 [`archive.md`](archive.md) 第 7 步停掉。
+5. 清空：删掉 testlog 全部数据行，保留表头。开发期进程按 [`archive.md`](archive.md) 第 8 步停掉。
 6. 门禁：运行文档校验，0 个问题后提交。提交标题含"收一下"（下次对账的起点），合审结论写进提交信息。
 
 testlog 只存上次收尾以来的行；历史在 `git log --grep "Mode: fix"` 和各 spec 的修订记录，不在 testlog。

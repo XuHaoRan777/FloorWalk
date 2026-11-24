@@ -9,7 +9,9 @@
 记录放在 git 目录里（不入库），按「代码指纹」存：指纹是工作区里 `docs/`、`*.md` 和
 `scripts/workflow.conf` 之外的代码文件（已跟踪的，加未被忽略的新文件）的内容摘要，按 git 的换行规则求。
 所以只改文档的提交（归档提交）不让记录失效；在未提交的代码上跑过、之后原样提交的，记录照样算数；
-代码内容一变，记录就不算了。
+代码内容一变，记录就不算了。每次运行另外追加一行到同目录的 `history.jsonl`（时间、门、用时、是否全量），
+只增不删，复盘用；它写在各工作树共用的 git 目录里。不带门名（全量）跑、`in_progress` 单元还有未完成的任务时
+打印一行提示，照样跑。
 
 `validate_docs.py --archive-gate` 用 `archive_gate_problems` 核对：登记的每个门在当前代码上都跑过且通过。
 红门只有两条路：修，或由用户登记 `gate-known-red <名字> <日期与原因>`（照跑照报，不拦归档）。
@@ -37,6 +39,9 @@ GATE_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 # 失败时打印的日志行数，和保留多少个代码指纹的记录。
 TAIL_LINES = 40
 MAX_FINGERPRINTS = 20
+HISTORY_FILE = "history.jsonl"
+IN_PROGRESS_PLAN_PATTERN = re.compile(r"^- 工作单元状态：`in_progress`", re.MULTILINE)
+TASK_STATUS_PATTERN = re.compile(r"^\|\s*(T\d+)\s*\|[^|\n]*\|\s*`?([a-z_]+)`?\s*\|", re.MULTILINE)
 
 
 class ConfigError(Exception):
@@ -119,6 +124,43 @@ def dirty_code_paths(root: Path) -> list[str]:
 def record_dir(root: Path) -> Path | None:
     git_dir = git(root, "rev-parse", "--git-dir")
     return (root / git_dir.strip() / "workflow").resolve() if git_dir else None
+
+
+def append_history(root: Path, entry: dict) -> None:
+    """每跑一个门追加一行到 `history.jsonl`，不覆盖、不清理，供事后复盘（`gate.json` 只留最近的指纹）。
+
+    写在各工作树共用的 git 目录里，带上工作树名：并行组收组删工作树时，历史不跟着删。
+    `gate.json` 仍按工作树分开存，因为新工作树里没有 `.env*`，同样的代码跑出的结果可能不同。
+    """
+    common = git(root, "rev-parse", "--git-common-dir")
+    if not common:
+        return
+    directory = (root / common.strip() / "workflow").resolve()
+    directory.mkdir(parents=True, exist_ok=True)
+    with (directory / HISTORY_FILE).open("a", encoding="utf-8", newline="\n") as stream:
+        stream.write(json.dumps({"worktree": root.name, **entry}, ensure_ascii=False) + "\n")
+
+
+def unfinished_tasks(root: Path) -> list[tuple[str, list[str]]]:
+    """`in_progress` 单元里、最后一行（最终代码审查）之前还没 `done` 的任务：[(单元目录名, [任务号])]。
+
+    只看 `in_progress`：接力线、并行组里排在后面的单元是 `approved`，任务还没开始，不算。
+    """
+    work_root = root / "docs/work"
+    found: list[tuple[str, list[str]]] = []
+    if not work_root.is_dir():
+        return found
+    for plan in sorted(work_root.glob("*/plan.md")):
+        if plan.parent.name == "_template":
+            continue
+        text = plan.read_text(encoding="utf-8", errors="replace")
+        if not IN_PROGRESS_PLAN_PATTERN.search(text):
+            continue
+        rows = TASK_STATUS_PATTERN.findall(text)
+        pending = [task for task, status in rows[:-1] if status != "done"]
+        if pending:
+            found.append((plan.parent.name, pending))
+    return found
 
 
 def load_records(directory: Path) -> dict:
@@ -213,6 +255,12 @@ def run_gates(root: Path, names: list[str]) -> int:
         return 2
     dirty = dirty_code_paths(root)
     selected = [(name, command) for name, command in gates if not names or name in names]
+    if not names:
+        for unit, tasks in unfinished_tasks(root):
+            print(
+                f"提示：{unit} 还有未完成的任务 {'、'.join(tasks)}；任务级只跑受影响的门（AGENTS.md 第 7 节），"
+                "全量留到最终代码审查前。照样跑。"
+            )
     directory.mkdir(parents=True, exist_ok=True)
     data = load_records(directory)
     runs = data["runs"].setdefault(fingerprint[0], {})
@@ -240,6 +288,7 @@ def run_gates(root: Path, names: list[str]) -> int:
             "at": _dt.datetime.now().isoformat(timespec="seconds"),
         }
         save_records(directory, data)
+        append_history(root, {"gate": name, "full": not names, "fingerprint": fingerprint[0], **runs[name]})
         if passed:
             print(f"[gate] {name}  passed  {seconds}s  `{command}`")
             continue

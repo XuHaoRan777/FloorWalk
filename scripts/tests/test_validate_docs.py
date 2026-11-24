@@ -1,4 +1,6 @@
 import importlib.util
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -93,6 +95,10 @@ class ValidateDocsTests(unittest.TestCase):
     def test_plaintext_secret_is_reported(self) -> None:
         write_file(self.root, "docs/notes.md", "JWT_SECRET=abc123\n")
         self.assertIn("sensitive-value", self.codes())
+
+    def test_ellipsis_placeholder_is_allowed(self) -> None:
+        write_file(self.root, "docs/notes.md", "DB_PASSWORD=...\nJWT_SECRET=\"…\"\n")
+        self.assertEqual(self.codes(), [])
 
     def test_placeholder_secret_is_allowed(self) -> None:
         write_file(self.root, "docs/notes.md", "JWT_SECRET=<your-secret>\nDB_PASSWORD=${DB_PASSWORD}\n")
@@ -534,7 +540,22 @@ class KickoffTests(unittest.TestCase):
     def test_relay_with_manual_unit_before_tail_is_refused(self) -> None:
         unit_ids = self.relay(["B Agent 验收", "A 人工验收", "B Agent 验收"])
         commit_all(self.root)
-        self.assertEqual(self.messages(unit_ids), ["方式 A 的单元只能在线尾，一条线最多一个"])
+        messages = self.messages(unit_ids)
+        self.assertEqual(len(messages), 1, messages)
+        self.assertIn("方式 A 的单元只能在线尾，一条线最多一个", messages[0])
+
+    def test_two_manual_units_run_as_same_sitting(self) -> None:
+        unit_ids = self.relay(["A 人工验收", "A 人工验收"])
+        commit_all(self.root)
+        self.assertEqual(self.messages(unit_ids), [])
+        result = self.run_cli(*unit_ids)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("交接后接着做 EX-002，两个同场验收", result.stdout.strip().splitlines()[-1])
+
+    def test_same_sitting_is_only_for_two_manual_units(self) -> None:
+        unit_ids = self.relay(["B Agent 验收", "A 人工验收", "A 人工验收"])
+        commit_all(self.root)
+        self.assertTrue(any("只能在线尾" in message for message in self.messages(unit_ids)))
 
     def test_two_unit_relay_ending_in_manual_is_below_threshold(self) -> None:
         unit_ids = self.relay(["B Agent 验收", "A 人工验收"])
@@ -548,6 +569,205 @@ class KickoffTests(unittest.TestCase):
         commit_all(self.root)
         messages = self.messages(unit_ids)
         self.assertEqual(sum("接力探针" in message for message in messages), 2, messages)
+
+
+def spec_text(stable_id: str, *, title: str = "示例", deps: str = "- 无\n", approval: str = "") -> str:
+    return (
+        f"# {title}\n\n> ID：`{stable_id}`\n>\n> 状态：`approved`\n\n## 依赖\n\n{deps}\n"
+        f"## 批准记录\n\n- 批准依据：可以\n- 批准时间：`2026-11-24`\n{approval}"
+    )
+
+
+class CloseoutTests(unittest.TestCase):
+    """15–18. 收尾欠账、归档产物、ADR 索引、下游依赖、Backlog 生成。"""
+
+    def setUp(self) -> None:
+        self.validator = load_validator()
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        create_valid_root(self.root)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def codes(self) -> list[str]:
+        return sorted(issue.code for issue in self.validator.validate_repository(self.root))
+
+    def unit(self, name: str, work: str, archive: str = "active", **spec) -> None:
+        create_work_unit(self.root, name, work_status=work, archive_status=archive)
+        write_file(self.root, f"docs/work/{name}/spec.md", spec_text(name[:6], **spec))
+
+    def cli(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT_PATH), "--root", str(self.root), *args],
+            capture_output=True, text=True, encoding="utf-8", check=False,
+        )
+
+    # 15. 该归档没归档
+    def test_verified_unit_left_active_in_clean_tree_is_reported(self) -> None:
+        self.unit("EX-001-example", "verified")
+        register_backlog(self.root, [("EX-001", "EX-001-example", "verified")])
+        self.assertEqual(self.codes(), [])  # 不是 git 仓库：不查
+        commit_all(self.root)
+        self.assertEqual(self.codes(), ["unarchived"])
+        write_file(self.root, "docs/work/EX-001-example/plan.md", "# 归档中\n\n- 工作单元状态：`verified`\n- 归档状态：`active`\n")
+        self.assertEqual(self.codes(), [])  # 工作树有改动：可能正在归档
+
+    def test_relay_middle_unit_may_wait_for_its_downstream(self) -> None:
+        self.unit("EX-001-first", "verified")
+        self.unit("EX-002-second", "in_progress", deps="- EX-001：`src/app.py`\n")
+        write_file(self.root, "src/app.py", "x = 1\n")
+        register_backlog(self.root, [("EX-001", "EX-001-first", "verified"), ("EX-002", "EX-002-second", "in_progress")])
+        commit_all(self.root)
+        self.assertEqual(self.codes(), [])
+
+    def test_relay_unit_without_dependency_link_waits_for_its_line(self) -> None:
+        probe = "- 接力探针（2026-11-23）：提交、执行器、本地配置通过\n"
+        self.unit("EX-001-first", "verified", approval=probe)
+        self.unit("EX-002-second", "in_progress", approval=probe)  # 没在「依赖」里写 EX-001
+        register_backlog(self.root, [("EX-001", "EX-001-first", "verified"), ("EX-002", "EX-002-second", "in_progress")])
+        commit_all(self.root)
+        self.assertEqual(self.codes(), [])
+        write_file(self.root, "docs/work/EX-002-second/spec.md", spec_text("EX-002", approval=probe.replace("11-23", "11-24")))
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=test", "commit", "-qam", "另一条线"], cwd=self.root, check=True)
+        self.assertEqual(self.codes(), ["unarchived"])
+
+    # 16. 归档产物与 ADR
+    def test_promised_archive_product_must_exist(self) -> None:
+        self.unit("EX-001-example", "verified", "archived", approval="- 归档产物：`docs/adr/0001-first.md`\n")
+        self.assertEqual(self.codes(), ["archive-product"])
+        write_file(self.root, "docs/adr/0001-first.md", "# ADR-0001\n\n- 状态：`accepted`\n")
+        self.assertEqual(self.codes(), [])
+
+    def test_adr_header_must_match_index(self) -> None:
+        index = "# ADR\n\n| ADR | 决策 | 状态 | 日期 |\n| --- | --- | --- | --- |\n| [ADR-0001](0001-first.md) | 甲 | `{}` | 2026-11-24 |\n"
+        write_file(self.root, "docs/adr/0001-first.md", "# ADR-0001\n\n> 状态：accepted\n")
+        write_file(self.root, "docs/adr/README.md", index.format("accepted"))
+        self.assertEqual(self.codes(), [])
+        write_file(self.root, "docs/adr/README.md", index.format("proposed"))
+        self.assertEqual(self.codes(), ["adr-index"])
+        write_file(self.root, "docs/adr/README.md", index.format("accepted"))
+        write_file(self.root, "docs/adr/0002-second.md", "# ADR-0002\n\n- 状态：`accepted`（部分被取代）\n")
+        self.assertEqual(self.codes(), ["adr-index"])  # 索引里没有 0002
+
+    def test_adr_index_without_status_column_is_not_checked(self) -> None:
+        write_file(self.root, "docs/adr/README.md", "# ADR\n\n当前无 ADR。\n")
+        write_file(self.root, "docs/adr/0001-first.md", "# ADR-0001\n\n- 状态：`accepted`\n")
+        self.assertEqual(self.codes(), [])
+
+    # 17. 下游依赖路径
+    def test_dependency_path_must_exist_once_upstream_delivered(self) -> None:
+        self.unit("EX-001-first", "in_progress")
+        self.unit("EX-002-second", "approved", deps="- EX-001：`deploy/.env.example`、`src/api.ts`\n")
+        register_backlog(self.root, [("EX-001", "EX-001-first", "in_progress"), ("EX-002", "EX-002-second", "approved")])
+        self.assertEqual(self.codes(), [])  # 上游还没交付
+        self.unit("EX-001-first", "verified", "archived")
+        register_backlog(self.root, [("EX-002", "EX-002-second", "approved")])
+        self.assertEqual(self.codes(), ["dependency-path", "dependency-path"])
+        write_file(self.root, "deploy/.env.example", "# 凭据：否；缺失：用默认值\nPORT=3000\n")
+        write_file(self.root, "src/api.ts", "export {}\n")
+        self.assertEqual(self.codes(), [])
+
+    def test_downstream_report_lists_dependents(self) -> None:
+        self.unit("EX-001-first", "verified", "archived")
+        self.unit("EX-002-second", "approved", deps="- EX-001：`src/api.ts`\n")
+        register_backlog(self.root, [("EX-002", "EX-002-second", "approved")])
+        result = self.cli("--downstream", "EX-001")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("EX-002-second：spec approved，plan approved；消费 src/api.ts（不在）", result.stdout)
+        self.assertIn("没有依赖 EX-002 的活动单元", self.cli("--downstream", "EX-002").stdout)
+
+    # 18. Backlog 生成
+    def test_sync_backlog_rewrites_current_work_table(self) -> None:
+        self.unit("EX-001-first", "in_progress", title="第一件事")
+        self.unit("EX-002-second", "approved", title="第二件事", deps="- EX-001\n")
+        write_file(self.root, "docs/backlog.md", "# Backlog\n\n## 当前工作\n\n只列活动单元。\n\n| ID | 工作单元 | 状态 | 依赖 | 下一步 |\n| --- | --- | --- | --- | --- |\n| EX-009 | 旧行 | `draft` | - | - |\n\n## 已归档\n\n无\n")
+        self.assertIn("backlog", self.codes())
+        result = self.cli("--sync-backlog")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        backlog = (self.root / "docs/backlog.md").read_text(encoding="utf-8")
+        self.assertIn("| EX-002 | [第二件事](work/EX-002-second/spec.md) | `approved` | EX-001 |", backlog)
+        self.assertNotIn("EX-009", backlog)
+        self.assertIn("只列活动单元。", backlog)
+        self.assertIn("## 已归档", backlog)
+        self.assertEqual(self.codes(), [])
+
+    def test_sync_backlog_adds_table_when_section_has_none(self) -> None:
+        self.unit("EX-001-example", "in_progress")
+        self.assertEqual(self.cli("--sync-backlog").returncode, 0)
+        self.assertEqual(self.codes(), [])
+
+
+TEMPLATE_ROOT = Path(__file__).parents[2]
+
+
+def fill(text: str, pairs: list[tuple[str, str]]) -> str:
+    """按模板原文替换；模板改了措辞这里会报错，提醒同时改这份样例。"""
+    for old, new in pairs:
+        if old not in text:
+            raise AssertionError(f"模板里找不到「{old}」：模板改了，同步改这里的样例")
+        text = text.replace(old, new)
+    return text
+
+
+class TemplateConsistencyTests(unittest.TestCase):
+    """模板和校验器一致：按 _template 新建、照常填写的单元，用模板自带的脚本校验和开工检查都要通过。"""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name) / "project"
+        self.root.mkdir()
+        for filename in ("AGENTS.md", "CLAUDE.md"):
+            shutil.copy2(TEMPLATE_ROOT / filename, self.root / filename)
+        for directory in ("docs", "scripts"):
+            shutil.copytree(
+                TEMPLATE_ROOT / directory,
+                self.root / directory,
+                ignore=shutil.ignore_patterns("__pycache__", ".git"),
+            )
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def run_script(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(self.root / "scripts/validate_docs.py"), "--root", str(self.root), *args],
+            capture_output=True, text=True, encoding="utf-8", check=False,
+        )
+
+    def test_unit_created_from_template_passes(self) -> None:
+        self.assertEqual(self.run_script().returncode, 0, self.run_script().stdout)
+        unit = self.root / "docs/work/EX-001-demo"
+        shutil.copytree(self.root / "docs/work/_template", unit)
+        spec = fill(
+            (unit / "spec.md").read_text(encoding="utf-8"),
+            [
+                ("# <工作单元名称>", "# 演示"),
+                ("`<前缀>-NNN`", "`EX-001`"),
+                ("> 状态：`draft`", "> 状态：`approved`"),
+                ("- AC-01（`用户要求`）：", "- AC-01（`用户要求`）：首页显示欢迎语。"),
+                ("- AC-02（`建议采纳`）：", "- AC-02（`建议采纳`）：未登录时跳到登录页。"),
+                ("`A 人工验收` | `B Agent 验收`", "`B Agent 验收`"),
+                ("- `specs/<模块>.md` 「<小节>」：<改什么>", "- 无"),
+                ("- 批准依据：<用户原话或指令摘要>", "- 批准依据：用户说“可以，批准”"),
+                ("- 批准时间：`YYYY-MM-DD`", "- 批准时间：`2026-11-24`"),
+                ("- 特殊授权：<无，或相对常设授权的收窄/放宽>", "- 特殊授权：无"),
+            ],
+        )
+        spec = re.sub(r"^- 归档产物：.*$", "- 归档产物：无", spec, flags=re.MULTILINE)
+        spec = re.sub(r"^- 接力探针：.*\n", "", spec, flags=re.MULTILINE)
+        (unit / "spec.md").write_text(spec, encoding="utf-8")
+        plan = fill(
+            (unit / "plan.md").read_text(encoding="utf-8"),
+            [("- 工作单元状态：`draft`", "- 工作单元状态：`approved`"), ("| T01 |  | `pending` |  |", "| T01 | 首页欢迎语 | `pending` | AC-01、AC-02 |")],
+        )
+        (unit / "plan.md").write_text(plan, encoding="utf-8")
+        self.assertEqual(self.run_script("--sync-backlog").returncode, 0)
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        kickoff = self.run_script("--kickoff", "EX-001")
+        self.assertEqual(kickoff.returncode, 0, kickoff.stdout)
+        self.assertEqual(kickoff.stdout.strip().splitlines()[-1], "执行 EX-001。")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import contextlib
 import importlib.util
 import io
+import json
 import shutil
 import subprocess
 import sys
@@ -147,6 +148,45 @@ class GateTests(unittest.TestCase):
         self.assertEqual(self.run_gate()[0], 0)
         self.write("build/out.js", "console.log(1)\n")
         self.assertEqual(self.problems(), [])
+
+    def test_every_run_is_appended_to_history(self) -> None:
+        self.conf(f"gate unit {PYTHON} ok.py", f"gate other {PYTHON} ok.py")
+        self.commit("两个门")
+        self.assertEqual(self.run_gate()[0], 0)
+        self.assertEqual(self.run_gate("unit")[0], 0)
+        history = (self.root / ".git/workflow/history.jsonl").read_text(encoding="utf-8").splitlines()
+        entries = [json.loads(line) for line in history]
+        self.assertEqual([(entry["gate"], entry["full"]) for entry in entries], [("unit", True), ("other", True), ("unit", False)])
+        self.assertTrue(all(entry["status"] == "passed" and "at" in entry and "seconds" in entry for entry in entries))
+
+    def test_history_from_a_worktree_lands_in_the_shared_git_dir(self) -> None:
+        outside = Path(self._tmp.name).parent / f"{Path(self._tmp.name).name}-line"
+        self.addCleanup(shutil.rmtree, outside, True)
+        self.assertEqual(self.git("worktree", "add", "-q", "--detach", str(outside)).returncode, 0)
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            self.assertEqual(self.gate.run_gates(outside, []), 0, buffer.getvalue())
+        history = (self.root / ".git/workflow/history.jsonl").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(json.loads(history[-1])["worktree"], outside.name)
+        self.assertFalse((self.root / ".git/workflow/gate.json").exists())  # 门的记录仍按工作树分开
+        self.assertTrue(any((self.root / ".git/worktrees").glob("*/workflow/gate.json")))
+
+    def test_full_run_with_unfinished_tasks_prints_hint(self) -> None:
+        plan = (
+            "# 计划\n\n- 工作单元状态：`in_progress`\n- 归档状态：`active`\n\n| ID | 任务 | 状态 | 证据 |\n| --- | --- | --- | --- |\n"
+            "| T01 | 甲 | `done` | AC-01 |\n| T02 | 乙 | `in_progress` | AC-02 |\n| T03 | 最终代码审查 | `pending` | |\n"
+        )
+        later = plan.replace("`in_progress`\n- 归档", "`approved`\n- 归档").replace("| `done` |", "| `pending` |")
+        self.write("docs/work/EX-002-next/plan.md", later)  # 接力线后面还没开工的单元不算
+        self.write("docs/work/EX-001-demo/plan.md", plan)
+        code, output = self.run_gate()
+        self.assertEqual(code, 0, output)
+        self.assertIn("EX-001-demo 还有未完成的任务 T02", output)
+        self.assertNotIn("EX-002", output)
+        self.assertNotIn("T03", output.split("提示：", 1)[1].split("\n", 1)[0])
+        self.assertNotIn("提示：", self.run_gate("unit")[1])
+        self.write("docs/work/EX-001-demo/plan.md", plan.replace("`in_progress`", "`done`"))
+        self.assertNotIn("提示：", self.run_gate()[1])
 
     def test_failing_gate_prints_tail_and_blocks_archive(self) -> None:
         self.conf(f"gate unit {PYTHON} bad.py")

@@ -1,6 +1,6 @@
 # 并行组试行记录
 
-做法见 [`howto/parallel.md`](howto/parallel.md)。本页只追加，不改旧段：每组集成单元归档时追加一段，试行中遇到的坑随时追加。抽进模板时，本页就是 workflow 准入规则要的项目内失败记录，所以试行期的坑记这里，不进 [`pitfalls.md`](pitfalls.md)。
+做法见 [`howto/parallel.md`](howto/parallel.md)。本页只追加，不改旧段：每组集成单元归档时追加复盘，试行中记录组级指标和排障过程。已确认且仍影响后续的可复现坑即时记录到 [`pitfalls.md`](pitfalls.md)，本页保留并行组历史，不替代通用陷阱索引。
 
 ## 抽进模板的标准
 
