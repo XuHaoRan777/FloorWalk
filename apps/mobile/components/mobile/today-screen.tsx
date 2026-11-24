@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import { Bell, Check, RefreshCw } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +10,8 @@ import { BrandMark } from './brand-mark';
 import { EmptyIllustration } from './empty-illustration';
 import { useTabColors } from './use-tab-colors';
 import { todayStyles } from './today-screen.styles';
+import { formatLocalDate, formatTimeWindow } from './today-format';
+import { TodayProgress } from './today-progress';
 import tokens from '../../../../packages/tokens/native.json';
 
 const statusLabels: Record<InspectorTodayTask['status'], string> = {
@@ -17,39 +20,6 @@ const statusLabels: Record<InspectorTodayTask['status'], string> = {
   submitted: '已提交',
   overdue: '逾期',
 };
-
-function formatLocalDate(value: string, timezone: string) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date(value));
-  const values = Object.fromEntries(
-    parts
-      .filter((part) => part.type !== 'literal')
-      .map((part) => [part.type, part.value]),
-  );
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
-function formatLocalTime(value: string, timezone: string) {
-  return new Intl.DateTimeFormat('zh-CN', {
-    timeZone: timezone,
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(new Date(value));
-}
-
-function formatTimeWindow(task: InspectorTodayTask, timezone: string) {
-  const starts = formatLocalTime(task.startsAt, timezone);
-  const ends = formatLocalTime(task.dueAt, timezone);
-  const crossesMidnight =
-    formatLocalDate(task.startsAt, timezone) !==
-    formatLocalDate(task.dueAt, timezone);
-  return `${starts}～${crossesMidnight ? '次日 ' : ''}${ends}`;
-}
 
 export function TodayScreen({
   today,
@@ -68,38 +38,33 @@ export function TodayScreen({
 }) {
   const tasks = today?.tasks ?? [];
   const colors = useTabColors();
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
+  const [focusedControl, setFocusedControl] = useState<string | null>(null);
   const resumeTaskIndex = tasks.findIndex(
     (task) => task.status === 'in_progress',
   );
   const nextTaskIndex =
     resumeTaskIndex >= 0
       ? resumeTaskIndex
-      : tasks.findIndex(
-          (task) => task.status === 'not_started' || task.status === 'overdue',
-        );
+      : tasks.findIndex((task) => task.status === 'not_started');
   const nextTask = tasks[nextTaskIndex];
-  const completed = tasks.filter((task) => task.status === 'submitted').length;
-  const inProgress = tasks.filter(
-    (task) => task.status === 'in_progress',
-  ).length;
-  const overdue = tasks.filter((task) => task.status === 'overdue').length;
-  const notStarted = tasks.filter(
-    (task) => task.status === 'not_started',
-  ).length;
 
   return (
     <SafeAreaView
-      className={classes.background}
+      className={classes.mobileBackground}
       edges={['top']}
       style={{ flex: 1 }}
     >
       <View
-        className="border-b border-border bg-card"
-        style={[todayStyles.brandBar, { borderBottomColor: colors.border }]}
+        className={`${classes.mobileSurface} border-b ${classes.mobileBorder}`}
+        style={todayStyles.brandBar}
       >
         <View style={todayStyles.brandLockup}>
           <BrandMark size={28} />
-          <Text className={classes.foreground} style={todayStyles.brandName}>
+          <Text
+            className={classes.mobileForeground}
+            style={todayStyles.brandName}
+          >
             FloorWalk
           </Text>
         </View>
@@ -107,9 +72,15 @@ export function TodayScreen({
           accessibilityLabel={`通知${unreadCount > 0 ? `，${unreadCount} 条未读` : ''}`}
           accessibilityRole="button"
           onPress={onOpenNotifications}
+          onFocus={() => setFocusedControl('notifications')}
+          onBlur={() => setFocusedControl(null)}
           style={({ pressed }) => [
             todayStyles.notifications,
-            pressed && styles.pressedRow,
+            focusedControl === 'notifications' && {
+              borderWidth: 2,
+              borderColor: colors.primary,
+            },
+            pressed && { backgroundColor: colors.mobilePressedBackground },
           ]}
           testID="home-notifications"
         >
@@ -131,160 +102,137 @@ export function TodayScreen({
       </View>
       {today ? (
         <FlatList
-          className={classes.background}
-          contentContainerStyle={styles.page}
+          className={classes.mobileBackground}
+          contentContainerStyle={[styles.page, todayStyles.page]}
           data={tasks}
+          extraData={focusedTaskId}
           keyExtractor={(task) => task.id}
           ListFooterComponent={
             nextTask ? (
               <View style={todayStyles.resume}>
                 <View style={todayStyles.resumeHeading}>
-                  <Text className={classes.muted} style={styles.muted}>
+                  <Text className={classes.mobileMuted} style={styles.muted}>
                     从这里继续
                   </Text>
-                  <Text className={classes.muted} style={styles.muted}>
+                  <Text className={classes.mobileMuted} style={styles.muted}>
                     第 {nextTaskIndex + 1} 项
                   </Text>
                 </View>
-                <Pressable
-                  accessibilityRole="button"
+                <PrimaryButton
                   accessibilityHint="打开当前可继续的巡检任务"
-                  className={`${classes.primaryButton} ${classes.pressMotion}`}
                   onPress={() => onOpenTask(nextTask.id)}
-                  pressRetentionOffset={{
-                    top: 8,
-                    right: 8,
-                    bottom: 8,
-                    left: 8,
-                  }}
+                  pressFeedback="surface"
                   style={todayStyles.resumeButton}
                   testID="today-resume-task"
                 >
-                  <Text
-                    className={classes.primaryButtonText}
-                    style={styles.buttonText}
-                  >
-                    {`打开${nextTask.templateName}`}
-                  </Text>
-                </Pressable>
+                  {`打开${nextTask.templateName}`}
+                </PrimaryButton>
+              </View>
+            ) : tasks.length > 0 ? (
+              <View style={todayStyles.resume}>
+                <Text className={classes.mobileForeground} style={styles.muted}>
+                  今日无可继续的任务
+                </Text>
+                <Text className={classes.mobileMuted} style={styles.muted}>
+                  已提交或逾期任务可在上方查看，打回事项可在通知中处理。
+                </Text>
+                <PrimaryButton
+                  onPress={onOpenNotifications}
+                  pressFeedback="surface"
+                  style={todayStyles.resumeButton}
+                  variant="secondary"
+                >
+                  查看通知
+                </PrimaryButton>
               </View>
             ) : undefined
           }
           ListEmptyComponent={
             <View className={classes.empty} style={todayStyles.empty}>
-              <EmptyIllustration variant="today" />
+              <EmptyIllustration variant="today" mobile />
               <Text
-                className={classes.foreground}
+                className={classes.mobileForeground}
                 style={todayStyles.emptyTitle}
               >
                 今天没有巡检任务。
               </Text>
-              <Text className={classes.muted} style={styles.muted}>
+              <Text className={classes.mobileMuted} style={styles.muted}>
                 有新安排时会显示在这里。
               </Text>
+              <PrimaryButton
+                onPress={onOpenNotifications}
+                pressFeedback="surface"
+                style={todayStyles.resumeButton}
+                variant="secondary"
+              >
+                查看通知
+              </PrimaryButton>
             </View>
           }
           ListHeaderComponent={
             <View style={{ gap: tokens.space.md }}>
               <View style={todayStyles.pageHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text className={classes.eyebrow} style={styles.eyebrow}>
+                  <Text className={classes.mobileMuted} style={styles.eyebrow}>
                     今日任务
                   </Text>
                   <Text
                     accessibilityRole="header"
-                    className={classes.foreground}
-                    style={styles.heading}
+                    className={classes.mobileForeground}
+                    style={todayStyles.heading}
                   >
                     {today.site.name}
+                  </Text>
+                  <Text
+                    className={classes.mobileMuted}
+                    style={todayStyles.date}
+                  >
+                    {formatLocalDate(new Date().toISOString(), today.timezone)}
                   </Text>
                 </View>
                 <Pressable
                   accessibilityLabel="刷新今日任务"
                   accessibilityRole="button"
                   onPress={onRefresh}
+                  onFocus={() => setFocusedControl('refresh')}
+                  onBlur={() => setFocusedControl(null)}
                   style={({ pressed }) => [
                     todayStyles.refresh,
-                    pressed && styles.pressedRow,
+                    focusedControl === 'refresh' && {
+                      borderWidth: 2,
+                      borderColor: colors.primary,
+                    },
+                    pressed && {
+                      backgroundColor: colors.mobilePressedBackground,
+                    },
                   ]}
                   testID="refresh-today"
                 >
                   <RefreshCw color={colors.primary} size={16} />
-                  <Text className={classes.link} style={styles.link}>
+                  <Text
+                    className={classes.mobileForeground}
+                    style={styles.link}
+                  >
                     刷新
                   </Text>
                 </Pressable>
               </View>
               <ErrorBanner message={todayError} />
-              {tasks.length > 0 ? (
-                <View
-                  accessibilityLabel={`今日任务已完成 ${completed} 项，进行中 ${inProgress} 项，逾期 ${overdue} 项，未开始 ${notStarted} 项`}
-                  style={todayStyles.progress}
-                  testID="today-progress"
-                >
-                  <View style={todayStyles.progressHeading}>
-                    <Text
-                      className={classes.foreground}
-                      style={styles.cardTitle}
-                    >
-                      今日进度
-                    </Text>
-                    <Text
-                      className={classes.muted}
-                      style={todayStyles.progressCount}
-                    >
-                      {completed} / {tasks.length} 已完成
-                    </Text>
-                  </View>
-                  <View
-                    accessibilityElementsHidden
-                    style={todayStyles.progressTrack}
-                  >
-                    {tasks.map((task) => (
-                      <View
-                        key={task.id}
-                        style={[
-                          todayStyles.progressSegment,
-                          {
-                            backgroundColor:
-                              task.status === 'submitted'
-                                ? colors.successMark
-                                : task.status === 'in_progress'
-                                  ? colors.primary
-                                  : task.status === 'overdue'
-                                    ? colors.warning
-                                    : colors.border,
-                          },
-                        ]}
-                      />
-                    ))}
-                  </View>
-                  <Text
-                    className={classes.muted}
-                    style={todayStyles.progressLegend}
-                  >
-                    {[
-                      completed > 0 ? `已完成 ${completed}` : null,
-                      inProgress > 0 ? `进行中 ${inProgress}` : null,
-                      notStarted > 0 ? `未开始 ${notStarted}` : null,
-                      overdue > 0 ? `逾期 ${overdue}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join('　')}
-                  </Text>
-                </View>
-              ) : null}
+              {tasks.length > 0 ? <TodayProgress tasks={tasks} /> : null}
               {tasks.length > 0 ? (
                 <View
                   style={[
                     todayStyles.listHeading,
-                    { borderTopColor: colors.border },
+                    { borderTopColor: colors.mobileBorder },
                   ]}
                 >
-                  <Text className={classes.foreground} style={styles.cardTitle}>
+                  <Text
+                    className={classes.mobileForeground}
+                    style={todayStyles.cardTitle}
+                  >
                     今日安排
                   </Text>
-                  <Text className={classes.muted} style={styles.muted}>
+                  <Text className={classes.mobileMuted} style={styles.muted}>
                     {tasks.length} 项
                   </Text>
                 </View>
@@ -296,37 +244,54 @@ export function TodayScreen({
               accessibilityLabel={`查看 ${item.templateName} 任务详情`}
               accessibilityRole="button"
               accessibilityHint="打开任务检查项和时间状态"
-              className="border-b border-border"
               onPress={() => onOpenTask(item.id)}
+              onFocus={() => setFocusedTaskId(item.id)}
+              onBlur={() => setFocusedTaskId(null)}
               style={({ pressed }) => [
                 todayStyles.taskRow,
-                pressed && styles.pressedRow,
+                { borderBottomColor: colors.mobileBorder },
+                pressed && { backgroundColor: colors.mobilePressedBackground },
+                focusedTaskId === item.id && {
+                  borderWidth: 2,
+                  borderColor: colors.primary,
+                  borderRadius: 8,
+                },
               ]}
               testID={`today-task-${item.id}`}
             >
               <View
+                pointerEvents="none"
+                style={[
+                  todayStyles.routeLine,
+                  { backgroundColor: colors.mobileRoute },
+                ]}
+              />
+              <View
                 style={[
                   todayStyles.taskNode,
-                  { borderColor: colors.border },
+                  {
+                    borderColor: colors.mobileBorder,
+                    backgroundColor: colors.mobileBackground,
+                  },
                   item.status === 'submitted' && {
-                    backgroundColor: colors.positiveBackground,
-                    borderColor: colors.successMark,
+                    backgroundColor: colors.mobileSuccessBackground,
+                    borderColor: colors.mobileSuccess,
                   },
                   item.status === 'in_progress' && {
-                    borderColor: colors.primary,
+                    borderColor: colors.mobileRouteStrong,
                     ...todayStyles.taskNodeCurrent,
                   },
                   item.status === 'overdue' && {
-                    backgroundColor: colors.warningBackground,
-                    borderColor: colors.warning,
+                    backgroundColor: colors.mobileWarningBackground,
+                    borderColor: colors.mobileWarning,
                   },
                 ]}
               >
                 {item.status === 'submitted' ? (
-                  <Check color={colors.success} size={14} />
+                  <Check color={colors.mobileSuccess} size={14} />
                 ) : (
                   <Text
-                    className={classes.muted}
+                    className={classes.mobileMuted}
                     style={todayStyles.taskNumber}
                   >
                     {index + 1}
@@ -334,20 +299,23 @@ export function TodayScreen({
                 )}
               </View>
               <View style={todayStyles.taskCopy}>
-                <Text className={classes.foreground} style={styles.cardTitle}>
+                <Text
+                  className={classes.mobileForeground}
+                  style={todayStyles.cardTitle}
+                >
                   {item.templateName}
                 </Text>
-                <Text className={classes.muted} style={styles.muted}>
+                <Text className={classes.mobileMuted} style={styles.muted}>
                   {formatTimeWindow(item, today.timezone)}
                 </Text>
               </View>
               <Text
                 className={
                   item.status === 'submitted'
-                    ? classes.successText
+                    ? classes.mobileSuccessText
                     : item.status === 'overdue'
-                      ? classes.warningTitle
-                      : classes.muted
+                      ? classes.mobileWarningTitle
+                      : classes.mobileMuted
                 }
                 style={todayStyles.taskStatus}
               >
@@ -359,8 +327,8 @@ export function TodayScreen({
         />
       ) : (
         <ScrollView
-          className={classes.background}
-          contentContainerStyle={styles.centered}
+          className={classes.mobileBackground}
+          contentContainerStyle={[styles.centered, todayStyles.page]}
         >
           {todayError ? (
             <>

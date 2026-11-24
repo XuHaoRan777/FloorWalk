@@ -31,7 +31,11 @@ test('FW-034 AC-04 周月指标与门店、店长和日期趋势', async ({ page
       results: ['pass'],
     });
     await dashboard.open();
-    await page.getByRole('tab', { name: '总部看板' }).click();
+    const todayTab = page.getByRole('tab', { name: '今日视图' });
+    await todayTab.click();
+    await expect(todayTab).toHaveAttribute('aria-selected', 'true');
+    await page.getByTestId('admin-dashboard-entry').click();
+    await expect(page).toHaveURL(/\/admin\/dashboard\/?$/);
     await expect(page.getByRole('heading', { name: '总部看板' })).toBeVisible();
     await expect(page.getByText('本周暂无数据')).toBeVisible();
     await expect(page.getByLabel('每日完成率与平均分折线图')).toHaveCount(0);
@@ -121,6 +125,8 @@ test('FW-034 AC-04 周月指标与门店、店长和日期趋势', async ({ page
     );
     await page.getByRole('button', { name: '门店', exact: true }).click();
     await expect(page.getByTestId('admin-dashboard-sites')).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(/\/admin\/today\/?$/);
   } finally {
     await dashboard.cleanup();
   }
@@ -132,6 +138,9 @@ test('FW-034 AC-04 慢请求完成后仍能显示看板', async ({ page }) => {
   try {
     await dashboard.addTask();
     await dashboard.open();
+    const todayTab = page.getByRole('tab', { name: '今日视图' });
+    await todayTab.click();
+    await expect(todayTab).toHaveAttribute('aria-selected', 'true');
     let delayedRequests = 0;
     await page.route(
       (url) => url.pathname.endsWith('/api/dashboard/period'),
@@ -141,7 +150,8 @@ test('FW-034 AC-04 慢请求完成后仍能显示看板', async ({ page }) => {
         await route.continue().catch(() => undefined);
       },
     );
-    await page.getByRole('tab', { name: '总部看板' }).click();
+    await page.getByTestId('admin-dashboard-entry').click();
+    await expect(page).toHaveURL(/\/admin\/dashboard\/?$/);
     await expect(page.getByTestId('admin-dashboard-summary')).toContainText(
       '本周应完成 1 项',
       { timeout: 25_000 },

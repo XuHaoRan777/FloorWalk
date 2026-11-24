@@ -1,15 +1,19 @@
 import Tabs from 'expo-router/tabs';
+import { useSegments } from 'expo-router';
 import {
-  BarChart3,
   CalendarDays,
   ClipboardCheck,
   LayoutGrid,
   UserRound,
 } from 'lucide-react-native';
 import { useTabColors } from '../../../components/mobile/use-tab-colors';
+import { MobileTabButton } from '../../../components/mobile/mobile-tab-button';
 
 export default function AdminLayout() {
   const colors = useTabColors();
+  const segments: string[] = useSegments();
+  const isReviewDetail =
+    segments.includes('review') && segments.includes('[id]');
 
   return (
     <Tabs
@@ -20,6 +24,8 @@ export default function AdminLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
         tabBarHideOnKeyboard: true,
+        tabBarButton: (props) => <MobileTabButton {...props} />,
+        tabBarStyle: isReviewDetail ? { display: 'none' } : undefined,
       }}
     >
       <Tabs.Screen
@@ -45,11 +51,8 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="dashboard"
         options={{
-          title: '看板',
-          tabBarAccessibilityLabel: '总部看板',
-          tabBarIcon: ({ color, size }) => (
-            <BarChart3 color={color} size={size} />
-          ),
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: 'none' },
         }}
       />
       <Tabs.Screen

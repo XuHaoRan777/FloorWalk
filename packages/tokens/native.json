@@ -37,6 +37,44 @@
     "chart2": "#058d84",
     "chart3": "#bc750e"
   },
+  "mobile": {
+    "background": "#f5f8ff",
+    "surface": "#ffffff",
+    "foreground": "#1c2942",
+    "mutedForeground": "#52627e",
+    "border": "#dfe7f2",
+    "route": "#007f92",
+    "routeStrong": "#006b79",
+    "success": "#137a55",
+    "successBackground": "#e5f5ed",
+    "warning": "#8a4a00",
+    "warningBackground": "#fff3dd",
+    "danger": "#a52d3f",
+    "dangerBackground": "#fff0f2",
+    "pressedBackground": "#eaf1fe",
+    "disabledBackground": "#f2f4f7",
+    "disabledForeground": "#8a95a5",
+    "overlay": "#1c2942"
+  },
+  "mobileSpace": {
+    "unit": 4,
+    "xs": 4,
+    "sm": 8,
+    "md": 16,
+    "lg": 24,
+    "xl": 32
+  },
+  "mobileRadius": {
+    "control": 8,
+    "primary": 12
+  },
+  "mobileType": {
+    "xs": 12,
+    "sm": 14,
+    "base": 16,
+    "lg": 18,
+    "title": 23
+  },
   "font": {
     "sans": {
       "regular": "IBMPlexSans_400Regular",

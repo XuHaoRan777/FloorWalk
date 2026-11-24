@@ -13,7 +13,7 @@ async function login(page: import('@playwright/test').Page, loginName: string) {
 test('管理员登录进入今日，管理页显示六个配置入口', async ({ page }) => {
   await login(page, 'hq@northbean.example');
   await expect(page.getByRole('heading', { name: '今日视图' })).toBeVisible();
-  await expect(page.getByRole('tab')).toHaveCount(5);
+  await expect(page.getByRole('tab')).toHaveCount(4);
   await expect(page.getByRole('tab', { name: '个人资料' })).toBeVisible();
   await page.getByRole('tab', { name: '管理' }).click();
   await expect(page.getByRole('heading', { name: '管理配置' })).toBeVisible();

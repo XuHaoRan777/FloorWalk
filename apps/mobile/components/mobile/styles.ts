@@ -2,6 +2,15 @@ import { StyleSheet } from 'react-native';
 import tokens from '../../../../packages/tokens/native.json';
 
 export const classes = {
+  mobileBackground: 'will-change-variable bg-mobile-background',
+  mobileSurface: 'will-change-variable bg-mobile-surface',
+  mobileForeground: 'will-change-variable text-mobile-foreground',
+  mobileMuted: 'will-change-variable text-mobile-muted-foreground',
+  mobileBorder: 'will-change-variable border-mobile-border',
+  mobileRouteStrong: 'will-change-variable text-mobile-route-strong',
+  mobilePressed: 'will-change-variable bg-mobile-pressed-background',
+  mobileSuccessText: 'will-change-variable text-mobile-success',
+  mobileWarningTitle: 'will-change-variable text-mobile-warning',
   background: 'will-change-variable bg-background',
   foreground: 'will-change-variable text-foreground',
   muted: 'will-change-variable text-muted-foreground',

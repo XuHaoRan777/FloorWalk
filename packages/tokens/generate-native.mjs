@@ -97,6 +97,48 @@ const nativeTokens = {
       color(name),
     ]),
   ),
+  mobile: Object.fromEntries(
+    [
+      'background',
+      'surface',
+      'foreground',
+      'muted-foreground',
+      'border',
+      'route',
+      'route-strong',
+      'success',
+      'success-background',
+      'warning',
+      'warning-background',
+      'danger',
+      'danger-background',
+      'pressed-background',
+      'disabled-background',
+      'disabled-foreground',
+      'overlay',
+    ].map((name) => [
+      name.replace(/-([a-z\d])/g, (_, letter) => letter.toUpperCase()),
+      color(`mobile-${name}`),
+    ]),
+  ),
+  mobileSpace: Object.fromEntries(
+    ['unit', 'xs', 'sm', 'md', 'lg', 'xl'].map((name) => [
+      name,
+      dimension(`mobile-space-${name}`),
+    ]),
+  ),
+  mobileRadius: Object.fromEntries(
+    ['control', 'primary'].map((name) => [
+      name,
+      dimension(`mobile-radius-${name}`),
+    ]),
+  ),
+  mobileType: Object.fromEntries(
+    ['xs', 'sm', 'base', 'lg', 'title'].map((name) => [
+      name,
+      dimension(`mobile-text-${name}`),
+    ]),
+  ),
   font: { sans: font('sans'), mono: font('mono') },
   radius: Object.fromEntries(
     ['control', 'card', 'sheet'].map((name) => [

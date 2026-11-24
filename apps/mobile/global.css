@@ -13,4 +13,20 @@
   --color-sidebar-accent-foreground: var(--fw-accent-foreground);
   --color-sidebar-border: var(--fw-border);
   --color-sidebar-ring: var(--fw-ring);
+  --color-mobile-background: var(--fw-mobile-background);
+  --color-mobile-surface: var(--fw-mobile-surface);
+  --color-mobile-foreground: var(--fw-mobile-foreground);
+  --color-mobile-muted-foreground: var(--fw-mobile-muted-foreground);
+  --color-mobile-border: var(--fw-mobile-border);
+  --color-mobile-route: var(--fw-mobile-route);
+  --color-mobile-route-strong: var(--fw-mobile-route-strong);
+  --color-mobile-success: var(--fw-mobile-success);
+  --color-mobile-success-background: var(--fw-mobile-success-background);
+  --color-mobile-warning: var(--fw-mobile-warning);
+  --color-mobile-warning-background: var(--fw-mobile-warning-background);
+  --color-mobile-danger: var(--fw-mobile-danger);
+  --color-mobile-danger-background: var(--fw-mobile-danger-background);
+  --color-mobile-pressed-background: var(--fw-mobile-pressed-background);
+  --color-mobile-disabled-background: var(--fw-mobile-disabled-background);
+  --color-mobile-disabled-foreground: var(--fw-mobile-disabled-foreground);
 }

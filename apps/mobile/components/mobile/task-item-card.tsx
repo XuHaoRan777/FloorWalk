@@ -19,6 +19,7 @@ import { api, ApiError, userFacingError } from '../../lib/api';
 import { ErrorBanner } from './error-banner';
 import { PrimaryButton } from './primary-button';
 import { classes, styles } from './styles';
+import { useTabColors } from './use-tab-colors';
 
 type InspectorTaskItem = InspectorTaskDetail['items'][number];
 
@@ -43,6 +44,7 @@ export function TaskItemCard({
   onUnauthorized: () => void;
   onUploaded: () => Promise<void>;
 }) {
+  const colors = useTabColors();
   const [photos, setPhotos] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [note, setNote] = useState('');
   const [selfAssessment, setSelfAssessment] =
@@ -50,6 +52,11 @@ export function TaskItemCard({
       item.minPhotoCount === 0 ? 'pass' : null,
     );
   const [capturing, setCapturing] = useState(false);
+  const [cameraPressed, setCameraPressed] = useState(false);
+  const [cameraFocused, setCameraFocused] = useState(false);
+  const [focusedAssessment, setFocusedAssessment] =
+    useState<InspectionItemSelfAssessment | null>(null);
+  const [noteFocused, setNoteFocused] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const photoShortfall = Math.max(0, item.minPhotoCount - photos.length);
@@ -67,6 +74,9 @@ export function TaskItemCard({
     setCapturing(true);
     setError(null);
     try {
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => resolve()),
+      );
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'],
         cameraType: ImagePicker.CameraType.back,
@@ -205,6 +215,8 @@ export function TaskItemCard({
                   }
                   disabled={!canOperate || busy}
                   onPress={() => setSelfAssessment(assessment)}
+                  onFocus={() => setFocusedAssessment(assessment)}
+                  onBlur={() => setFocusedAssessment(null)}
                   style={[
                     styles.touchTarget,
                     styles.assessmentOption,
@@ -212,6 +224,23 @@ export function TaskItemCard({
                   ]}
                   testID={`assess-${assessment}-${item.position}`}
                 >
+                  {focusedAssessment === assessment && canOperate && !busy ? (
+                    <View
+                      pointerEvents="none"
+                      style={{
+                        position: 'absolute',
+                        top: 2,
+                        right: 2,
+                        bottom: 2,
+                        left: 2,
+                        borderWidth: 2,
+                        borderRadius: 8,
+                        borderColor: selected
+                          ? colors.mobileSurface
+                          : colors.primary,
+                      }}
+                    />
+                  ) : null}
                   <Text
                     className={
                       selected
@@ -269,12 +298,37 @@ export function TaskItemCard({
             className={`${classes.secondaryButton} ${classes.actionButton}`}
             disabled={!canOperate || busy || capturing}
             onPress={() => void capturePhoto()}
+            onFocus={() => setCameraFocused(true)}
+            onBlur={() => setCameraFocused(false)}
+            onPressIn={() => setCameraPressed(true)}
+            onPressOut={() => setCameraPressed(false)}
             style={[
               styles.actionButton,
               (!canOperate || busy || capturing) && styles.disabledButton,
+              cameraPressed &&
+                canOperate &&
+                !busy &&
+                !capturing && {
+                  backgroundColor: colors.mobilePressedBackground,
+                },
             ]}
             testID={`capture-item-${item.position}`}
           >
+            {cameraFocused && canOperate && !busy && !capturing ? (
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  top: 2,
+                  right: 2,
+                  bottom: 2,
+                  left: 2,
+                  borderWidth: 2,
+                  borderRadius: 8,
+                  borderColor: colors.primary,
+                }}
+              />
+            ) : null}
             <Camera size={18} />
             <Text
               className={classes.secondaryButtonText}
@@ -295,9 +349,14 @@ export function TaskItemCard({
         editable={canOperate && !busy && !capturing}
         multiline
         onChangeText={setNote}
+        onFocus={() => setNoteFocused(true)}
+        onBlur={() => setNoteFocused(false)}
         className={classes.noteInput}
         placeholder={noteRequired ? '请填写检查备注' : '添加备注（可选）'}
-        style={styles.noteInput}
+        style={[
+          styles.noteInput,
+          noteFocused && { borderWidth: 2, borderColor: colors.primary },
+        ]}
         value={note}
       />
       {noteRequired && (
@@ -307,7 +366,9 @@ export function TaskItemCard({
       )}
       <ErrorBanner message={error} />
       <PrimaryButton
-        disabled={!canSubmit}
+        disabled={!canSubmit && !busy}
+        focusRing
+        loading={busy}
         onPress={() => void submit()}
         testID={`submit-item-${item.position}`}
       >

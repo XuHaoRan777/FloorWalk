@@ -1,5 +1,23 @@
+import tokens from '../../../../packages/tokens/native.json';
+
 export function useTabColors() {
   return {
+    mobileBackground: tokens.mobile.background,
+    mobileSurface: tokens.mobile.surface,
+    mobileForeground: tokens.mobile.foreground,
+    mobileMuted: tokens.mobile.mutedForeground,
+    mobileBorder: tokens.mobile.border,
+    mobileRoute: tokens.mobile.route,
+    mobileRouteStrong: tokens.mobile.routeStrong,
+    mobileSuccess: tokens.mobile.success,
+    mobileSuccessBackground: tokens.mobile.successBackground,
+    mobileWarning: tokens.mobile.warning,
+    mobileWarningBackground: tokens.mobile.warningBackground,
+    mobileDanger: tokens.mobile.danger,
+    mobileDangerBackground: tokens.mobile.dangerBackground,
+    mobilePressedBackground: tokens.mobile.pressedBackground,
+    mobileDisabledBackground: tokens.mobile.disabledBackground,
+    mobileDisabledForeground: tokens.mobile.disabledForeground,
     primary: 'var(--fw-primary)',
     primaryForeground: 'var(--fw-primary-foreground)',
     accent: 'var(--fw-accent)',

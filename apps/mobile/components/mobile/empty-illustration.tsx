@@ -5,12 +5,16 @@ type EmptyIllustrationVariant = 'today' | 'template' | 'notification';
 
 export function EmptyIllustration({
   variant,
+  mobile = false,
 }: {
   variant: EmptyIllustrationVariant;
+  mobile?: boolean;
 }) {
   const colors = useTabColors();
-  const stroke = colors.border;
+  const stroke = mobile ? colors.mobileBorder : colors.border;
   const block = colors.raised;
+  const route = mobile ? colors.mobileRoute : colors.primary;
+  const point = mobile ? colors.mobileRoute : colors.accent;
 
   return (
     <Svg width={128} height={96} viewBox="0 0 160 120" fill="none">
@@ -27,14 +31,14 @@ export function EmptyIllustration({
           <Rect x={84} y={60} width={40} height={6} rx={3} fill={block} />
           <Path
             d="M80 116V84M112 84H48V56"
-            stroke={colors.primary}
+            stroke={route}
             strokeWidth={2}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          <Circle cx={48} cy={56} r={4.5} fill={colors.accent} />
-          <Circle cx={80} cy={84} r={4.5} fill={colors.accent} />
-          <Circle cx={112} cy={84} r={4.5} fill={colors.accent} />
+          <Circle cx={48} cy={56} r={4.5} fill={point} />
+          <Circle cx={80} cy={84} r={4.5} fill={point} />
+          <Circle cx={112} cy={84} r={4.5} fill={point} />
         </>
       ) : null}
       {variant === 'template' ? (

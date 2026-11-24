@@ -2,6 +2,23 @@ import { StyleSheet } from 'react-native';
 import tokens from '../../../../packages/tokens/native.json';
 
 export const todayStyles = StyleSheet.create({
+  page: { padding: tokens.mobileSpace.md, gap: tokens.mobileSpace.md },
+  heading: {
+    fontFamily: tokens.font.sans.semibold,
+    fontSize: tokens.mobileType.title,
+    fontWeight: '700',
+    lineHeight: 29,
+  },
+  date: {
+    fontFamily: tokens.font.mono.regular,
+    fontSize: tokens.mobileType.sm,
+    lineHeight: 20,
+  },
+  cardTitle: {
+    fontFamily: tokens.font.sans.semibold,
+    fontSize: tokens.mobileType.base,
+    fontWeight: '700',
+  },
   brandBar: {
     alignItems: 'center',
     borderBottomWidth: 1,
@@ -93,10 +110,19 @@ export const todayStyles = StyleSheet.create({
   },
   taskRow: {
     alignItems: 'center',
+    borderBottomWidth: 1,
     flexDirection: 'row',
     gap: tokens.space.md,
     minHeight: 68,
     paddingVertical: tokens.space.sm,
+    position: 'relative',
+  },
+  routeLine: {
+    position: 'absolute',
+    left: 17,
+    top: 0,
+    bottom: 0,
+    width: 2,
   },
   taskNode: {
     alignItems: 'center',
@@ -105,6 +131,7 @@ export const todayStyles = StyleSheet.create({
     height: 36,
     justifyContent: 'center',
     width: 36,
+    zIndex: 1,
   },
   taskNodeCurrent: { borderWidth: 2 },
   taskNumber: {
@@ -129,9 +156,10 @@ export const todayStyles = StyleSheet.create({
   resumeButton: {
     alignItems: 'center',
     alignSelf: 'center',
-    borderRadius: tokens.radius.control,
+    borderRadius: tokens.mobileRadius.primary,
     height: 48,
     justifyContent: 'center',
+    marginTop: 0,
     maxWidth: '100%',
     paddingHorizontal: tokens.space.md,
     width: 280,

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react-native';
 import { useTabColors } from '../../../components/mobile/use-tab-colors';
 import { useNotifications } from '../../../components/mobile/notification-provider';
+import { MobileTabButton } from '../../../components/mobile/mobile-tab-button';
 
 export const unstable_settings = {
   initialRouteName: 'today',
@@ -25,6 +26,7 @@ export default function TabLayout() {
           tabBarActiveTintColor: tabColors.primary,
           tabBarInactiveTintColor: tabColors.mutedForeground,
           tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
+          tabBarButton: (props) => <MobileTabButton {...props} />,
         }}
       >
         <Tabs.Screen

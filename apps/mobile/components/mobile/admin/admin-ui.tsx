@@ -1,4 +1,4 @@
-import { Host, Picker, Switch, TextInput, useNativeState } from '@expo/ui';
+import { createContext, useContext } from 'react';
 import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import {
@@ -8,9 +8,11 @@ import {
   ScrollView,
   Text,
   View,
-  type KeyboardTypeOptions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import tokens from '../../../../../packages/tokens/native.json';
 import { ErrorBanner } from '../error-banner';
 import { PrimaryButton } from '../primary-button';
@@ -19,6 +21,32 @@ import { useTabColors } from '../use-tab-colors';
 import { BrandMark } from '../brand-mark';
 import { useNotifications } from '../notification-provider';
 import { Bell } from 'lucide-react-native';
+export { AdminField, AdminSelect, AdminToggle } from './admin-fields';
+
+const AdminVisualContext = createContext<'shared' | 'route'>('shared');
+const routeStyles = {
+  heading: {
+    fontFamily: tokens.font.sans.semibold,
+    fontSize: tokens.mobileType.title,
+    fontWeight: '700' as const,
+    lineHeight: 29,
+  },
+  body: {
+    fontFamily: tokens.font.sans.regular,
+    fontSize: tokens.mobileType.sm,
+    lineHeight: 20,
+  },
+  page: {
+    padding: tokens.mobileSpace.md,
+    paddingBottom: tokens.space.xxl,
+    gap: tokens.mobileSpace.md,
+  },
+  card: {
+    borderRadius: tokens.mobileRadius.control,
+    gap: tokens.mobileSpace.sm,
+    padding: tokens.mobileSpace.md,
+  },
+};
 
 export function AdminPage({
   title,
@@ -33,6 +61,7 @@ export function AdminPage({
   onBack,
   homeHeader = false,
   fixedFooter,
+  visual = 'shared',
 }: {
   title: string;
   children: ReactNode;
@@ -46,10 +75,13 @@ export function AdminPage({
   onBack?: () => void;
   homeHeader?: boolean;
   fixedFooter?: ReactNode;
+  visual?: 'shared' | 'route';
 }) {
   const router = useRouter();
   const colors = useTabColors();
+  const insets = useSafeAreaInsets();
   const { unreadCount } = useNotifications();
+  const [focusedControl, setFocusedControl] = useState<string | null>(null);
 
   function goBack() {
     if (onBack) {
@@ -60,150 +92,211 @@ export function AdminPage({
     else router.replace('/admin');
   }
 
-  return (
-    <SafeAreaView
-      className={classes.background}
-      edges={['top']}
-      style={{ flex: 1 }}
-    >
-      <KeyboardAvoidingView
-        behavior={
-          Platform.OS === 'ios' ? 'padding' : fixedFooter ? 'height' : undefined
+  const pageHeader = (
+    <View style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}>
+      {showBack ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={backLabel}
+          onPress={goBack}
+          onFocus={() => setFocusedControl('back')}
+          onBlur={() => setFocusedControl(null)}
+          style={({ pressed }) => [
+            {
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 44,
+              minWidth: 44,
+            },
+            pressed && styles.pressedRow,
+            focusedControl === 'back' && {
+              borderWidth: 2,
+              borderColor: colors.primary,
+              borderRadius: 8,
+            },
+          ]}
+        >
+          <Text className={classes.link} style={styles.link}>
+            {backLabel}
+          </Text>
+        </Pressable>
+      ) : null}
+      <Text
+        accessibilityRole="header"
+        className={
+          visual === 'route' ? classes.mobileForeground : classes.foreground
         }
+        style={[
+          visual === 'route' ? routeStyles.heading : styles.heading,
+          { flex: 1, marginTop: 0 },
+        ]}
+      >
+        {title}
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={loading ? '正在刷新' : '刷新'}
+        accessibilityState={{ disabled: loading || busy }}
+        disabled={loading || busy}
+        onPress={onRefresh}
+        onFocus={() => setFocusedControl('refresh')}
+        onBlur={() => setFocusedControl(null)}
+        style={({ pressed }) => [
+          {
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: 44,
+            minWidth: 44,
+          },
+          pressed && styles.pressedRow,
+          focusedControl === 'refresh' && {
+            borderWidth: 2,
+            borderColor: colors.primary,
+            borderRadius: 8,
+          },
+        ]}
+      >
+        <Text className={classes.link} style={styles.link}>
+          {loading ? '…' : '刷新'}
+        </Text>
+      </Pressable>
+    </View>
+  );
+
+  return (
+    <AdminVisualContext.Provider value={visual}>
+      <SafeAreaView
+        className={
+          visual === 'route' ? classes.mobileBackground : classes.background
+        }
+        edges={['top']}
         style={{ flex: 1 }}
       >
-        {homeHeader ? (
-          <View
-            className={`${classes.card} border-b border-border`}
-            style={{
-              alignItems: 'center',
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              minHeight: 52,
-              paddingHorizontal: tokens.space.md,
-            }}
-          >
+        <KeyboardAvoidingView
+          behavior={
+            Platform.OS === 'ios'
+              ? 'padding'
+              : fixedFooter
+                ? 'height'
+                : undefined
+          }
+          style={{ flex: 1 }}
+        >
+          {homeHeader ? (
             <View
-              style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}
-            >
-              <BrandMark size={26} />
-              <Text className={classes.foreground} style={styles.cardTitle}>
-                FloorWalk
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`通知${unreadCount ? `，${unreadCount} 条未读` : ''}`}
-              onPress={() => router.push('/admin/notifications')}
+              className={`${visual === 'route' ? classes.mobileSurface : classes.card} border-b ${visual === 'route' ? classes.mobileBorder : 'border-border'}`}
               style={{
                 alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: 44,
-                minWidth: 44,
-                position: 'relative',
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                minHeight: 52,
+                paddingHorizontal: tokens.space.md,
               }}
-              testID="admin-notifications"
             >
-              <Bell color={colors.primary} size={22} />
-              {unreadCount > 0 ? (
-                <View
-                  className={classes.notificationBadge}
-                  style={styles.adminNotificationBadge}
-                >
-                  <Text
-                    className={classes.notificationBadgeText}
-                    style={styles.adminNotificationBadgeText}
-                  >
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </Text>
-                </View>
-              ) : null}
-            </Pressable>
-          </View>
-        ) : null}
-        <View style={{ flex: 1 }}>
-          <ScrollView
-            contentContainerStyle={[
-              styles.page,
-              fixedFooter ? { paddingBottom: tokens.space.md } : undefined,
-            ]}
-            contentInsetAdjustmentBehavior="automatic"
-            keyboardShouldPersistTaps="handled"
-          >
-            <View
-              style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}
-            >
-              {showBack ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={backLabel}
-                  onPress={goBack}
-                  style={({ pressed }) => [
-                    {
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minHeight: 44,
-                      minWidth: 44,
-                    },
-                    pressed && styles.pressedRow,
-                  ]}
-                >
-                  <Text className={classes.link} style={styles.link}>
-                    {backLabel}
-                  </Text>
-                </Pressable>
-              ) : null}
-              <Text
-                accessibilityRole="header"
-                className={classes.foreground}
-                style={[styles.heading, { flex: 1, marginTop: 0 }]}
+              <View
+                style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}
               >
-                {title}
-              </Text>
+                <BrandMark size={26} />
+                <Text
+                  className={
+                    visual === 'route'
+                      ? classes.mobileForeground
+                      : classes.foreground
+                  }
+                  style={styles.cardTitle}
+                >
+                  FloorWalk
+                </Text>
+              </View>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={loading ? '正在刷新' : '刷新'}
-                accessibilityState={{ disabled: loading || busy }}
-                disabled={loading || busy}
-                onPress={onRefresh}
-                style={({ pressed }) => [
-                  {
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minHeight: 44,
-                    minWidth: 44,
-                  },
-                  pressed && styles.pressedRow,
-                ]}
+                accessibilityLabel={`通知${unreadCount ? `，${unreadCount} 条未读` : ''}`}
+                onPress={() => router.push('/admin/notifications')}
+                onFocus={() => setFocusedControl('notifications')}
+                onBlur={() => setFocusedControl(null)}
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: 44,
+                  minWidth: 44,
+                  position: 'relative',
+                  borderWidth: focusedControl === 'notifications' ? 2 : 0,
+                  borderColor: colors.primary,
+                  borderRadius: 8,
+                }}
+                testID="admin-notifications"
               >
-                <Text className={classes.link} style={styles.link}>
-                  {loading ? '…' : '刷新'}
-                </Text>
+                <Bell color={colors.primary} size={22} />
+                {unreadCount > 0 ? (
+                  <View
+                    className={classes.notificationBadge}
+                    style={styles.adminNotificationBadge}
+                  >
+                    <Text
+                      className={classes.notificationBadgeText}
+                      style={styles.adminNotificationBadgeText}
+                    >
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </Text>
+                  </View>
+                ) : null}
               </Pressable>
             </View>
-            <ErrorBanner message={error} />
-            {message ? (
-              <Text
-                accessibilityRole="alert"
-                className={classes.success}
-                style={styles.success}
-              >
-                {message}
-              </Text>
-            ) : null}
-            {children}
-          </ScrollView>
-          {fixedFooter ? (
+          ) : null}
+          {visual === 'route' ? (
             <View
-              className="border-t border-border bg-card"
-              style={{ borderTopWidth: 1, padding: tokens.space.sm }}
+              className={`${classes.mobileSurface} border-b ${classes.mobileBorder}`}
+              style={{ paddingHorizontal: tokens.mobileSpace.md }}
             >
-              {fixedFooter}
+              {pageHeader}
             </View>
           ) : null}
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          <View style={{ flex: 1 }}>
+            <ScrollView
+              className={
+                visual === 'route'
+                  ? classes.mobileBackground
+                  : classes.background
+              }
+              contentContainerStyle={[
+                visual === 'route' ? routeStyles.page : styles.page,
+                fixedFooter ? { paddingBottom: tokens.space.md } : undefined,
+              ]}
+              contentInsetAdjustmentBehavior="automatic"
+              keyboardShouldPersistTaps="handled"
+            >
+              {visual === 'route' ? null : pageHeader}
+              <ErrorBanner message={error} />
+              {message ? (
+                <Text
+                  accessibilityRole="alert"
+                  className={classes.success}
+                  style={styles.success}
+                >
+                  {message}
+                </Text>
+              ) : null}
+              {children}
+            </ScrollView>
+            {fixedFooter ? (
+              <View
+                className={`${visual === 'route' ? classes.mobileSurface : 'bg-card'} border-t ${visual === 'route' ? classes.mobileBorder : 'border-border'}`}
+                style={{
+                  borderTopWidth: 1,
+                  padding: tokens.space.sm,
+                  paddingBottom:
+                    visual === 'route'
+                      ? tokens.space.sm + insets.bottom
+                      : tokens.space.sm,
+                }}
+              >
+                {fixedFooter}
+              </View>
+            ) : null}
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </AdminVisualContext.Provider>
   );
 }
 
@@ -214,147 +307,43 @@ export function AdminCard({
   children: ReactNode;
   testID?: string;
 }) {
+  return <AdminCardContent children={children} testID={testID} />;
+}
+
+function AdminCardContent({
+  children,
+  testID,
+}: {
+  children: ReactNode;
+  testID?: string;
+}) {
+  const visual = useContext(AdminVisualContext);
   return (
-    <View className={classes.card} style={styles.card} testID={testID}>
+    <View
+      className={
+        visual === 'route'
+          ? `${classes.mobileSurface} border ${classes.mobileBorder}`
+          : classes.card
+      }
+      style={visual === 'route' ? routeStyles.card : styles.card}
+      testID={testID}
+    >
       {children}
     </View>
   );
 }
 
 export function AdminText({ children }: { children: ReactNode }) {
+  const visual = useContext(AdminVisualContext);
   return (
-    <Text className={classes.foreground} style={styles.value}>
+    <Text
+      className={
+        visual === 'route' ? classes.mobileForeground : classes.foreground
+      }
+      style={visual === 'route' ? routeStyles.body : styles.value}
+    >
       {children}
     </Text>
-  );
-}
-
-export function AdminField({
-  label,
-  value,
-  onChangeText,
-  disabled = false,
-  password = false,
-  multiline = false,
-  keyboardType = 'default',
-  maxLength,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  disabled?: boolean;
-  password?: boolean;
-  multiline?: boolean;
-  keyboardType?: KeyboardTypeOptions;
-  maxLength?: number;
-}) {
-  const state = useNativeState(value);
-  const colors = useTabColors();
-  // Fields mount with their draft. Native edits update this shared state;
-  // writing React's delayed change events back can overwrite newer keystrokes.
-  return (
-    <View style={{ gap: tokens.space.xs }}>
-      <Text className={classes.muted} style={styles.label}>
-        {label}
-      </Text>
-      <Host
-        matchContents={{ vertical: true }}
-        colorScheme="light"
-        seedColor={colors.accent}
-        style={{ width: '100%' }}
-      >
-        <TextInput
-          accessibilityLabel={label}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!disabled}
-          keyboardType={keyboardType}
-          maxLength={maxLength}
-          multiline={multiline}
-          onChangeText={onChangeText}
-          secureTextEntry={password}
-          style={{
-            width: '100%',
-            height: multiline ? 112 : 48,
-            borderRadius: tokens.radius.control,
-            borderWidth: 1,
-            padding: tokens.space.sm,
-          }}
-          textStyle={{ fontSize: 16, fontFamily: tokens.font.sans.regular }}
-          value={state}
-        />
-      </Host>
-    </View>
-  );
-}
-
-export function AdminSelect({
-  label,
-  value,
-  onChange,
-  options,
-  disabled = false,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string }[];
-  disabled?: boolean;
-}) {
-  const colors = useTabColors();
-  return (
-    <View style={{ gap: tokens.space.xs }}>
-      <Text className={classes.muted} style={styles.label}>
-        {label}
-      </Text>
-      <Host
-        matchContents={{ vertical: true }}
-        colorScheme="light"
-        seedColor={colors.accent}
-        style={{ width: '100%', minHeight: 48 }}
-      >
-        <Picker
-          accessibilityLabel={label}
-          enabled={!disabled}
-          selectedValue={value}
-          onValueChange={onChange}
-        >
-          <Picker.Item label="请选择" value="" />
-          {options.map((option) => (
-            <Picker.Item key={option.value} {...option} />
-          ))}
-        </Picker>
-      </Host>
-    </View>
-  );
-}
-
-export function AdminToggle({
-  label,
-  value,
-  onChange,
-  disabled = false,
-}: {
-  label: string;
-  value: boolean;
-  onChange: (value: boolean) => void;
-  disabled?: boolean;
-}) {
-  const colors = useTabColors();
-  return (
-    <Host
-      matchContents
-      colorScheme="light"
-      seedColor={colors.accent}
-      style={{ minHeight: 48 }}
-    >
-      <Switch
-        label={label}
-        value={value}
-        onValueChange={onChange}
-        disabled={disabled}
-      />
-    </Host>
   );
 }
 

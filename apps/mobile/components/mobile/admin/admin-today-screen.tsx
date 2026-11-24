@@ -1,4 +1,7 @@
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
+import { BarChart3, ChevronRight } from 'lucide-react-native';
+import { Pressable, View } from 'react-native';
 import type { AdminTodayResponse } from '@libs/shared';
 import { getAdminToday } from '../../../lib/api/dashboard';
 import { reviewApi } from '../../../lib/api/review';
@@ -6,6 +9,7 @@ import { PrimaryButton } from '../primary-button';
 import { AdminCard, AdminPage, AdminText } from './admin-ui';
 import { useAdminResource } from './use-admin-data';
 import { useAdminFocus } from './use-admin-focus';
+import { useTabColors } from '../use-tab-colors';
 
 const taskLabels = {
   not_started: '未开始',
@@ -31,6 +35,8 @@ async function loadToday() {
 
 export function AdminTodayScreen() {
   const router = useRouter();
+  const colors = useTabColors();
+  const [dashboardFocused, setDashboardFocused] = useState(false);
   const resource = useAdminResource(
     loadToday,
     null as Awaited<ReturnType<typeof loadToday>> | null,
@@ -65,9 +71,37 @@ export function AdminTodayScreen() {
       showBack={false}
       onRefresh={() => void resource.load()}
     >
+      {today ? (
+        <AdminText>{`${today.date} · ${today.timezone}`}</AdminText>
+      ) : null}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="打开总部看板"
+        accessibilityHint="查看周月汇总、门店、店长和日期趋势"
+        className="flex-row items-center justify-between rounded-xl border border-mobile-border bg-mobile-surface px-4 py-3 active:bg-mobile-pressed-background"
+        onPress={() => router.push('/admin/dashboard')}
+        onFocus={() => setDashboardFocused(true)}
+        onBlur={() => setDashboardFocused(false)}
+        style={[
+          { minHeight: 64 },
+          dashboardFocused && {
+            borderWidth: 2,
+            borderColor: colors.primary,
+          },
+        ]}
+        testID="admin-dashboard-entry"
+      >
+        <View className="flex-row items-center gap-3">
+          <BarChart3 color={colors.primary} size={22} />
+          <View>
+            <AdminText>总部看板</AdminText>
+            <AdminText>完成率、逾期、自检准确率与分数</AdminText>
+          </View>
+        </View>
+        <ChevronRight color={colors.mutedForeground} size={18} />
+      </Pressable>
       {today && data ? (
         <>
-          <AdminText>{`${today.date} · ${today.timezone}`}</AdminText>
           <AdminCard testID="admin-today-summary">
             <AdminText>{`应完成 ${today.summary.expected}`}</AdminText>
             <AdminText>{`已完成 ${today.summary.completed}`}</AdminText>

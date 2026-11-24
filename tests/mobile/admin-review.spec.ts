@@ -16,7 +16,11 @@ async function decide(
       response.url().endsWith('/decision') &&
       response.request().method() === 'POST',
   );
-  await item.getByRole('button', { name: button, exact: true }).click();
+  if (button !== '确认打回') await item.click();
+  await page
+    .getByTestId('review-decision-dock')
+    .getByRole('button', { name: button, exact: true })
+    .click();
   expect((await response).status()).toBe(201);
 }
 
@@ -58,15 +62,28 @@ test('FW-034 AC-01、AC-02 审核队列、失败转人工、打回重传与改�
     await expect(firstItem).toContainText(/上传于 \d{2}:\d{2}/);
     await expect(firstItem).toContainText('AI 理由：AI 调用失败，请人工审核。');
     await expect(firstItem.locator('img')).toHaveJSProperty('naturalWidth', 1);
-    await firstItem.getByRole('button', { name: '打回', exact: true }).click();
+    await firstItem.click();
+    const decisionDock = page.getByTestId('review-decision-dock');
+    await page
+      .getByTestId('review-decision-dock')
+      .getByRole('button', { name: '打回', exact: true })
+      .click();
     await expect(
-      firstItem.getByRole('button', { name: '确认打回', exact: true }),
+      page
+        .getByTestId('review-decision-dock')
+        .getByRole('button', { name: '确认打回', exact: true }),
     ).toBeDisabled();
-    await firstItem.getByLabel('打回理由', { exact: true }).fill('   ');
+    await page
+      .getByTestId('review-decision-dock')
+      .getByLabel('打回理由', { exact: true })
+      .fill('   ');
     await expect(
-      firstItem.getByRole('button', { name: '确认打回', exact: true }),
+      page
+        .getByTestId('review-decision-dock')
+        .getByRole('button', { name: '确认打回', exact: true }),
     ).toBeDisabled();
-    await firstItem
+    await page
+      .getByTestId('review-decision-dock')
       .getByLabel('打回理由', { exact: true })
       .fill('请补充现场检查的具体说明。');
     await decide(page, taskId, firstItem, '确认打回');
@@ -99,9 +116,13 @@ test('FW-034 AC-01、AC-02 审核队列、失败转人工、打回重传与改�
     await expect(summary).toContainText('50 分');
     await expect(summary).toContainText('不合格');
     await expect(
-      firstItem.getByRole('button', { name: '打回', exact: true }),
+      page
+        .getByTestId('review-decision-dock')
+        .getByRole('button', { name: '打回', exact: true }),
     ).toBeDisabled();
-    await expect(firstItem).toContainText('已过打回时间，仅可判通过或不合格。');
+    await expect(decisionDock).toContainText(
+      '已过打回时间，仅可判通过或不合格。',
+    );
     await decide(page, taskId, secondItem, '通过');
     await expect(summary).toContainText('100 分');
     await expect(summary).toContainText('通过');
