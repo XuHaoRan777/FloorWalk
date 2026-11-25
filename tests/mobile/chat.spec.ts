@@ -153,9 +153,7 @@ test('Expo Web chat pagination, polling, sending, validation and HQ read-only', 
   const recordRow = page.getByTestId(`record-row-${target.id}`);
   await expect(recordRow).toBeVisible();
   await recordRow.click();
-  await expect(
-    page.getByRole('heading', { name: '巡检记录详情' }),
-  ).toBeVisible();
+  await expect(page.getByTestId('record-detail-summary')).toBeVisible();
   const list = page.getByTestId('chat-message-list');
   await expect(
     list.getByText('Mobile 分页消息 2', { exact: true }),
@@ -163,7 +161,7 @@ test('Expo Web chat pagination, polling, sending, validation and HQ read-only', 
   await expect(
     list.getByText('Mobile 分页消息 51', { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText('店长', { exact: false }).first()).toBeVisible();
+  await expect(list.getByText('店长', { exact: false }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: '加载更早' })).toBeVisible();
   let polls = 0;
   page.on('request', (browserRequest) => {

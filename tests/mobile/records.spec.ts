@@ -264,13 +264,14 @@ test('记录列表按 API 分页显示，支持加载更多和刷新回到第一
         : `巡检状态：${statusLabels[firstRecord.status]}`,
     ),
   ).toBeVisible();
-  await expect(
-    firstRow.getByText(`任务：${firstRecord.templateName}`),
-  ).toBeVisible();
-  if (firstRecord.taskDate)
+  await expect(firstRow.getByText(firstRecord.templateName, { exact: true }))
+    .toBeVisible();
+  if (firstRecord.taskDate) {
+    const [, month, day] = firstRecord.taskDate.split('-');
     await expect(
-      firstRow.getByText(`任务日期：${firstRecord.taskDate}`),
+      firstRow.getByText(`${month}月${day}日`, { exact: true }),
     ).toBeVisible();
+  }
   await expect(
     firstRow.getByText(
       `分数：${firstRecord.score === null ? '—' : `${firstRecord.score} 分`}`,
@@ -384,7 +385,9 @@ test('记录详情只读显示检查项、照片和按时间排列的审核历�
   await expect(page.getByTestId('record-item-1')).toContainText(
     '同店店员填写的记录备注',
   );
-  await expect(page.getByTestId('record-item-1')).toContainText('结果：合格');
+  await expect(
+    page.getByTestId('record-item-1').getByText('合格', { exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: '返回记录', exact: true }).click();
 
   const records = await readAllRecords(page);
@@ -431,9 +434,18 @@ test('记录详情只读显示检查项、照片和按时间排列的审核历�
   for (const item of expected.items) {
     const row = page.getByTestId(`record-item-${item.position}`);
     await expect(row).toContainText(item.title);
-    await expect(row).toContainText(
-      `结果：${item.result === 'pass' ? '合格' : item.result === 'rework' ? '打回' : item.result === 'fail' ? '不合格' : '未检查'}`,
-    );
+    await expect(
+      row.getByText(
+        item.result === 'pass'
+          ? '合格'
+          : item.result === 'rework'
+            ? '打回'
+            : item.result === 'fail'
+              ? '不合格'
+              : '未检查',
+        { exact: true },
+      ),
+    ).toBeVisible();
     await expect(row).toContainText(`备注：${item.note || '—'}`);
     for (const evidence of item.evidence)
       await expect(

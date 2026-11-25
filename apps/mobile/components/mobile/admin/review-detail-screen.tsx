@@ -275,7 +275,11 @@ export function ReviewDetailScreen({
             />
           ))}
           {task.inspectionId ? (
-            <ChatPanel inspectionId={task.inspectionId} canSend={false} />
+            <ChatPanel
+              inspectionId={task.inspectionId}
+              canSend={false}
+              variant="legacy"
+            />
           ) : null}
         </>
       ) : null}

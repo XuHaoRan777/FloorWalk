@@ -3,25 +3,26 @@ import * as ImagePicker from 'expo-image-picker';
 import {
   AppState,
   ActivityIndicator,
-  Image,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Platform,
   ScrollView,
   type ScrollViewInstance,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import type { ChatMessage } from '@libs/shared';
+import { FileText } from 'lucide-react-native';
 import { api, userFacingError } from '../../lib/api';
 import { chatImageUrl } from '../../lib/api/chat';
 import { ErrorBanner } from './error-banner';
-import { PrimaryButton } from './primary-button';
-import { classes, styles } from './styles';
+import { ChatComposer } from './chat-composer';
+import { ChatPanelLegacyView } from './chat-panel-legacy-view';
+import { ChatMessageRow } from './chat-message-row';
+import { MobileEmptyState, MobileSurfaceCard } from './manager-data-ui';
+import { MobileButton, MobileText } from './manager-ui';
+import tokens from '../../../../packages/tokens/native.json';
+import { styles } from './chat-panel.styles';
 
-const roleLabels = {
-  store_manager: '店长',
-  admin: '商家管理员',
-} as const;
 const maxFileSize = 10 * 1024 * 1024;
 
 function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]) {
@@ -36,9 +37,11 @@ function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]) {
 export function ChatPanel({
   inspectionId,
   canSend,
+  variant = 'embedded',
 }: {
   inspectionId: string;
   canSend: boolean;
+  variant?: 'embedded' | 'screen' | 'legacy';
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
@@ -268,136 +271,128 @@ export function ChatPanel({
     }
   }
 
-  return (
-    <View className={classes.card} style={styles.card}>
-      <Text
-        accessibilityRole="header"
-        className={classes.foreground}
-        style={styles.sectionTitle}
-      >
-        巡检聊天
-      </Text>
+  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) =>
+    (scrollOffset.current = event.nativeEvent.contentOffset.y);
+  const onContentSizeChange = (_width: number, height: number) => {
+    contentHeight.current = height;
+    const prepend = pendingPrepend.current;
+    if (prepend) {
+      scrollToBottom.current = false;
+      const top = prepend.top + height - prepend.height;
+      scrollOffset.current = top;
+      scroll.current?.scrollTo({ y: top, animated: false });
+      pendingPrepend.current = null;
+    } else if (scrollToBottom.current) {
+      scroll.current?.scrollToEnd({ animated: false });
+      scrollToBottom.current = false;
+    }
+  };
+
+  if (variant === 'legacy') {
+    return (
+      <ChatPanelLegacyView
+        busy={busy}
+        canRetry={Boolean(error && !loadingMessages && !loaded.current)}
+        canSend={canSend}
+        error={error}
+        hasMoreBefore={hasMoreBefore}
+        image={image}
+        loadingEarlier={loadingEarlier}
+        loadingMessages={loadingMessages}
+        messages={messages}
+        scrollRef={scroll}
+        text={text}
+        sendDisabled={busy || text.length > 1000 || (!text.trim() && !image)}
+        onChangeText={setText}
+        onChooseImage={() => void chooseImage()}
+        onContentSizeChange={onContentSizeChange}
+        onLoadEarlier={() => void loadEarlier()}
+        onRefreshImage={(messageId) => void refreshImage(messageId)}
+        onScroll={onScroll}
+        onSend={() => void send()}
+        onRetry={() => void retryMessages()}
+      />
+    );
+  }
+
+  const screenMode = variant === 'screen';
+  const content = (
+    <>
+      {!screenMode ? (
+        <MobileText accessibilityRole="header" role="fixed" size="lg">
+          巡检聊天
+        </MobileText>
+      ) : null}
       <ErrorBanner message={error} />
       {error && !loadingMessages && !loaded.current && (
-        <PrimaryButton onPress={() => void retryMessages()} variant="secondary">
+        <MobileButton onPress={() => void retryMessages()} variant="secondary">
           重新加载聊天
-        </PrimaryButton>
+        </MobileButton>
       )}
       {hasMoreBefore && (
-        <PrimaryButton
+        <MobileButton
           disabled={loadingEarlier}
           onPress={() => void loadEarlier()}
           variant="secondary"
         >
           {loadingEarlier ? '加载中…' : '加载更早'}
-        </PrimaryButton>
+        </MobileButton>
       )}
       <ScrollView
         ref={scroll}
-        style={{ maxHeight: 320 }}
+        contentContainerStyle={styles.messageListContent}
         scrollEventThrottle={16}
-        onScroll={(event) => {
-          scrollOffset.current = event.nativeEvent.contentOffset.y;
-        }}
-        onContentSizeChange={(_width, height) => {
-          contentHeight.current = height;
-          const prepend = pendingPrepend.current;
-          if (prepend) {
-            scrollToBottom.current = false;
-            const top = prepend.top + height - prepend.height;
-            scrollOffset.current = top;
-            scroll.current?.scrollTo({ y: top, animated: false });
-            pendingPrepend.current = null;
-          } else if (scrollToBottom.current) {
-            scroll.current?.scrollToEnd({ animated: false });
-            scrollToBottom.current = false;
-          }
-        }}
+        style={screenMode ? styles.screenMessageList : styles.embeddedMessageList}
+        onScroll={onScroll}
+        onContentSizeChange={onContentSizeChange}
         testID="chat-message-list"
       >
         {loadingMessages ? (
-          <View className={classes.empty} style={styles.empty}>
-            <ActivityIndicator accessibilityLabel="正在加载聊天消息" />
-            <Text className={classes.muted} style={styles.muted}>
+          <View style={styles.loadingState}>
+            <ActivityIndicator
+              accessibilityLabel="正在加载聊天消息"
+              color={tokens.mobile.primary}
+            />
+            <MobileText size="sm" tone="muted">
               正在加载聊天消息…
-            </Text>
+            </MobileText>
           </View>
         ) : !error && messages.length === 0 ? (
-          <View className={classes.empty} style={styles.empty}>
-            <Text className={classes.muted} style={styles.muted}>
-              暂无聊天消息。
-            </Text>
-          </View>
+          <MobileEmptyState
+            title="暂无聊天消息"
+            description="发送的文字或图片会显示在这里。"
+            icon={<FileText color={tokens.mobile.primary} size={24} />}
+            style={
+              screenMode ? styles.screenEmptyState : styles.emptyState
+            }
+          />
         ) : null}
         {messages.map((message) => (
-          <View
-            key={message.id}
-            className={classes.chatMessage}
-            style={styles.chatMessage}
-            testID={`chat-message-${message.id}`}
-          >
-            <Text className={classes.muted} style={styles.label}>
-              {message.displayName} · {roleLabels[message.role]} ·{' '}
-              {new Date(message.createdAt).toLocaleString()}
-            </Text>
-            {message.body && (
-              <Text className={classes.foreground} style={styles.value}>
-                {message.body}
-              </Text>
-            )}
-            {message.imageUrl && (
-              <Image
-                accessibilityLabel="聊天图片"
-                onError={() => void refreshImage(message.id)}
-                resizeMode="contain"
-                source={{ uri: message.imageUrl }}
-                className={classes.chatImage}
-                style={styles.chatImage}
-              />
-            )}
-          </View>
+        <ChatMessageRow
+          key={message.id}
+          message={message}
+          onRefreshImage={(messageId) => void refreshImage(messageId)}
+        />
         ))}
       </ScrollView>
-      {canSend && (
-        <>
-          <TextInput
-            accessibilityLabel="聊天内容"
-            hitSlop={{ top: 1, bottom: 1, left: 0, right: 0 }}
-            editable={!busy}
-            multiline
-            onChangeText={setText}
-            className={classes.noteInput}
-            placeholder="输入消息"
-            style={styles.noteInput}
-            value={text}
-          />
-          <Text
-            className={classes.muted}
-            style={styles.muted}
-            accessibilityLiveRegion="polite"
-          >
-            {text.length}/1000
-          </Text>
-          {image && (
-            <Text className={classes.muted} style={styles.muted}>
-              {image.fileName ?? '已选择图片'}
-            </Text>
-          )}
-          <PrimaryButton
-            disabled={busy}
-            onPress={() => void chooseImage()}
-            variant="secondary"
-          >
-            选择图片
-          </PrimaryButton>
-          <PrimaryButton
-            disabled={busy || text.length > 1000 || (!text.trim() && !image)}
-            onPress={() => void send()}
-          >
-            发送
-          </PrimaryButton>
-        </>
-      )}
-    </View>
+      {canSend ? (
+        <ChatComposer
+          busy={busy}
+          imageName={image?.fileName ?? (image ? '已选择图片' : null)}
+          text={text}
+          sendDisabled={busy || text.length > 1000 || (!text.trim() && !image)}
+          onChooseImage={() => void chooseImage()}
+          onChangeText={setText}
+          onSend={() => void send()}
+        />
+      ) : null}
+    </>
+  );
+
+  return screenMode ? (
+    <View style={styles.screenPanel}>{content}</View>
+  ) : (
+    <MobileSurfaceCard style={styles.embeddedPanel}>{content}</MobileSurfaceCard>
   );
 }
+

@@ -38,42 +38,77 @@
     "chart3": "#bc750e"
   },
   "mobile": {
-    "background": "#f5f8ff",
+    "background": "#ffffff",
     "surface": "#ffffff",
-    "foreground": "#1c2942",
-    "mutedForeground": "#52627e",
-    "border": "#dfe7f2",
-    "route": "#007f92",
-    "routeStrong": "#006b79",
-    "success": "#137a55",
-    "successBackground": "#e5f5ed",
-    "warning": "#8a4a00",
-    "warningBackground": "#fff3dd",
-    "danger": "#a52d3f",
-    "dangerBackground": "#fff0f2",
-    "pressedBackground": "#eaf1fe",
-    "disabledBackground": "#f2f4f7",
-    "disabledForeground": "#8a95a5",
-    "overlay": "#1c2942"
+    "foreground": "#1f1f1f",
+    "mutedForeground": "#595959",
+    "border": "#f0f0f0",
+    "input": "#d9d9d9",
+    "primary": "#1677ff",
+    "primaryPressed": "#0958d9",
+    "primarySoft": "#e6f4ff",
+    "primaryText": "#0958d9",
+    "primaryTint": "#e6f4ff",
+    "route": "#1677ff",
+    "routeStrong": "#0958d9",
+    "success": "#52c41a",
+    "successText": "#389e0d",
+    "successTint": "#f6ffed",
+    "successBackground": "#f6ffed",
+    "warning": "#faad14",
+    "warningText": "#d48806",
+    "warningTint": "#fffbe6",
+    "warningBackground": "#fffbe6",
+    "danger": "#ff4d4f",
+    "dangerText": "#cf1322",
+    "dangerTint": "#fff1f0",
+    "dangerBackground": "#fff1f0",
+    "change": "#722ed1",
+    "changeText": "#531dab",
+    "changeTint": "#f9f0ff",
+    "pressedBackground": "#e6f4ff",
+    "disabled": "#bfbfbf",
+    "disabledBackground": "#f5f5f5",
+    "disabledForeground": "#8c8c8c",
+    "overlay": "#1f1f1f"
   },
   "mobileSpace": {
     "unit": 4,
     "xs": 4,
     "sm": 8,
-    "md": 16,
-    "lg": 24,
-    "xl": 32
+    "md": 12,
+    "lg": 16,
+    "xl": 20,
+    "xxl": 24,
+    "xxxl": 32,
+    "display": 40
   },
   "mobileRadius": {
-    "control": 8,
-    "primary": 12
+    "control": 10,
+    "primary": 10,
+    "card": 20,
+    "photo": 16,
+    "large": 24,
+    "pill": 9999
   },
   "mobileType": {
-    "xs": 12,
-    "sm": 14,
-    "base": 16,
-    "lg": 18,
-    "title": 23
+    "xs": 11,
+    "sm": 12,
+    "base": 14,
+    "lg": 16,
+    "title": 20,
+    "xl": 20,
+    "2xl": 24,
+    "display": 30
+  },
+  "mobileShadow": {
+    "card": "0 2px 10px rgba(31, 31, 31, 0.06)",
+    "focus": "0 0 0 3px rgba(22, 119, 255, 0.18)"
+  },
+  "mobileFont": {
+    "display": {
+      "regular": "LXGWWenKaiGB-Regular"
+    }
   },
   "font": {
     "sans": {

@@ -7,6 +7,7 @@ export function MobileTabButton({
   children,
   onFocus,
   onBlur,
+  style,
   ...props
 }: ComponentProps<typeof PlatformPressable>) {
   const colors = useTabColors();
@@ -16,6 +17,15 @@ export function MobileTabButton({
     <PlatformPressable
       {...props}
       pressColor={colors.mobilePressedBackground}
+      style={[
+        style,
+        {
+          borderRadius: 10,
+          minHeight: 44,
+          minWidth: 44,
+          overflow: 'hidden',
+        },
+      ]}
       onFocus={(event) => {
         setFocused(true);
         onFocus?.(event);
@@ -36,8 +46,8 @@ export function MobileTabButton({
             bottom: 2,
             left: 2,
             borderWidth: 2,
-            borderRadius: 8,
-            borderColor: colors.primary,
+            borderRadius: 10,
+            borderColor: colors.mobilePrimary,
           }}
         />
       ) : null}

@@ -20,6 +20,7 @@ export default function TodayPage() {
     <TodayScreen
       today={today}
       todayError={loadingError}
+      managerName={session.user.displayName}
       unreadCount={unreadCount}
       onRefresh={() => void loadToday()}
       onOpenNotifications={() => router.push('/notifications')}

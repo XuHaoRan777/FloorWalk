@@ -1,96 +1,98 @@
-# Mobile 视觉与交互规范
+# Mobile 唯一视觉基线
 
-Mobile 采用 FW-046 方向 A「检查路线」。视觉来源是门店当天按时间窗排列的任务顺序，以及管理员审核时逐项核验的检查项序位。路线只表示已有顺序，不绘制没有数据来源的门店平面图。本规范只定义 Mobile，不改变 Web 的 token 值。
+本文件是 FloorWalk Mobile 的唯一视觉基线，定义 Mobile 专用 token、字体角色、公共组件状态和页面排版原则。设计源文件只存在本机 `.visual/design/`，不在仓库中，也不复制到仓库。排版与组件细节以本机 `b.css` 和 `components.html` 为准，七个店长页面以 `.visual/samples/r2/B/01-manager-today.html`、`02-manager-capture.html` 和 `.visual/design/pages/manager-records.html`、`manager-record-detail.html`、`manager-chat.html`、`manager-notifications.html`、`manager-profile.html` 为准。`.visual/` 只读，不入库。
 
-## 锁定品牌资产
+FW-046 被否决的方向 A 不构成本基线。
 
-- 品牌主色 --fw-primary 为 #365de8，用于主要操作、焦点与品牌识别。
-- FW-044 L1「F 字动线」Logo 保留原 SVG 几何和颜色。F 的竖笔与顶边组成路线，中横收在 #058d84 检查点上。
-- Logo 不随 Mobile 路线辅助色改色。其余 Mobile 表面色与辅助色走 Mobile 专用 token 命名层。
+## 品牌
 
-## Mobile 专用 token
+品牌标记继续使用现有 `BrandMark` 资源，沿用已锁定的几何和颜色。Mobile 主色用于交互与状态，不替代品牌标记本身。
 
-源值定义在 packages/tokens/tokens.css 的 --fw-mobile-* 变量中，由 packages/tokens/generate-native.mjs 同步生成至 native.json.mobile。Web token 保持原值。
+## Mobile token
 
-| 用途 | Token | 值 |
+Mobile 取值定义在 `packages/tokens/tokens.css` 的 `--fw-mobile-*` 变量中，通过 `node packages/tokens/generate-native.mjs` 生成到 `packages/tokens/native.json` 的 `mobile` 对象。通用 token 与 Web 取值保持现有值。
+
+| 用途 | Native token | 值 |
 | --- | --- | --- |
-| 画布 | --fw-mobile-background | #f5f8ff |
-| 卡片、固定标题栏与导航表面 | --fw-mobile-surface | #ffffff |
-| 主文字 | --fw-mobile-foreground | #1c2942 |
-| 次级文字 | --fw-mobile-muted-foreground | #52627e |
-| 分隔线 | --fw-mobile-border | #dfe7f2 |
-| 路线线段与次级节点 | --fw-mobile-route | #007f92 |
-| 路线序号与小字号节点 | --fw-mobile-route-strong | #006b79 |
-| 成功 | --fw-mobile-success、--fw-mobile-success-background | #137a55、#e5f5ed |
-| 警告 | --fw-mobile-warning、--fw-mobile-warning-background | #8a4a00、#fff3dd |
-| 危险 | --fw-mobile-danger、--fw-mobile-danger-background | #a52d3f、#fff0f2 |
-| 按下表面 | --fw-mobile-pressed-background | #eaf1fe |
-| 禁用表面和文字 | --fw-mobile-disabled-background、--fw-mobile-disabled-foreground | #f2f4f7、#8a95a5 |
-| 遮罩 | --fw-mobile-overlay | #1c2942，使用时 46% 不透明度 |
+| 页面和表面 | `mobile.background`、`mobile.surface` | `#FFFFFF` |
+| 正文与次级文字 | `mobile.foreground`、`mobile.mutedForeground` | `#1F1F1F`、`#595959` |
+| 分隔线与输入框边界 | `mobile.border`、`mobile.input` | `#F0F0F0`、`#D9D9D9` |
+| 品牌主色 | `mobile.primary`、`mobile.primaryPressed`、`mobile.primaryText` | `#1677FF`、`#0958D9`、`#0958D9` |
+| 主色浅底 | `mobile.primarySoft`、`mobile.primaryTint` | `#E6F4FF`、`#E6F4FF` |
+| 进行中和路线 | `mobile.route`、`mobile.routeStrong` | `#1677FF`、`#0958D9` |
+| 成功 | `mobile.success`、`mobile.successText`、`mobile.successTint`、`mobile.successBackground` | `#52C41A`、`#389E0D`、`#F6FFED`、`#F6FFED` |
+| 打回 | `mobile.warning`、`mobile.warningText`、`mobile.warningTint`、`mobile.warningBackground` | `#FAAD14`、`#D48806`、`#FFFBE6`、`#FFFBE6` |
+| 逾期与不合格 | `mobile.danger`、`mobile.dangerText`、`mobile.dangerTint`、`mobile.dangerBackground` | `#FF4D4F`、`#CF1322`、`#FFF1F0`、`#FFF1F0` |
+| 改判 | `mobile.change`、`mobile.changeText`、`mobile.changeTint` | `#722ED1`、`#531DAB`、`#F9F0FF` |
+| 禁用 | `mobile.disabled`、`mobile.disabledForeground`、`mobile.disabledBackground` | `#BFBFBF`、`#8C8C8C`、`#F5F5F5` |
+| 按下反馈与遮罩 | `mobile.pressedBackground`、`mobile.overlay` | `#E6F4FF`、`#1F1F1F` |
 
-当前项用品牌蓝或路线深青的边界和节点形状表达。主操作使用品牌实底。成功状态使用成功色、勾号与「已提交」等状态词。三者不共用同一颜色语义，也不单凭颜色传达。
+状态标签始终使用颜色、图标和文案共同表达。通过、进行中、打回、逾期、不合格、已改判、已提交和未开始对应组件定义中的语义状态。
 
-## 字体、密度与表面
+| 尺度 | Token 与值 |
+| --- | --- |
+| 间距 | `mobileSpace` 以 4 dp 为单位，`xs=4`、`sm=8`、`md=12`、`lg=16`、`xl=20`、`xxl=24`、`xxxl=32`、`display=40` |
+| 圆角 | `mobileRadius.control=10`、`primary=10`、`card=20`、`photo=16`、`large=24`、`pill=9999` |
+| 字号 | `mobileType.xs=11`、`sm=12`、`base=14`、`lg=16`、`title=20`、`xl=20`、`2xl=24`、`display=30` dp |
+| 卡片阴影 | `mobileShadow.card` 为 `0 2px 10px rgba(31, 31, 31, 0.06)` |
+| 焦点阴影 | `mobileShadow.focus` 为 `0 0 0 3px rgba(22, 119, 255, 0.18)` |
+| 最小触控尺寸 | 44 dp |
 
-- 中文正文使用已加载的 IBM Plex Sans。时间窗、序号和计数用 IBM Plex Mono 等宽数字。
-- 正文字号从辅助到标题依次为 12、14、16、18、23 dp。重要任务名优先显示，说明文本允许换行。
-- 间距基于 4 dp，常用 4、8、12、16、24、32 dp。页面边距 16 dp。
-- 控件圆角 8 dp，主操作和轻浮层 12 dp。任务行、进度区与审核条目用平面分隔线和节点线组织，不连续套卡片。独立摘要可用白色表面与轻边界。
-- 不给工作列表增加持续动画。阴影只用于需要离开内容平面的浮层。
+## 字体
 
-## 页面框架
+采用 LXGW WenKai GB v1.530 Regular 上游 TTF，并用 3500 个常用汉字、数字、ASCII 与常用中英文标点截取子集。应用资源 `apps/mobile/assets/fonts/LXGWWenKaiGB-Regular.ttf` 为 1,735,448 字节，授权随附于 `apps/mobile/assets/fonts/LXGWWenKaiGB-OFL.txt`。`apps/mobile/app/_layout.tsx` 通过 `expo-font` 注册并加载 `LXGWWenKaiGB-Regular`。组件稿的 WOFF2 字体只用于本机设计预览，不加载进应用。
 
-### 共用导航和安全区
+字体上游版本为 v1.530，Regular TTF 下载地址是 [LXGWWenKaiGB-Regular.ttf](https://github.com/lxgw/LxgwWenKaiGB/releases/download/v1.530/LXGWWenKaiGB-Regular.ttf)，许可证为 SIL Open Font License 1.1。仓库中的授权文件来自同版发布包。
 
-- 店长底栏顺序为「今日待巡、记录、通知、我的」。
-- 管理员底栏顺序为「今日、审核、管理、我的」。通知固定在首页右上角。
-- 管理员总部看板仍使用 /admin/dashboard，由「今日」首屏清楚可见的「总部看板」入口打开。Android 返回回到进入看板前的「今日」页。
-- 首页固定 Logo/通知标题栏与底部导航，正文滚动。非首页标题、返回和刷新随正文滚动。
-- 使用系统安全区。底栏保留系统手势区。键盘出现时配置 Tab 隐藏，表单滚动区可滚动到输入项和保存操作。
+子集字符表和 fontTools 4.68.0 临时安装目录留在本机 `.visual/design/.font-source/` 与 `.visual/design/.fonttools/`。字符表从 Jun Da 的现代汉字频率表中取常用汉字，再加 ASCII 和常用中英文标点。以下 PowerShell 命令从仓库根目录重建应用字体，输出与当前应用资源的 SHA-256 一致。
 
-### 店长今日待巡样板页
+```powershell
+$fw047PythonPath = (Resolve-Path '.visual/design/.fonttools').Path
+$fw047PreviousPythonPath = $env:PYTHONPATH
+try {
+  $env:PYTHONPATH = $fw047PythonPath
+  python -m fontTools.subset `
+    '.visual/design/.font-source/LXGWWenKaiGB-Regular-v1.530.ttf' `
+    '--text-file=.visual/design/.font-source/fw047-characters.txt' `
+    '--output-file=apps/mobile/assets/fonts/LXGWWenKaiGB-Regular.ttf' `
+    '--layout-features=*' `
+    '--name-IDs=*' `
+    '--name-languages=*'
+} finally {
+  $env:PYTHONPATH = $fw047PreviousPythonPath
+}
+```
 
-首屏依次为门店与日期、今日进度、今日安排和按任务顺序连续排列的路线任务行。路线节点显示编号，进行中节点突出标记。可继续任务使用单一主操作，优先指向第一项进行中任务，其次第一项未开始任务。没有可继续任务时显示结束状态，保留任务列表供查看，并以「查看通知」作为次级操作；今天无任务时显示空状态和相同的通知入口。
+页面标题、固定标签、状态文案、控件动作、日期与数字使用 LXGW WenKai GB。门店名、姓名、模板名、备注、验收要点、聊天文字和通知详情属于用户输入或接口内容，统一使用系统正文字体，避免子集没有覆盖用户数据时出现缺字。正文规则通过 `MobileText` 的 `body` 角色实现；其余固定标签、标题和数字按组件角色选择文楷。
 
-任务名、状态与时间窗均使用 Today API 既有字段。列表项打开既有任务详情。刷新仍使用原有刷新动作。
+## 公共组件
 
-### 管理员任务审核详情样板页
+公共组件在 `apps/mobile/components/mobile/` 中实现，复用以上 Mobile token。实现状态按 `.visual/design/components.html` 对齐。
 
-固定返回标题栏与固定底部判定区。滚动区顶部显示门店、任务、截止时间和分数，下面沿路线顺序展示条目、证据、理由、备注及历史结论。
+| 组件 | 视觉与状态 |
+| --- | --- |
+| 底部导航 `MobileBottomBar` | 店长顺序为「今日待巡、记录、通知、我的」，当前页使用主色图标、标签和选中底面。管理员保留现有独立导航结构。 |
+| 顶部区 `MobileTopBar` | 支持标题、说明、品牌标记、返回与尾部操作。标题层级、按钮触控尺寸和安全区符合页面用途。 |
+| 按钮 `MobileButton` | 主操作、次操作、危险操作、禁用与加载五态，并有按下和焦点反馈。禁用和加载期间不重复触发动作。 |
+| 状态标记 `MobileStatusTag` | 状态色、图标和文字同时出现，不只用颜色传达状态。 |
+| 任务行 `MobileTaskRow` | 按时间展示时刻、模板名、时间说明和状态，当前项与键盘焦点有独立视觉提示。 |
+| 照片位 `MobilePhotoSlot` | 已拍、空位、上传中和失败四态。失败态提供重试入口，空位文字说明拍摄动作。 |
+| 输入框 `MobileTextField` | 固定标签、系统正文输入、占位文字、聚焦与禁用状态，支持多行备注。 |
+| 列表行 `MobileListRow` | 主标题、可选说明和尾部状态或操作按层级排列，用户输入内容允许换行或省略。 |
+| 卡片 `MobileSurfaceCard` | 白色表面、浅分隔边界和轻阴影用于独立信息组。列表主要以分隔线组织。 |
+| 空状态 `MobileEmptyState` | 图标、标题、说明和可选下一步并列，内容区留白稳定。 |
 
-每项同时显示当前结论。firstResult 与 result 有历史差别，或 manuallyDecidedAfterCompletion 为真时，显示首次结论、当前结论及完成后人工改判标记。lastReworkReason 仅作为当前可得打回理由展示。接口没有改判人、改判时间和逐次改判理由，不构造这些字段。
+## 页面排版
 
-点击一个条目将它设为当前检查项，底部固定操作区对应当前条目。判定按钮保持现有通过、打回、不合格语义。打回理由通过现有输入与确认动作提交。
+- Mobile 页面画布为白色，页面边距通常为 16 dp，分组使用轻分隔线或浅色表面。
+- 品牌蓝用于主要动作、焦点和当前位置。成功、打回、危险、改判与未开始分别使用各自语义状态。
+- 交互对象的触控区域至少为 44×44 dp。按下反馈不移动布局，键盘焦点保持清晰。
+- 可滚动页面处理顶部和底部系统安全区。底栏保留系统手势区，键盘打开时主要输入和发送操作仍可触达。
+- 标题与固定操作使用固定字号层级。用户输入和接口返回的长文本使用系统正文字体，并截断或换行，避免撑破横向布局。
+- 图片、照片说明和消息正文适配现有字段。设计稿使用的图库图片只留在 `.visual/`，应用、测试和取证使用合成照片。
 
-### 360 dp 窄屏
+## 数据边界
 
-页面使用单列和 16 dp 边距。标题、状态和说明可换行。任务行中的序号与内容保持两列，时间与任务名称不得互相挤压。审核判定按钮在底部固定区内等分排列，每个触控目标不小于 44×44 dp。无页面级横向滚动。
+设计稿里没有现有接口字段的内容不展示，不构造本地草稿、模板照片、巡检人姓名、聊天关联模板名或审核事件。已有接口字段按页面层级组织和展示；业务请求、权限、取数与提交语义仍以 `docs/specs/` 对应章节为准。
 
-## 交互状态表
-
-原生触控无 hover。每个可操作目标不小于 44×44 dp。焦点使用品牌焦点环或原生输入焦点。按下不改变布局。
-
-| 组件 | 默认 | 按下 | 当前/选中 | 聚焦 | 禁用 | 加载 |
-| --- | --- | --- | --- | --- | --- | --- |
-| 底部 Tab 项 | 次级图标与标签 | 短暂表面反馈 | 品牌蓝图标与标签，并有当前位置标识 | 品牌焦点环 | 保留位置并降对比 | 保留导航位置，页面内容显示加载 |
-| 首页入口或卡片 | 白色表面、边界、名称与说明 | Mobile 按下浅底 | 品牌边界或短侧标 | 品牌焦点环 | 显示不可用原因并弱化 | 保持行高，入口文本改为进度 |
-| 主按钮 | 品牌蓝实底、白字和动词标签 | 品牌蓝加深，不缩放 | 主操作持续品牌蓝，不混作成功 | 品牌焦点环 | 禁用中性表面和说明 | Spinner 与动作文案，防重复提交 |
-| 次级按钮 | 白色/次级表面、边界与清晰标签 | 按下浅底 | 品牌描边或浅底，不抢主操作层级 | 品牌焦点环 | 中性弱化 | 保留标签并显示局部进度 |
-| 文字链接 | 品牌字色与明确动词 | 字色加深 | 品牌色和当前位置标识 | 品牌焦点环 | 中性字色 | 链接文字显示进行中 |
-| 列表项 | 主次文字、分隔线和状态词 | 全行浅底 | 路线节点突出，保留状态文案 | 全行焦点环 | 不响应并保留原因 | 行高稳定，行内显示进度 |
-| 状态徽标 | 语义文字配图形或浅底 | 非交互 | 仅筛选状态可选中并加品牌边界 | 若可操作则品牌焦点环 | 非交互状态 | 文案加小型进度符号 |
-| 开关 | Expo UI 原生开/关状态和文字 | 系统反馈 | 打开用品牌强调，关闭用中性 | 系统焦点 | 原生禁用反馈与说明 | 禁用并显示保存状态 |
-| 输入框 | 字段标签、值或占位文本 | 原生光标反馈 | 不伪装成导航选中 | 品牌焦点环和原生光标 | 中性表面与只读说明 | 保留草稿并显示字段进度 |
-| 拍照按钮 | 相机图标和「拍摄照片」 | 表面使用 `--fw-mobile-pressed-background`，不移动，图标和文字保持原色 | 已拍用缩略图、张数和检查项序号 | 品牌焦点环 | 明确显示时间窗/审核原因 | 显示打开相机或上传进度 |
-
-## 动效
-
-路线节点按顺序填充，成功提交时出现勾号与状态文字，状态反馈只在动作发生后播放一次。Tab 切换不播放滑动。按下反馈不缩放页面。prefers-reduced-motion 下直接呈现稳定终态，仅保留帮助区分状态的颜色和文字变化。
-
-## 空状态
-
-今日空状态显示现有「今天没有巡检任务。」与「有新安排时会显示在这里。」说明，配路线/清单线稿。没有任务是数据状态，不与任务已完成状态共用成功色。保留刷新入口。
-
-## 数据和依赖边界
-
-只消费现有 Today API、TaskReview、firstResult、result、manuallyDecidedAfterCompletion、lastReworkReason 与 evidence。无新接口、共享字段、数据库结构、配置键或依赖。
+`.visual/` 下的设计 HTML、CSS、图库照片、原始字体、字符表和截取工具都只在本机保留，不入库。

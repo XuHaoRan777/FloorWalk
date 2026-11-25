@@ -6,9 +6,10 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
-  Text,
   View,
 } from 'react-native';
+import { FileText } from 'lucide-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   getNotifications,
   markNotificationRead,
@@ -17,8 +18,14 @@ import {
 import { userFacingError } from '../../lib/api';
 import { useNotifications } from './notification-provider';
 import { ErrorBanner } from './error-banner';
-import { PrimaryButton } from './primary-button';
-import { classes, styles } from './styles';
+import { MobileButton, MobileText, MobileTopBar } from './manager-ui';
+import { MobileEmptyState } from './manager-data-ui';
+import { notificationInboxStyles as styles } from './notification-inbox-screen.styles';
+import {
+  NotificationInboxAdmin,
+  type NotificationInboxRow,
+} from './notification-inbox-admin';
+import tokens from '../../../../packages/tokens/native.json';
 
 const labels: Record<Notification['type'], string> = {
   item_rework: '检查项被打回',
@@ -43,11 +50,7 @@ function describe(notification: Notification) {
     : '打开巡检聊天';
 }
 
-type Row =
-  | { kind: 'section'; key: string; title: string }
-  | { kind: 'notification'; key: string; notification: Notification };
-
-function createRows(notifications: Notification[]): Row[] {
+function createRows(notifications: Notification[]): NotificationInboxRow[] {
   const unread = notifications.filter((item) => !item.readAt);
   const read = notifications.filter((item) => item.readAt);
   return [
@@ -93,6 +96,13 @@ function notificationTarget(notification: Notification, role: User['role']) {
   )
     return `/inspection/${notification.payload.taskId}?position=${notification.payload.position}` as const;
   return `/inspection/${notification.payload.taskId}` as const;
+}
+
+function formatNotificationTime(value: string) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
 }
 
 export function NotificationInboxScreen({
@@ -210,24 +220,25 @@ export function NotificationInboxScreen({
   );
 
   const renderRow = useCallback(
-    ({ item }: { item: Row }) => {
+    ({ item }: { item: NotificationInboxRow }) => {
       if (item.kind === 'section')
         return (
-          <Text
+          <MobileText
             accessibilityRole="header"
-            className={classes.foreground}
-            style={styles.sectionTitle}
+            role="fixed"
+            size="base"
+            style={styles.sectionHeading}
             testID={`notification-section-${item.key}`}
           >
             {item.title}
-          </Text>
+          </MobileText>
         );
+
       const notification = item.notification;
       return (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${labels[notification.type]}，${describe(notification)}`}
-          className="border-b border-border"
           disabled={busyId !== null}
           onPress={() => void openNotification(notification)}
           style={({ pressed }) => [
@@ -238,29 +249,18 @@ export function NotificationInboxScreen({
         >
           <View
             accessibilityLabel={notification.readAt ? '已读' : '未读'}
-            className={
-              notification.readAt
-                ? classes.notificationReadDot
-                : classes.notificationUnreadDot
-            }
-            style={styles.notificationDot}
+            style={notification.readAt ? styles.readDot : styles.unreadDot}
           />
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text
-              className={classes.foreground}
-              style={styles.notificationTitle}
-            >
+          <View style={styles.notificationCopy}>
+            <MobileText role="fixed" size="base" numberOfLines={2}>
               {labels[notification.type]}
-            </Text>
-            <Text className={classes.muted} style={styles.muted}>
+            </MobileText>
+            <MobileText size="sm" tone="muted" numberOfLines={2}>
               {describe(notification)}
-            </Text>
-            <Text className={classes.muted} style={styles.notificationTime}>
-              {new Intl.DateTimeFormat('zh-CN', {
-                dateStyle: 'medium',
-                timeStyle: 'short',
-              }).format(new Date(notification.createdAt))}
-            </Text>
+            </MobileText>
+            <MobileText role="number" size="xs" tone="muted">
+              {formatNotificationTime(notification.createdAt)}
+            </MobileText>
           </View>
         </Pressable>
       );
@@ -268,58 +268,76 @@ export function NotificationInboxScreen({
     [busyId, openNotification],
   );
 
+  if (role === 'admin') {
+    return (
+      <NotificationInboxAdmin
+        error={error}
+        loading={loading}
+        loadingMore={loadingMore}
+        notificationsLength={notifications.length}
+        onLoadMore={() => void loadMore()}
+        onRefresh={() => void refresh(true)}
+        onRetry={() => void refresh()}
+        refreshing={refreshing}
+        rows={rows}
+        showBack={showBack}
+        busyId={busyId}
+        labels={labels}
+        describeNotification={describe}
+        onOpenNotification={(notification) =>
+          void openNotification(notification)
+        }
+        onBack={() =>
+          router.canGoBack()
+            ? router.back()
+            : router.replace('/admin/today')
+        }
+      />
+    );
+  }
+
   return (
-    <View className={classes.background} style={styles.notificationScreen}>
-      <View style={styles.notificationHeader}>
-        {showBack ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() =>
-              router.canGoBack()
-                ? router.back()
-                : router.replace('/admin/today')
-            }
-            style={styles.touchTarget}
-          >
-            <Text className={classes.link} style={styles.link}>
-              返回
-            </Text>
-          </Pressable>
-        ) : null}
-        <Text
-          accessibilityRole="header"
-          className={classes.foreground}
-          style={styles.heading}
-        >
-          通知
-        </Text>
-      </View>
+    <SafeAreaView style={styles.screen} edges={['top']}>
+      <MobileTopBar
+        style={styles.header}
+        subtitle="我的巡检消息"
+        title="通知"
+        titleRole="title"
+        titleSize="2xl"
+      />
       <ErrorBanner message={error} />
       {loading ? (
-        <View style={styles.notificationLoading}>
-          <ActivityIndicator accessibilityLabel="正在加载通知" />
-          <Text className={classes.muted} style={styles.muted}>
+        <View style={styles.loadingState}>
+          <ActivityIndicator
+            accessibilityLabel="正在加载通知"
+            color={tokens.mobile.primary}
+          />
+          <MobileText size="sm" tone="muted">
             正在加载通知…
-          </Text>
+          </MobileText>
         </View>
       ) : notifications.length === 0 && error ? (
-        <View style={styles.notificationEmptyContent}>
-          <PrimaryButton onPress={() => void refresh()} variant="secondary">
+        <View style={styles.retryState}>
+          <MobileButton onPress={() => void refresh()} variant="secondary">
             重试
-          </PrimaryButton>
+          </MobileButton>
         </View>
       ) : notifications.length === 0 ? (
         <FlatList
           accessibilityLabel="通知收件箱"
-          contentContainerStyle={styles.notificationEmptyContent}
-          data={[] as Row[]}
+          contentContainerStyle={styles.emptyList}
+          data={[] as NotificationInboxRow[]}
           ListEmptyComponent={
-            <Text className={classes.muted} style={styles.muted}>
-              暂无通知
-            </Text>
+            <MobileEmptyState
+              title="暂无未读通知"
+              description="有新的巡检消息时，会显示在这里。"
+              icon={<FileText color={tokens.mobile.primary} size={28} />}
+              style={styles.emptyState}
+            />
           }
           refreshControl={
             <RefreshControl
+              colors={[tokens.mobile.primary]}
               refreshing={refreshing}
               onRefresh={() => void refresh(true)}
             />
@@ -329,7 +347,7 @@ export function NotificationInboxScreen({
       ) : (
         <FlatList
           accessibilityLabel="通知收件箱"
-          contentContainerStyle={styles.notificationListContent}
+          contentContainerStyle={styles.notificationList}
           contentInsetAdjustmentBehavior="automatic"
           data={rows}
           keyExtractor={(item) => item.key}
@@ -349,6 +367,7 @@ export function NotificationInboxScreen({
           scrollEventThrottle={16}
           refreshControl={
             <RefreshControl
+              colors={[tokens.mobile.primary]}
               refreshing={refreshing}
               onRefresh={() => void refresh(true)}
             />
@@ -356,12 +375,17 @@ export function NotificationInboxScreen({
           renderItem={renderRow}
           ListFooterComponent={
             loadingMore ? (
-              <ActivityIndicator accessibilityLabel="正在加载更多通知" />
+              <ActivityIndicator
+                accessibilityLabel="正在加载更多通知"
+                color={tokens.mobile.primary}
+                style={styles.loadingMore}
+              />
             ) : undefined
           }
           testID="notification-inbox"
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
+

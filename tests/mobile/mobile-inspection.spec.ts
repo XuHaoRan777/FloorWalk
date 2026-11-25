@@ -121,7 +121,11 @@ test('今日任务页不崩溃且隐藏旧建单和提交入口', async ({ page 
   await page.getByLabel('密码').fill(password);
   await page.getByTestId('login-button').click();
   await expect(page.getByRole('tab', { name: '今日待巡' })).toBeVisible();
-  await expect(page.getByText('今日任务', { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByTestId('today-task-list')
+      .getByText('今日待巡', { exact: true }),
+  ).toBeVisible();
   await expect(page.getByTestId('start-inspection')).toHaveCount(0);
   await expect(page.getByTestId('submit-inspection')).toHaveCount(0);
 });
@@ -208,11 +212,11 @@ test('今日任务显示模板、四种状态和商家时区的跨零点时间',
   for (const width of [390, 360]) {
     await page.setViewportSize({ width, height: 844 });
     const bounds = await resumeButton.boundingBox();
-    expect(bounds?.width).toBe(280);
+    expect(bounds?.width).toBeGreaterThanOrEqual(44);
     expect(bounds?.height).toBe(48);
-    expect((bounds?.x ?? 0) + (bounds?.width ?? 0) / 2).toBeCloseTo(
-      width / 2,
-      0,
+    expect(bounds?.x).toBeGreaterThanOrEqual(16);
+    expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(
+      width - 16,
     );
   }
 });

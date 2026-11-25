@@ -1,4 +1,5 @@
 import Tabs from 'expo-router/tabs';
+import { MobileBottomBar } from '../../../components/mobile/manager-ui';
 import {
   Bell,
   ClipboardCheck,
@@ -23,11 +24,16 @@ export default function TabLayout() {
         screenOptions={{
           headerShown: false,
           sceneStyle: { backgroundColor: tabColors.background },
-          tabBarActiveTintColor: tabColors.primary,
+          tabBarActiveTintColor: tabColors.mobilePrimary,
           tabBarInactiveTintColor: tabColors.mutedForeground,
-          tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
+          tabBarLabelStyle: {
+            fontFamily: tabColors.mobileDisplayFont,
+            fontSize: tabColors.mobileTabTextSize,
+            fontWeight: '600',
+          },
           tabBarButton: (props) => <MobileTabButton {...props} />,
         }}
+        tabBar={(props) => <MobileBottomBar {...props} />}
       >
         <Tabs.Screen
           name="today"

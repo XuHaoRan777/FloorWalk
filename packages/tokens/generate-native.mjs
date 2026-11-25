@@ -32,6 +32,7 @@ const fontRegistrations = {
     semibold: 'IBMPlexSans_600SemiBold',
   },
   'IBM Plex Mono': { regular: 'IBMPlexMono_400Regular' },
+  'LXGW WenKai GB': { regular: 'LXGWWenKaiGB-Regular' },
 };
 
 const colorNames = [
@@ -82,7 +83,9 @@ function color(name) {
 }
 
 function font(name) {
-  const family = values.get(`font-${name}`)?.split(',')[0].replaceAll("'", '');
+  const token =
+    name === 'mobile-display' ? 'mobile-font-display' : `font-${name}`;
+  const family = values.get(token)?.split(',')[0].replaceAll("'", '');
   const registration = fontRegistrations[family];
   if (!registration) {
     throw new Error(`Register the shared font on native: ${family}`);
@@ -104,15 +107,31 @@ const nativeTokens = {
       'foreground',
       'muted-foreground',
       'border',
+      'input',
+      'primary',
+      'primary-pressed',
+      'primary-soft',
+      'primary-text',
+      'primary-tint',
       'route',
       'route-strong',
       'success',
+      'success-text',
+      'success-tint',
       'success-background',
       'warning',
+      'warning-text',
+      'warning-tint',
       'warning-background',
       'danger',
+      'danger-text',
+      'danger-tint',
       'danger-background',
+      'change',
+      'change-text',
+      'change-tint',
       'pressed-background',
+      'disabled',
       'disabled-background',
       'disabled-foreground',
       'overlay',
@@ -122,23 +141,45 @@ const nativeTokens = {
     ]),
   ),
   mobileSpace: Object.fromEntries(
-    ['unit', 'xs', 'sm', 'md', 'lg', 'xl'].map((name) => [
+    [
+      ['unit', 'unit'],
+      ['xs', 'xs'],
+      ['sm', 'sm'],
+      ['md', 'md'],
+      ['lg', 'lg'],
+      ['xl', 'xl'],
+      ['xxl', 'xxl'],
+      ['xxxl', 'xxxl'],
+      ['display', 'display'],
+    ].map(([name, source]) => [
       name,
-      dimension(`mobile-space-${name}`),
+      dimension(`mobile-space-${source}`),
     ]),
   ),
   mobileRadius: Object.fromEntries(
-    ['control', 'primary'].map((name) => [
+    [
+      ['control', 'control'],
+      ['primary', 'primary'],
+      ['card', 'card'],
+      ['photo', 'photo'],
+      ['large', 'large'],
+      ['pill', 'pill'],
+    ].map(([name, source]) => [
       name,
-      dimension(`mobile-radius-${name}`),
+      dimension(`mobile-radius-${source}`),
     ]),
   ),
   mobileType: Object.fromEntries(
-    ['xs', 'sm', 'base', 'lg', 'title'].map((name) => [
+    ['xs', 'sm', 'base', 'lg', 'title', 'xl', '2xl', 'display'].map((name) => [
       name,
       dimension(`mobile-text-${name}`),
     ]),
   ),
+  mobileShadow: {
+    card: values.get('mobile-shadow-card'),
+    focus: values.get('mobile-shadow-focus'),
+  },
+  mobileFont: { display: font('mobile-display') },
   font: { sans: font('sans'), mono: font('mono') },
   radius: Object.fromEntries(
     ['control', 'card', 'sheet'].map((name) => [

@@ -74,11 +74,11 @@ test('停用门店仍可查看历史，今日页不显示旧巡检入口', async
     expect(history.ok()).toBeTruthy();
 
     await page.getByLabel('记录').click();
-    await expect(page.getByRole('heading', { name: '巡检记录' })).toBeVisible();
-    await page.goto(`/records/${records.items[0].id}`);
     await expect(
-      page.getByRole('heading', { name: '巡检记录详情' }),
+      page.getByRole('heading', { name: '巡检记录', exact: true }),
     ).toBeVisible();
+    await page.goto(`/records/${records.items[0].id}`);
+    await expect(page.getByTestId('record-detail-summary')).toBeVisible();
 
     const reactivated = await request.patch(
       `${apiBase}/admin/sites/${site.id}`,

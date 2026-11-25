@@ -93,7 +93,10 @@ for (const account of [
           .getByRole('tab', { name: account.canRename ? '个人资料' : '我的' })
           .click();
         await expect(
-          page.getByRole('heading', { name: '账号信息', exact: true }),
+          page.getByRole('heading', {
+            name: account.canRename ? '账号信息' : '我的',
+            exact: true,
+          }),
         ).toBeVisible();
         await expect(
           page.getByRole('button', { name: '刷新资料', exact: true }),
@@ -111,7 +114,10 @@ for (const account of [
           account.canRename ? '管理员' : '店长',
         );
         await expect(
-          page.getByRole('button', { name: '改密码', exact: true }),
+          page.getByRole('button', {
+            name: account.canRename ? '改密码' : '修改密码',
+            exact: true,
+          }),
         ).toBeEnabled();
         await expect(page.getByRole('textbox')).toHaveCount(0);
 
@@ -163,7 +169,10 @@ for (const account of [
 
         await page.reload();
         await expect(
-          page.getByRole('heading', { name: '账号信息', exact: true }),
+          page.getByRole('heading', {
+            name: account.canRename ? '账号信息' : '我的',
+            exact: true,
+          }),
         ).toBeVisible();
         await expect(
           page.getByRole('button', { name: '刷新资料', exact: true }),
@@ -233,7 +242,10 @@ for (const account of [
           .getByRole('tab', { name: account.canRename ? '个人资料' : '我的' })
           .click();
         await expect(
-          target.getByRole('heading', { name: '账号信息', exact: true }),
+          target.getByRole('heading', {
+            name: account.canRename ? '账号信息' : '我的',
+            exact: true,
+          }),
         ).toBeVisible();
       };
       const login = async (target: Page) => {
@@ -280,7 +292,12 @@ for (const account of [
         await openProfile(otherPage);
 
         await openProfile(page);
-        await page.getByRole('button', { name: '改密码', exact: true }).click();
+        await page
+          .getByRole('button', {
+            name: account.canRename ? '改密码' : '修改密码',
+            exact: true,
+          })
+          .click();
         await expect(
           page.getByRole('heading', { name: '修改密码', exact: true }),
         ).toBeVisible();

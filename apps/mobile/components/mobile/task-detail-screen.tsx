@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Pressable,
   ScrollView,
-  Text,
+  StyleSheet,
   View,
   type ScrollViewInstance,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { InspectorTaskDetail } from '@libs/shared';
 import { api, ApiError, userFacingError } from '../../lib/api';
-import { ErrorBanner } from './error-banner';
-import { PrimaryButton } from './primary-button';
-import { classes, styles } from './styles';
 import { ChatPanel } from './chat-panel';
+import { ErrorBanner } from './error-banner';
+import {
+  MobileButton,
+  MobileStatusTag,
+  MobileText,
+  MobileTopBar,
+} from './manager-ui';
+import { MobileEmptyState } from './manager-data-ui';
 import { TaskItemCard } from './task-item-card';
+import tokens from '../../../../packages/tokens/native.json';
 
 const hour = 60 * 60 * 1000;
 
@@ -49,34 +55,46 @@ function operationWindow(
   if (
     detail.inspectionStatus === 'passed' ||
     detail.inspectionStatus === 'failed'
-  )
+  ) {
     return { canOperate: false, label: '判定已完成' };
+  }
 
   const startsAt = Date.parse(detail.startsAt);
   const dueAt = Date.parse(detail.dueAt);
-  if (now < startsAt - hour)
+  if (now < startsAt - hour) {
     return {
       canOperate: false,
       label: `${formatTime(startsAt - hour, detail.timezone)} 起可开始`,
     };
-  if (now <= dueAt)
+  }
+  if (now <= dueAt) {
     return {
       canOperate: true,
       label: `截止 ${formatTime(detail.dueAt, detail.timezone)}`,
     };
+  }
 
   if (item.result === 'rework') {
     const reworkDeadline = dueAt + hour;
-    if (now <= reworkDeadline)
+    if (now <= reworkDeadline) {
       return {
         canOperate: true,
         label: `重传截止 ${formatTime(reworkDeadline, detail.timezone)}`,
       };
+    }
     return { canOperate: false, label: '重传时间已截止' };
   }
-  if (!item.uploadedAt)
+  if (!item.uploadedAt) {
     return { canOperate: false, label: '已过截止时间，未上传项不可操作' };
+  }
   return { canOperate: false, label: '已过截止时间，不可操作' };
+}
+
+function taskStatus(detail: InspectorTaskDetail) {
+  if (detail.status === 'not_started') return 'not_started' as const;
+  if (detail.status === 'submitted') return 'submitted' as const;
+  if (detail.status === 'overdue') return 'overdue' as const;
+  return 'in_progress' as const;
 }
 
 export function TaskDetailScreen({
@@ -124,103 +142,133 @@ export function TaskDetailScreen({
     return () => clearInterval(timer);
   }, []);
 
-  if (!detail)
+  if (!detail) {
     return (
-      <View className={classes.background} style={styles.centered}>
-        <Text className={classes.muted} style={styles.description}>
-          {loading ? '正在加载任务详情…' : '暂时无法读取任务详情。'}
-        </Text>
-        <ErrorBanner message={error} />
-        {!loading && (
-          <PrimaryButton onPress={() => void load()} variant="secondary">
-            重新加载
-          </PrimaryButton>
-        )}
-      </View>
+      <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <View style={styles.centered}>
+          <MobileText size="base" tone="muted">
+            {loading ? '正在加载任务详情…' : '暂时无法读取任务详情。'}
+          </MobileText>
+          <ErrorBanner message={error} />
+          {!loading ? (
+            <MobileButton onPress={() => void load()} variant="secondary">
+              重新加载
+            </MobileButton>
+          ) : null}
+        </View>
+      </SafeAreaView>
     );
+  }
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      className={classes.background}
-      contentContainerStyle={styles.page}
-      contentInsetAdjustmentBehavior="automatic"
+    <SafeAreaView
       testID="task-detail-screen"
+      style={styles.screen}
+      edges={['top', 'bottom']}
     >
-      <Pressable
-        accessibilityLabel="返回上级页面"
-        accessibilityRole="button"
-        onPress={onBack}
-        style={({ pressed }) => [
-          styles.touchTarget,
-          pressed && styles.pressedRow,
-        ]}
+      <MobileTopBar
+        backLabel="返回上级页面"
+        backText="返回今日待巡"
+        onBack={onBack}
+        subtitle={formatTimeWindow(detail)}
+        title={detail.templateName}
+        titleRole="body"
+        titleSize="lg"
+      />
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.page}
+        contentInsetAdjustmentBehavior="automatic"
+        keyboardShouldPersistTaps="handled"
       >
-        <Text className={classes.link} style={styles.link}>
-          ‹ 返回
-        </Text>
-      </Pressable>
-      <View>
-        <Text
-          accessibilityRole="header"
-          className={classes.foreground}
-          style={styles.heading}
-        >
-          {detail.templateName}
-        </Text>
-        <Text className={classes.muted} style={styles.muted}>
-          {formatTimeWindow(detail)}
-        </Text>
-        <Text className={classes.muted} style={styles.muted}>
-          任务状态：
-          {detail.status === 'not_started'
-            ? '未开始'
-            : detail.status === 'in_progress'
-              ? '进行中'
-              : detail.status === 'submitted'
-                ? '已提交'
-                : '逾期'}
-        </Text>
-      </View>
-      {loading && (
-        <Text className={classes.muted} style={styles.muted}>
-          正在更新任务详情…
-        </Text>
-      )}
-      <ErrorBanner message={error} />
-      {detail.items.map((item) => {
-        const operation = operationWindow(detail, item, now);
-        return (
-          <TaskItemCard
-            key={item.id}
-            taskId={detail.id}
-            item={item}
-            focused={item.position === focusPosition}
-            onLayout={(event) => {
-              if (item.position === focusPosition)
-                scrollRef.current?.scrollTo({
-                  y: event.nativeEvent.layout.y,
-                  animated: true,
-                });
-            }}
-            timezone={detail.timezone}
-            canOperate={operation.canOperate}
-            operationLabel={operation.label}
-            onUnauthorized={onUnauthorized}
-            onUploaded={refreshAfterUpload}
-          />
-        );
-      })}
-      {detail.items.length === 0 && (
-        <View className={classes.empty} style={styles.empty}>
-          <Text className={classes.muted} style={styles.muted}>
-            当前任务没有检查项。
-          </Text>
+        <View style={styles.taskStatus}>
+          <MobileText role="fixed" size="sm">
+            任务状态
+          </MobileText>
+          <MobileStatusTag status={taskStatus(detail)} />
         </View>
-      )}
-      {detail.inspectionId && (
-        <ChatPanel inspectionId={detail.inspectionId} canSend />
-      )}
-    </ScrollView>
+        {loading ? (
+          <MobileText size="sm" tone="muted">
+            正在更新任务详情…
+          </MobileText>
+        ) : null}
+        <ErrorBanner message={error} />
+        {detail.items.map((item) => {
+          const operation = operationWindow(detail, item, now);
+          return (
+            <TaskItemCard
+              key={item.id}
+              taskId={detail.id}
+              item={item}
+              focused={item.position === focusPosition}
+              onLayout={(event) => {
+                if (item.position === focusPosition) {
+                  scrollRef.current?.scrollTo({
+                    y: event.nativeEvent.layout.y,
+                    animated: true,
+                  });
+                }
+              }}
+              timezone={detail.timezone}
+              canOperate={operation.canOperate}
+              operationLabel={operation.label}
+              onUnauthorized={onUnauthorized}
+              onUploaded={refreshAfterUpload}
+            />
+          );
+        })}
+        {detail.items.length === 0 ? (
+          <MobileEmptyState
+            title="当前任务没有检查项。"
+            style={styles.emptyState}
+          />
+        ) : null}
+        {detail.inspectionId ? (
+          <View style={styles.chat}>
+            <ChatPanel inspectionId={detail.inspectionId} canSend />
+          </View>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: tokens.mobile.background,
+    flex: 1,
+  },
+  centered: {
+    alignItems: 'center',
+    flex: 1,
+    gap: tokens.mobileSpace.md,
+    justifyContent: 'center',
+    padding: tokens.mobileSpace.lg,
+  },
+  page: {
+    gap: tokens.mobileSpace.md,
+    paddingBottom: tokens.mobileSpace.display,
+    paddingHorizontal: tokens.mobileSpace.lg,
+    paddingTop: tokens.mobileSpace.md,
+  },
+  taskStatus: {
+    alignItems: 'center',
+    borderBottomColor: tokens.mobile.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingBottom: tokens.mobileSpace.sm,
+  },
+  emptyState: {
+    borderColor: tokens.mobile.border,
+    borderRadius: tokens.mobileRadius.control,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+  },
+  chat: {
+    borderTopColor: tokens.mobile.border,
+    borderTopWidth: 1,
+    marginTop: tokens.mobileSpace.md,
+    paddingTop: tokens.mobileSpace.md,
+  },
+});

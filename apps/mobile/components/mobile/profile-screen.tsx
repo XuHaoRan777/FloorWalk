@@ -15,8 +15,9 @@ import {
   userFacingError,
 } from '../../lib/api';
 import { AdminField } from './admin/admin-ui';
-import { PrimaryButton } from './primary-button';
+import { ManagerProfileScreen } from './manager-profile-screen';
 import { ErrorBanner } from './error-banner';
+import { PrimaryButton } from './primary-button';
 import type { Session } from './session';
 import { classes, styles } from './styles';
 
@@ -96,6 +97,26 @@ export function ProfileScreen({
       };
     }, [refreshProfile]),
   );
+
+  if (current.role === 'store_manager') {
+    return (
+      <ManagerProfileScreen
+        profile={profile}
+        current={current}
+        loading={loading}
+        locked={locked}
+        busy={busy}
+        error={error ?? logoutError ?? null}
+        message={message}
+        avatarFailed={avatarFailed}
+        onAvatarError={() => setAvatarFailed(true)}
+        onRefresh={() => void refreshProfile()}
+        onChooseAvatar={() => void chooseAvatar()}
+        onChangePassword={() => router.push('/change-password')}
+        onLogout={onLogout}
+      />
+    );
+  }
 
   async function saveName() {
     if (busyRef.current || loading) return;
@@ -302,25 +323,6 @@ export function ProfileScreen({
         >
           {current.role === 'admin' ? '管理员' : '店长'}
         </Text>
-        {current.role === 'store_manager' ? (
-          <View>
-            <Text className={classes.muted} style={styles.label}>
-              所属门店
-            </Text>
-            <Text
-              accessibilityLabel="当前门店"
-              className={classes.foreground}
-              style={styles.value}
-            >
-              {profile?.site?.name ??
-                (loading
-                  ? '加载中…'
-                  : profile
-                    ? '未绑定门店'
-                    : '暂时无法加载门店')}
-            </Text>
-          </View>
-        ) : null}
       </View>
       <PrimaryButton
         disabled={locked}
@@ -339,3 +341,4 @@ export function ProfileScreen({
     </ScrollView>
   );
 }
+

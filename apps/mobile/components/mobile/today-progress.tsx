@@ -1,11 +1,10 @@
-import { Text, View } from 'react-native';
 import type { InspectorTodayTask } from '@libs/shared';
-import { classes } from './styles';
+import { View } from 'react-native';
+import { MobileStatusTag, MobileText } from './manager-ui';
+import tokens from '../../../../packages/tokens/native.json';
 import { todayStyles } from './today-screen.styles';
-import { useTabColors } from './use-tab-colors';
 
 export function TodayProgress({ tasks }: { tasks: InspectorTodayTask[] }) {
-  const colors = useTabColors();
   const completed = tasks.filter((task) => task.status === 'submitted').length;
   const inProgress = tasks.filter(
     (task) => task.status === 'in_progress',
@@ -14,6 +13,12 @@ export function TodayProgress({ tasks }: { tasks: InspectorTodayTask[] }) {
   const notStarted = tasks.filter(
     (task) => task.status === 'not_started',
   ).length;
+  const summary = [
+    ['completed', '已完成', completed, tokens.mobile.success],
+    ['in_progress', '进行中', inProgress, tokens.mobile.primary],
+    ['overdue', '逾期', overdue, tokens.mobile.danger],
+    ['not_started', '未开始', notStarted, tokens.mobile.disabled],
+  ] as const;
 
   return (
     <View
@@ -22,17 +27,17 @@ export function TodayProgress({ tasks }: { tasks: InspectorTodayTask[] }) {
       testID="today-progress"
     >
       <View style={todayStyles.progressHeading}>
-        <Text
-          className={classes.mobileForeground}
-          style={todayStyles.cardTitle}
-        >
+        <MobileText role="fixed" size="base">
           今日进度
-        </Text>
-        <Text className={classes.mobileMuted} style={todayStyles.progressCount}>
-          {completed} / {tasks.length} 已完成
-        </Text>
+        </MobileText>
+        <MobileText role="number" size="lg">
+          {completed} / {tasks.length}
+        </MobileText>
       </View>
-      <View accessibilityElementsHidden style={todayStyles.progressTrack}>
+      <View
+        accessibilityElementsHidden
+        style={todayStyles.progressTrack}
+      >
         {tasks.map((task) => (
           <View
             key={task.id}
@@ -41,27 +46,27 @@ export function TodayProgress({ tasks }: { tasks: InspectorTodayTask[] }) {
               {
                 backgroundColor:
                   task.status === 'submitted'
-                    ? colors.mobileSuccess
+                    ? tokens.mobile.success
                     : task.status === 'in_progress'
-                      ? colors.mobileRoute
+                      ? tokens.mobile.primary
                       : task.status === 'overdue'
-                        ? colors.mobileWarning
-                        : colors.mobileBorder,
+                        ? tokens.mobile.danger
+                        : tokens.mobile.disabled,
               },
             ]}
           />
         ))}
       </View>
-      <Text className={classes.mobileMuted} style={todayStyles.progressLegend}>
-        {[
-          completed > 0 ? `已完成 ${completed}` : null,
-          inProgress > 0 ? `进行中 ${inProgress}` : null,
-          notStarted > 0 ? `未开始 ${notStarted}` : null,
-          overdue > 0 ? `逾期 ${overdue}` : null,
-        ]
-          .filter(Boolean)
-          .join('　')}
-      </Text>
+      <View style={todayStyles.progressSummary}>
+        {summary.map(([status, label, count, color]) => (
+          <MobileStatusTag
+            key={status}
+            status={status}
+            label={`${label} ${count}`}
+            style={{ borderColor: color, borderWidth: 1 }}
+          />
+        ))}
+      </View>
     </View>
   );
 }

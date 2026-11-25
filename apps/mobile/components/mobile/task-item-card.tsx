@@ -2,9 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Camera, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import {
-  Image,
   Pressable,
-  Text,
   TextInput,
   View,
   type LayoutChangeEvent,
@@ -17,11 +15,26 @@ import {
 } from '@libs/shared';
 import { api, ApiError, userFacingError } from '../../lib/api';
 import { ErrorBanner } from './error-banner';
-import { PrimaryButton } from './primary-button';
-import { classes, styles } from './styles';
-import { useTabColors } from './use-tab-colors';
+import { MobileButton, MobileStatusTag, MobileText } from './manager-ui';
+import { MobilePhotoSlot } from './manager-task-ui';
+import { taskItemStyles } from './task-item-card.styles';
+import tokens from '../../../../packages/tokens/native.json';
 
 type InspectorTaskItem = InspectorTaskDetail['items'][number];
+
+function resultLabel(result: InspectorTaskItem['result']) {
+  if (result === 'pass') return '通过';
+  if (result === 'rework') return '打回';
+  if (result === 'fail') return '不合格';
+  return '待审';
+}
+
+function resultStatus(result: InspectorTaskItem['result']) {
+  if (result === 'pass') return 'completed' as const;
+  if (result === 'rework') return 'rework' as const;
+  if (result === 'fail') return 'failed' as const;
+  return 'pending' as const;
+}
 
 export function TaskItemCard({
   taskId,
@@ -44,7 +57,6 @@ export function TaskItemCard({
   onUnauthorized: () => void;
   onUploaded: () => Promise<void>;
 }) {
-  const colors = useTabColors();
   const [photos, setPhotos] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [note, setNote] = useState('');
   const [selfAssessment, setSelfAssessment] =
@@ -52,8 +64,6 @@ export function TaskItemCard({
       item.minPhotoCount === 0 ? 'pass' : null,
     );
   const [capturing, setCapturing] = useState(false);
-  const [cameraPressed, setCameraPressed] = useState(false);
-  const [cameraFocused, setCameraFocused] = useState(false);
   const [focusedAssessment, setFocusedAssessment] =
     useState<InspectionItemSelfAssessment | null>(null);
   const [noteFocused, setNoteFocused] = useState(false);
@@ -144,206 +154,188 @@ export function TaskItemCard({
 
   return (
     <View
-      className={
-        focused ? `${classes.card} ${classes.highlightedCard}` : classes.card
-      }
       onLayout={onLayout}
-      style={[styles.card, focused && styles.highlightedCard]}
+      style={[
+        taskItemStyles.item,
+        focused && taskItemStyles.focused,
+      ]}
       testID={`task-item-${item.position}`}
     >
-      <Text className={classes.foreground} style={styles.cardTitle}>
-        {item.position}. {item.title}
-      </Text>
-      {item.acceptanceCriteria && (
-        <Text className={classes.muted} style={styles.muted}>
-          验收要点：{item.acceptanceCriteria}
-        </Text>
-      )}
-      <Text className={classes.muted} style={styles.muted}>
-        最少照片：{item.minPhotoCount} 张
-      </Text>
-      <Text className={classes.muted} style={styles.muted}>
-        当前结论：
-        {item.result === 'pending'
-          ? '待审'
-          : item.result === 'pass'
-            ? '通过'
-            : item.result === 'rework'
-              ? '打回'
-              : '不合格'}
-      </Text>
-      <Text className={classes.muted} style={styles.muted}>
-        {item.uploadedByName ? `最后提交：${item.uploadedByName}` : '尚未提交'}
-      </Text>
-      <Text className={classes.muted} style={styles.muted}>
-        {item.uploadedAt
-          ? `上传于 ${new Intl.DateTimeFormat('zh-CN', {
-              timeZone: timezone,
-              hour: '2-digit',
-              minute: '2-digit',
-              hourCycle: 'h23',
-            }).format(new Date(item.uploadedAt))}`
-          : '尚无上传时间'}
-      </Text>
-      <Text className={classes.muted} style={styles.muted}>
-        {operationLabel}
-      </Text>
-      {item.minPhotoCount > 0 && (
-        <>
-          <Text className={classes.muted} style={styles.muted}>
-            自评结果
-          </Text>
-          <View style={styles.actionRow}>
-            {(['pass', 'fail'] as const).map((assessment) => {
-              const selected = selfAssessment === assessment;
-              const label = assessment === 'pass' ? '自评合格' : '自评不合格';
-              return (
-                <Pressable
-                  key={assessment}
-                  accessibilityLabel={`${label}第${item.position}项`}
-                  accessibilityRole="button"
-                  accessibilityState={{
-                    selected,
-                    disabled: !canOperate || busy,
-                  }}
-                  className={
-                    selected
-                      ? assessment === 'pass'
-                        ? classes.success
-                        : classes.dangerButton
-                      : classes.secondaryButton
-                  }
-                  disabled={!canOperate || busy}
-                  onPress={() => setSelfAssessment(assessment)}
-                  onFocus={() => setFocusedAssessment(assessment)}
-                  onBlur={() => setFocusedAssessment(null)}
-                  style={[
-                    styles.touchTarget,
-                    styles.assessmentOption,
-                    !canOperate && styles.disabledButton,
-                  ]}
-                  testID={`assess-${assessment}-${item.position}`}
-                >
-                  {focusedAssessment === assessment && canOperate && !busy ? (
-                    <View
-                      pointerEvents="none"
-                      style={{
-                        position: 'absolute',
-                        top: 2,
-                        right: 2,
-                        bottom: 2,
-                        left: 2,
-                        borderWidth: 2,
-                        borderRadius: 8,
-                        borderColor: selected
-                          ? colors.mobileSurface
-                          : colors.primary,
-                      }}
-                    />
-                  ) : null}
-                  <Text
-                    className={
-                      selected
-                        ? classes.primaryButtonText
-                        : classes.secondaryButtonText
-                    }
-                    style={styles.buttonText}
-                  >
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+      <View style={taskItemStyles.heading}>
+        <View style={taskItemStyles.headingCopy}>
+          <View style={taskItemStyles.headingTitle}>
+            <MobileText role="number" size="sm" tone="muted" style={taskItemStyles.itemNumber}>
+              {String(item.position).padStart(2, '0')}
+            </MobileText>
+            <MobileText size="base" numberOfLines={2}>
+              {item.title}
+            </MobileText>
           </View>
-        </>
-      )}
-      {item.minPhotoCount > 0 && (
-        <>
-          <Text
-            className={classes.muted}
-            style={styles.muted}
-            testID={`photo-count-${item.position}`}
-          >
-            {photoShortfall > 0
-              ? `还差 ${photoShortfall} 张照片`
-              : `已拍 ${photos.length} 张照片`}
-          </Text>
-          {photos.length > 0 && (
-            <View style={styles.photoGrid}>
-              {photos.map((photo, index) => (
-                <View key={`${photo.uri}-${index}`} style={styles.photoPreview}>
-                  <Image
-                    accessibilityLabel={`${item.position} 项第 ${index + 1} 张照片`}
-                    resizeMode="cover"
-                    source={{ uri: photo.uri }}
-                    style={styles.photoImage}
-                  />
-                  <Pressable
-                    accessibilityLabel={`移除第${item.position}项第${index + 1}张照片`}
-                    accessibilityRole="button"
-                    disabled={busy || capturing}
-                    onPress={() => removePhoto(index)}
-                    style={styles.removePhoto}
-                  >
-                    <Trash2 size={16} />
-                  </Pressable>
-                </View>
-              ))}
+          {item.acceptanceCriteria.trim().length > 0 ? (
+            <View style={taskItemStyles.criteria}>
+              <MobileText role="fixed" size="xs" tone="muted">
+                验收要点：
+              </MobileText>
+              <MobileText size="sm" tone="muted">
+                {item.acceptanceCriteria}
+              </MobileText>
             </View>
-          )}
-          <Pressable
-            accessibilityLabel={`打开相机拍摄第${item.position}项照片`}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !canOperate || busy || capturing }}
-            className={`${classes.secondaryButton} ${classes.actionButton}`}
-            disabled={!canOperate || busy || capturing}
-            onPress={() => void capturePhoto()}
-            onFocus={() => setCameraFocused(true)}
-            onBlur={() => setCameraFocused(false)}
-            onPressIn={() => setCameraPressed(true)}
-            onPressOut={() => setCameraPressed(false)}
-            style={[
-              styles.actionButton,
-              (!canOperate || busy || capturing) && styles.disabledButton,
-              cameraPressed &&
-                canOperate &&
-                !busy &&
-                !capturing && {
-                  backgroundColor: colors.mobilePressedBackground,
-                },
-            ]}
-            testID={`capture-item-${item.position}`}
-          >
-            {cameraFocused && canOperate && !busy && !capturing ? (
-              <View
-                pointerEvents="none"
-                style={{
-                  position: 'absolute',
-                  top: 2,
-                  right: 2,
-                  bottom: 2,
-                  left: 2,
-                  borderWidth: 2,
-                  borderRadius: 8,
-                  borderColor: colors.primary,
-                }}
-              />
-            ) : null}
-            <Camera size={18} />
-            <Text
-              className={classes.secondaryButtonText}
-              style={styles.buttonText}
-            >
-              {capturing ? '正在打开相机…' : '拍摄照片'}
-            </Text>
-          </Pressable>
-          {selfAssessment === null && (
-            <Text className={classes.muted} style={styles.muted}>
+          ) : null}
+        </View>
+        <MobileStatusTag status={resultStatus(item.result)} label={resultLabel(item.result)} />
+      </View>
+
+      <View style={taskItemStyles.sectionRow}>
+        <MobileText role="fixed" size="sm">
+          最少照片：
+        </MobileText>
+        <MobileText role="number" size="sm" tone="muted">
+          {item.minPhotoCount} 张
+        </MobileText>
+      </View>
+      <View style={taskItemStyles.sectionRow}>
+        <MobileText size="sm" tone="muted">
+          当前结论：{resultLabel(item.result)}
+        </MobileText>
+        <MobileText role="fixed" size="xs" tone="muted">
+          {operationLabel}
+        </MobileText>
+      </View>
+      <View style={taskItemStyles.sectionRow}>
+        <MobileText size="sm" tone="muted">
+          {item.uploadedByName
+            ? `最后提交：${item.uploadedByName}`
+            : '尚未提交'}
+        </MobileText>
+        <MobileText role="number" size="xs" tone="muted">
+          {item.uploadedAt
+            ? `上传于 ${new Intl.DateTimeFormat('zh-CN', {
+                timeZone: timezone,
+                hour: '2-digit',
+                minute: '2-digit',
+                hourCycle: 'h23',
+              }).format(new Date(item.uploadedAt))}`
+            : '尚无上传时间'}
+        </MobileText>
+      </View>
+
+      {item.minPhotoCount > 0 ? (
+        <>
+          <View style={taskItemStyles.sectionRow}>
+            <MobileText role="fixed" size="sm">
+              现场照片
+            </MobileText>
+            <MobileText role="number" size="xs" tone="muted" testID={`photo-count-${item.position}`}>
+              {photoShortfall > 0
+                ? `还差 ${photoShortfall} 张照片`
+                : `已拍 ${photos.length} 张照片`}
+            </MobileText>
+          </View>
+          <View style={taskItemStyles.photoGrid}>
+            {photos.map((photo, index) => (
+              <View key={`${photo.uri}-${index}`} style={taskItemStyles.photoCell}>
+                <MobilePhotoSlot
+                  count={`现场照片 ${String(index + 1).padStart(2, '0')}`}
+                  label={`${item.position} 项第 ${index + 1} 张现场照片`}
+                  source={{ uri: photo.uri }}
+                  state="taken"
+                />
+                <Pressable
+                  accessibilityLabel={`移除第${item.position}项第${index + 1}张照片`}
+                  accessibilityRole="button"
+                  disabled={busy || capturing}
+                  onPress={() => removePhoto(index)}
+                  style={taskItemStyles.removePhoto}
+                >
+                  <Trash2 color={tokens.mobile.foreground} size={18} />
+                </Pressable>
+              </View>
+            ))}
+            <View style={taskItemStyles.photoCell}>
+              {capturing ? (
+                <MobilePhotoSlot
+                  label="正在打开相机…"
+                  state="uploading"
+                />
+              ) : (
+                <MobilePhotoSlot
+                  accessibilityLabel={`打开相机拍摄第${item.position}项照片`}
+                  icon={<Camera color={tokens.mobile.primary} size={22} />}
+                  label={photoShortfall > 0 ? '拍摄照片' : '继续拍照'}
+                  disabled={!canOperate || busy}
+                  onPress={() => void capturePhoto()}
+                  state="empty"
+                  testID={`capture-item-${item.position}`}
+                />
+              )}
+            </View>
+          </View>
+          <View style={taskItemStyles.sectionRow}>
+            <MobileText role="fixed" size="sm">
+              店长自评
+            </MobileText>
+            <View style={taskItemStyles.assessmentRow}>
+              {(['pass', 'fail'] as const).map((assessment) => {
+                const selected = selfAssessment === assessment;
+                const label =
+                  assessment === 'pass' ? '自评合格' : '自评不合格';
+                return (
+                  <Pressable
+                    key={assessment}
+                    accessibilityLabel={`${label}第${item.position}项`}
+                    accessibilityRole="button"
+                    accessibilityState={{
+                      selected,
+                      disabled: !canOperate || busy,
+                    }}
+                    disabled={!canOperate || busy}
+                    onPress={() => setSelfAssessment(assessment)}
+                    onFocus={() => setFocusedAssessment(assessment)}
+                    onBlur={() => setFocusedAssessment(null)}
+                    style={[
+                      taskItemStyles.assessmentButton,
+                      selected &&
+                        (assessment === 'pass'
+                          ? taskItemStyles.assessmentPassSelected
+                          : taskItemStyles.assessmentFailSelected),
+                      (!canOperate || busy) &&
+                        taskItemStyles.assessmentDisabled,
+                      focusedAssessment === assessment &&
+                        canOperate &&
+                        taskItemStyles.assessmentFocused,
+                    ]}
+                    testID={`assess-${assessment}-${item.position}`}
+                  >
+                    <MobileText
+                      role="fixed"
+                      size="xs"
+                      tone={
+                        selected
+                          ? assessment === 'pass'
+                            ? 'success'
+                            : 'danger'
+                          : 'foreground'
+                      }
+                    >
+                      {label}
+                    </MobileText>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+          {selfAssessment === null ? (
+            <MobileText size="sm" tone="muted">
               请选择自评结果。
-            </Text>
-          )}
+            </MobileText>
+          ) : null}
         </>
+      ) : (
+        <MobileText size="sm" tone="muted">
+          此项不需照片，填写备注后提交。
+        </MobileText>
       )}
+
       <TextInput
         accessibilityLabel={`第${item.position}项备注`}
         editable={canOperate && !busy && !capturing}
@@ -351,29 +343,26 @@ export function TaskItemCard({
         onChangeText={setNote}
         onFocus={() => setNoteFocused(true)}
         onBlur={() => setNoteFocused(false)}
-        className={classes.noteInput}
         placeholder={noteRequired ? '请填写检查备注' : '添加备注（可选）'}
+        placeholderTextColor={tokens.mobile.disabledForeground}
         style={[
-          styles.noteInput,
-          noteFocused && { borderWidth: 2, borderColor: colors.primary },
+          taskItemStyles.noteInput,
+          noteFocused && taskItemStyles.focusedInput,
+          (!canOperate || busy || capturing) &&
+            taskItemStyles.disabledInput,
         ]}
         value={note}
       />
-      {noteRequired && (
-        <Text className={classes.muted} style={styles.muted}>
-          此项不需照片，填写备注后提交。
-        </Text>
-      )}
       <ErrorBanner message={error} />
-      <PrimaryButton
+      <MobileButton
         disabled={!canSubmit && !busy}
-        focusRing
         loading={busy}
         onPress={() => void submit()}
         testID={`submit-item-${item.position}`}
+        style={taskItemStyles.submitButton}
       >
         {busy ? '提交中…' : `提交第 ${item.position} 项`}
-      </PrimaryButton>
+      </MobileButton>
     </View>
   );
 }

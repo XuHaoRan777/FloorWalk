@@ -99,7 +99,10 @@ test('店长从通知角标打开打回条目并清零未读', async ({ page }) 
     );
     await expect(page.getByTestId('task-detail-screen')).toBeVisible();
     await expect(page.getByTestId('task-item-1')).toBeVisible();
-    await expect(page.getByTestId('task-item-1')).toHaveClass(/border-accent/);
+    await expect(page.getByTestId('task-item-1')).toHaveCSS(
+      'border-left-width',
+      '2px',
+    );
     const unread = await page.request.get(
       `${apiBase}/me/notifications/unread-count`,
     );
@@ -149,7 +152,7 @@ test('另一商家的店长收件箱不显示本商家通知', async ({ page }) 
     await page.getByRole('button', { name: '演示二号', exact: true }).click();
     await expect(page.getByRole('tab', { name: '今日待巡' })).toBeVisible();
     await page.getByRole('tab', { name: '通知' }).click();
-    await expect(page.getByText('暂无通知')).toBeVisible();
+    await expect(page.getByText('暂无未读通知')).toBeVisible();
     const count = await page.request.get(
       `${apiBase}/me/notifications/unread-count`,
     );
@@ -461,7 +464,7 @@ test('店长聊天通知已读后进入对应聊天', async ({ page }) => {
       new RegExp(`/chat/${target.rows[0].inspectionId}$`),
     );
     await expect(
-      page.getByRole('heading', { name: '巡检聊天', exact: true }).first(),
+      page.getByRole('heading', { name: '巡检沟通', exact: true }),
     ).toBeVisible();
     await expect(page.getByLabel('聊天内容')).toBeVisible();
   } finally {

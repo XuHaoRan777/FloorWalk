@@ -3,6 +3,7 @@ import '../global.css';
 import Stack from 'expo-router/stack';
 import { useFonts } from 'expo-font';
 import { Text, View } from 'react-native';
+import lxgwWenKaiGBRegular from '../assets/fonts/LXGWWenKaiGB-Regular.ttf';
 import { IBMPlexMono_400Regular } from '@expo-google-fonts/ibm-plex-mono';
 import {
   IBMPlexSans_400Regular,
@@ -47,6 +48,7 @@ export default function RootLayout() {
     [tokens.font.sans.regular]: IBMPlexSans_400Regular,
     [tokens.font.sans.medium]: IBMPlexSans_500Medium,
     [tokens.font.sans.semibold]: IBMPlexSans_600SemiBold,
+    [tokens.mobileFont.display.regular]: lxgwWenKaiGBRegular,
   });
 
   if (fontError) throw fontError;

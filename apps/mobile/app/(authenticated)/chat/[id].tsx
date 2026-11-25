@@ -1,8 +1,20 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MobileTopBar } from '../../../components/mobile/manager-ui';
 import { ChatPanel } from '../../../components/mobile/chat-panel';
 import { useSession } from '../../../components/mobile/session-provider';
-import { classes, styles } from '../../../components/mobile/styles';
+import {
+  classes,
+  styles as legacyStyles,
+} from '../../../components/mobile/styles';
+import tokens from '../../../../../packages/tokens/native.json';
 
 export default function NotificationChatPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -10,41 +22,67 @@ export default function NotificationChatPage() {
   const { session } = useSession();
   if (!session || !id) return null;
   const isManager = session.user.role === 'store_manager';
+  const goBack = () =>
+    router.canGoBack()
+      ? router.back()
+      : router.replace(isManager ? '/today' : '/admin/today');
 
-  return (
-    <ScrollView
-      className={classes.background}
-      contentContainerStyle={styles.page}
-      contentInsetAdjustmentBehavior="automatic"
-    >
-      <Pressable
-        accessibilityRole="button"
-        onPress={() =>
-          router.canGoBack()
-            ? router.back()
-            : router.replace(isManager ? '/today' : '/admin/today')
-        }
-        style={styles.touchTarget}
+  if (!isManager) {
+    return (
+      <ScrollView
+        className={classes.background}
+        contentContainerStyle={legacyStyles.page}
+        contentInsetAdjustmentBehavior="automatic"
       >
-        <Text className={classes.link} style={styles.link}>
-          返回
-        </Text>
-      </Pressable>
-      <View>
-        <Text
-          accessibilityRole="header"
-          className={classes.foreground}
-          style={styles.heading}
+        <Pressable
+          accessibilityRole="button"
+          onPress={goBack}
+          style={legacyStyles.touchTarget}
         >
-          巡检聊天
-        </Text>
-        {!isManager ? (
-          <Text className={classes.muted} style={styles.muted}>
+          <Text className={classes.link} style={legacyStyles.link}>
+            返回
+          </Text>
+        </Pressable>
+        <View>
+          <Text
+            accessibilityRole="header"
+            className={classes.foreground}
+            style={legacyStyles.heading}
+          >
+            巡检聊天
+          </Text>
+          <Text className={classes.muted} style={legacyStyles.muted}>
             管理员只读查看
           </Text>
-        ) : null}
+        </View>
+        <ChatPanel inspectionId={id} canSend={false} variant="legacy" />
+      </ScrollView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+      <MobileTopBar
+        backLabel="返回上级页面"
+        backText="返回"
+        onBack={goBack}
+        title="巡检沟通"
+        titleRole="title"
+        titleSize="2xl"
+      />
+      <View style={styles.panel}>
+        <ChatPanel inspectionId={id} canSend variant="screen" />
       </View>
-      <ChatPanel inspectionId={id} canSend={isManager} />
-    </ScrollView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { backgroundColor: tokens.mobile.background, flex: 1 },
+  panel: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: tokens.mobileSpace.lg,
+    paddingBottom: tokens.mobileSpace.sm,
+  },
+});
