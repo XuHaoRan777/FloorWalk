@@ -36,7 +36,6 @@
 
 | ID | 工作单元 | 状态 | 依赖 | 下一步 |
 | --- | --- | --- | --- | --- |
-| FW-047 | [Mobile 店长端页面与视觉基础](work/FW-047-mobile-manager-visual-foundation/spec.md) | `in_progress` | 无 | 用户确认后 Promote、归档并通过 `--archive-gate` |
 
 ## 待开单元（未批准，按建议顺序）
 
@@ -58,7 +57,6 @@
 
 | 单元 / 任务 | 需要你测的 | 交接位置 |
 | ----------- | ---------- | -------- |
-| FW-047 / AC-14 | Android 模拟器系统返回键、安全区、相机调起和键盘遮挡现场确认 | [执行计划](work/FW-047-mobile-manager-visual-foundation/plan.md) |
 
 ## 已归档
 
@@ -66,6 +64,7 @@
 | ------ | ----------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------- |
 | FW-046 | [Mobile 视觉语言与两张样板页](work/FW-046-mobile-visual-language/spec.md) | 2026-11-24 | 方式 A 确认、Promote、机器门与独立审查（见 git log） |
 | FW-045 | [Mobile 视觉基础与样板页](work/FW-045-mobile-visual-foundation/spec.md) | 2026-11-23 | Android 样板验收、Promote、最终审查与归档（见 git log） |
+| FW-047 | [Mobile 店长端页面与视觉基础](work/FW-047-mobile-manager-visual-foundation/spec.md) | 2026-11-26 | AC-14 方式 A 确认、Promote、全量机器门与归档提交（见 git log） |
 | FW-003 | [巡检主链契约修订](work/FW-003-contract-revision/spec.md)                           | 2026-10-24 | 归档提交（见 git log）                                    |
 | FW-002 | [巡检主链契约与骨架](work/FW-002-inspection-contract/spec.md)                       | 2026-10-24 | 归档提交（见 git log）                                    |
 | FW-001 | [Monorepo 骨架与各模块启动](work/FW-001-monorepo-bootstrap/spec.md)                 | 2026-10-06 | `9107da6`（修正、验收与 Promote；归档状态见后续归档提交） |

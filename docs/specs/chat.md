@@ -1,6 +1,6 @@
 # 巡检单聊天
 
-代码（归档时再生成）：`apps/api/src/controllers/chat.controller.ts`、`apps/web/src/components/console/chat-panel.tsx`、`apps/mobile/components/mobile/chat-panel.tsx`，两端客户端在各自的 `lib/api/chat.ts`。
+代码（归档时再生成）：`apps/api/src/controllers/chat.controller.ts`、`apps/web/src/components/console/chat-panel.tsx`、`apps/mobile/app/(authenticated)/chat/[id].tsx`、`apps/mobile/components/mobile/chat-panel.tsx`、`apps/mobile/components/mobile/chat-panel.styles.ts`、`apps/mobile/components/mobile/chat-composer.tsx`、`apps/mobile/components/mobile/chat-message-row.tsx`，两端客户端在各自的 `lib/api/chat.ts`。
 
 ## 权限与入口
 
@@ -29,7 +29,7 @@
 | 聊天 API | GET/POST 巡检单消息、消息图片签名；消息 `seq` 为字符串，分页 `before`/`after` 互斥 | [共享契约](../../packages/shared/src/contract/index.ts)、[控制器](../../apps/api/src/controllers/chat.controller.ts) |
 | 图片与存储 | `chat_messages` 及图片字段约束、签名和读取 | [数据结构](inspection.md#数据结构)、[schema](../../apps/api/src/db/schema.ts) |
 | Web 面板 | 列表、分页、轮询、发送与只读显示 | [面板](../../apps/web/src/components/console/chat-panel.tsx)、[客户端](../../apps/web/src/lib/api/chat.ts) |
-| Mobile 面板 | 系统相册、页面焦点与 AppState、列表与发送 | [面板](../../apps/mobile/components/mobile/chat-panel.tsx)、[客户端](../../apps/mobile/lib/api/chat.ts) |
+| Mobile 面板 | 系统相册、页面焦点与 AppState、列表与发送 | [路由](<../../apps/mobile/app/(authenticated)/chat/[id].tsx>)、[面板](../../apps/mobile/components/mobile/chat-panel.tsx)、[样式](../../apps/mobile/components/mobile/chat-panel.styles.ts)、[输入区](../../apps/mobile/components/mobile/chat-composer.tsx)、[消息行](../../apps/mobile/components/mobile/chat-message-row.tsx)、[客户端](../../apps/mobile/lib/api/chat.ts) |
 
 ## 修订记录
 

@@ -1,6 +1,6 @@
 # Mobile 店长巡检
 
-代码：[店长 Tabs](<../../apps/mobile/app/(authenticated)/(tabs)/_layout.tsx>)、[今日页](../../apps/mobile/components/mobile/today-screen.tsx)、[任务详情](../../apps/mobile/components/mobile/task-detail-screen.tsx)及[API 客户端](../../apps/mobile/lib/api/)。
+代码：[店长 Tabs](<../../apps/mobile/app/(authenticated)/(tabs)/_layout.tsx>)、[今日页](../../apps/mobile/components/mobile/today-screen.tsx)、[任务详情](../../apps/mobile/components/mobile/task-detail-screen.tsx)、[检查项卡片与样式](../../apps/mobile/components/mobile/task-item-card.tsx)、[记录页](../../apps/mobile/components/mobile/records-screen.tsx)、[资料页](../../apps/mobile/components/mobile/manager-profile-screen.tsx)、[店长通知页](../../apps/mobile/components/mobile/notification-inbox-screen.tsx)、[聊天页](<../../apps/mobile/app/(authenticated)/chat/[id].tsx>)及[API 客户端](../../apps/mobile/lib/api/)。
 
 ## 登录与今日巡检
 
@@ -20,8 +20,6 @@
 
 任务详情可查看[聊天面板](chat.md)。历史巡检详情仍只读显示各项判定、备注与照片；旧整单修改与补交入口已移除。
 
-店长巡检详情存在已知显示问题。2026-11-18 走查出现 React Native Web `Unexpected text node`，堆栈指向 `apps/mobile/components/mobile/task-item-card.tsx:136`。该问题按用户决定排入后续 Mobile 布局与样式维护，待复现与修复。[工作队列](../backlog.md#待开单元未批准按建议顺序)
-
 ## 记录
 
 「记录」Tab 显示当前门店的巡检，以及店长调店前参与过的原门店历史；同店内其他店长参与的记录也可见。按创建时间倒序排列，每行显示任务状态（无任务时显示巡检状态）、分数、模板名、任务日期、创建时间和提交时间。首屏 10 条，「加载更多」追加下一页，无更多时显示「没有更多了」；下拉刷新回到第一页，丢弃刷新前仍在途的旧页。加载、失败和空列表各有提示；网络、400/403/404 错误显示中文，401 返回登录。
@@ -38,9 +36,9 @@
 
 ## 数据契约（归档时再生成）
 
-| 入口        | 当前契约                                                           | 代码（归档时再生成）                                                                                                                                                                                                                                                                                                                                                                                    |
-| ----------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mobile 巡检 | 登录、按状态选择今日继续任务、按需任务详情、相机逐项上传/重传、聊天、任务记录分页与只读详情 | [导航布局](../../apps/mobile/app/_layout.tsx)、[Tabs](<../../apps/mobile/app/(authenticated)/(tabs)/_layout.tsx>)、[今日任务](../../apps/mobile/components/mobile/today-screen.tsx)、[任务进度](../../apps/mobile/components/mobile/today-progress.tsx)、[日期格式](../../apps/mobile/components/mobile/today-format.ts)、[任务详情](../../apps/mobile/components/mobile/task-detail-screen.tsx)、[任务条目](../../apps/mobile/components/mobile/task-item-card.tsx)、[记录屏幕](../../apps/mobile/components/mobile/records-screen.tsx)、[API 入口](../../apps/mobile/lib/api.ts)、[功能客户端](../../apps/mobile/lib/api/) |
+| 入口        | 当前契约                                                           | 代码（归档时再生成）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Mobile 巡检 | 登录、按状态选择今日继续任务、按需任务详情、相机逐项上传/重传、聊天、任务记录分页与只读详情 | [导航布局](../../apps/mobile/app/_layout.tsx)、[Tabs](<../../apps/mobile/app/(authenticated)/(tabs)/_layout.tsx>)、[今日任务](../../apps/mobile/components/mobile/today-screen.tsx)、[任务进度](../../apps/mobile/components/mobile/today-progress.tsx)、[日期格式](../../apps/mobile/components/mobile/today-format.ts)、[任务详情](../../apps/mobile/components/mobile/task-detail-screen.tsx)、[任务条目](../../apps/mobile/components/mobile/task-item-card.tsx)、[任务条目样式](../../apps/mobile/components/mobile/task-item-card.styles.ts)、[店长公共组件](../../apps/mobile/components/mobile/manager-ui.tsx)、[店长任务组件](../../apps/mobile/components/mobile/manager-task-ui.tsx)、[记录屏幕](../../apps/mobile/components/mobile/records-screen.tsx)、[记录详情路由](<../../apps/mobile/app/(authenticated)/records/[id].tsx>)、[资料屏幕](../../apps/mobile/components/mobile/manager-profile-screen.tsx)、[通知屏幕](../../apps/mobile/components/mobile/notification-inbox-screen.tsx)、[API 入口](../../apps/mobile/lib/api.ts)、[功能客户端](../../apps/mobile/lib/api/) |
 
 ## 修订记录
 
@@ -61,3 +59,4 @@
 | 2026-11-20 | 收拢修正记录，登记店长巡检详情的 `Unexpected text node` 显示问题与后续维护安排。 |
 | 2026-11-22 | FW-045 定稿店长首页品牌/通知栏和底栏；任务详情与其他非首页标题随内容滚动，通知目标按导航来源返回。 |
 | 2026-11-24 | FW-046 统一 Mobile 视觉与交互表达；今日主操作按 API 状态优先指向进行中、再指向未开始任务，无可继续任务时提供通知入口，保留逾期和已提交任务供查看。 |
+| 2026-11-26 | FW-047 按确认设计稿完成店长端七页与 Mobile 视觉基础，修复任务详情 React Native Web `Unexpected text node` 并让自评选项按内容收宽。 |

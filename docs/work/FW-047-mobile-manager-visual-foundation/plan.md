@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- 工作单元状态：`in_progress`
-- 归档状态：`active`
-- 当前任务：等待用户确认 AC-14 原生模拟器走查
-- 阻塞：等待用户确认 Android 模拟器返回键、安全区、相机调起和键盘遮挡路径
-- 下一步：用户确认后 Promote、归档并通过 `--archive-gate`
+- 工作单元状态：`verified`
+- 归档状态：`archived`
+- 当前任务：归档完成
+- 阻塞：无
+- 下一步：无
 
 开单前工作树干净。设计 HTML/CSS 与图库照片仅在本机 `.visual/`。字体在实现时作为应用资源加入。
 
@@ -37,14 +37,14 @@
 | T05 AC-11 | `passed` | `按 .visual/design/b.css 与 components.html 重写 Mobile 基线` | `docs/context/mobile-design.md` | 文档注明设计源只存在本机 `.visual/design/` 且不入库，记录 Mobile token、组件状态、字体来源/许可证/子集命令及接口边界。Web token 与 Logo 的规则未改。 |
 | T04 AC-08、AC-09、AC-10 | `passed` | `Expo Web 390×844，对照 .visual/design/pages/manager-chat.html、manager-notifications.html 与 manager-profile.html` | `docs/work/FW-047-mobile-manager-visual-foundation/evidence/manager-chat-comparison.png`, `docs/work/FW-047-mobile-manager-visual-foundation/evidence/manager-notifications-comparison.png`, `docs/work/FW-047-mobile-manager-visual-foundation/evidence/manager-profile-comparison.png` | 聊天标题用「巡检沟通」。聊天 API 只提供巡检 ID 和消息，没有模板名字段，未显示样稿里的「午间运营巡检」。聊天页现处 Tabs 外的栈路由，保留来源感知返回，不显示静态稿中的店长底栏。输入区保留当前图片选择、计数和发送操作。三页空状态图标、文案与卡片边界和设计稿一致。通知空状态使用「暂无未读通知」。资料页使用当前 API 的门店、姓名、登录名和日期，静态示例内容与真实种子不同。实际页面继续显示头像、账号资料、角色、所属门店、刷新资料、改密和退出入口，保持既有资料功能。三页的 Expo Web 均不绘制设计 HTML 的 Android 状态栏，原生安全区留待 AC-14。 |
 | T06 AC-12 | `passed` | `Expo Web 390×844 并排对照唯一设计稿` | `docs/work/FW-047-mobile-manager-visual-foundation/evidence/manager-today-comparison.png`, `docs/work/FW-047-mobile-manager-visual-foundation/evidence/manager-capture-comparison.png`, `docs/work/FW-047-mobile-manager-visual-foundation/evidence/manager-records-comparison.png`, `docs/work/FW-047-mobile-manager-visual-foundation/evidence/manager-record-detail-comparison.png`, `docs/work/FW-047-mobile-manager-visual-foundation/evidence/manager-chat-comparison.png`, `docs/work/FW-047-mobile-manager-visual-foundation/evidence/manager-notifications-comparison.png`, `docs/work/FW-047-mobile-manager-visual-foundation/evidence/manager-profile-comparison.png` | 每页一张 390×844 并排图。数据内容变化、接口缺字段、页面导航框架与 Expo Web 不绘制系统栏造成的差异逐页记录在对应 T02–T04 证据行。设计稿照片及记录详情接口照片请求均用合成图，不复制图库素材。 |
-| T06 AC-13 | `passed` | `python scripts/gate.py` | `tests/web-results/slot-3/fw047-web-baseline.json`, `.git/workflow/history.jsonl` | 当前代码指纹 `66b177c961400c35` 下六道门全部通过。Mobile 类型检查、ESLint、全量 E2E 43/43 通过；Web E2E 40 项与开单前一致，为 34 passed、5 failed、1 skipped，5 个失败项身份及错误特征完全相同。 |
-| T06 AC-14 | `blocked` | `node scripts/dev/proc.mjs start api --slot 1`; `node scripts/dev/proc.mjs start metro --slot 1`; `adb reverse tcp:3110 tcp:3110`; `adb reverse tcp:3112 tcp:3112`; Android AVD `Medium_Phone_API_37.0` | `docs/work/FW-047-mobile-manager-visual-foundation/plan.md` | Agent 在模拟器观察：系统返回从详情回到今日页；页面在状态栏及底部手势区内；调起系统相机预览后取消，未拍照或上传；零照片项备注输入显示键盘时「提交第 1 项」仍在键盘上方可见，返回键先收键盘。按 spec 的验收方式 A，仍待用户现场确认这条原生路径。临时日程已撤销和删除，今日任务清理后为 0。 |
-| T07 全部 AC 与完整差异 | `passed` | `同会话最终代码审查。用户要求不另开独立复核会话` | `docs/work/FW-047-mobile-manager-visual-foundation/spec.md`, `docs/work/FW-047-mobile-manager-visual-foundation/plan.md` | 同会话原因是用户明确要求不另开独立复核会话。逐 AC 对照完整差异无未实现项。认证与授权投影、越权、并发幂等、序列化、迁移、敏感日志、结构契约、文件职责均无本单元引入的错误，未发现阻断性 finding。方式 A 的 AC-14 用户确认仍待完成。 |
+| T06 AC-13 | `passed` | `python scripts/gate.py` | `tests/web-results/slot-3/fw047-web-baseline.json`, `.git/workflow/history.jsonl` | 回修后当前代码指纹 `2c7d9916465cf073` 下六道门全部通过。Mobile 类型检查、ESLint、全量 E2E 43/43 通过；Web E2E 与开单前基线一致，为 34 passed、5 failed、1 skipped，5 个失败项身份及错误特征完全相同。 |
+| T06 AC-14 | `passed` | `node scripts/dev/proc.mjs start api --slot 1`; `node scripts/dev/proc.mjs start metro --slot 1`; `adb reverse tcp:3110 tcp:3110`; `adb reverse tcp:3112 tcp:3112`; Android AVD `Medium_Phone_API_37.0` | `docs/work/FW-047-mobile-manager-visual-foundation/plan.md` | Agent 在模拟器观察：系统返回从详情回到今日页；页面在状态栏及底部手势区内；调起系统相机预览后取消，未拍照或上传；零照片项备注输入显示键盘时「提交第 1 项」仍在键盘上方可见，返回键先收键盘。用户原话「四项都通过，继续归档」。临时日程已撤销和删除，今日任务清理后为 0。 |
+| T07 全部 AC 与完整差异 | `passed` | `同会话最终代码审查。用户要求不另开独立复核会话` | `docs/work/FW-047-mobile-manager-visual-foundation/spec.md`, `docs/work/FW-047-mobile-manager-visual-foundation/plan.md` | 同会话原因是用户明确要求不另开独立复核会话。逐 AC 对照完整差异无未实现项。认证与授权投影、越权、并发幂等、序列化、迁移、敏感日志、结构契约、文件职责均无本单元引入的错误，未发现阻断性 finding。用户已确认 AC-14 四项通过。 |
 
 ## 交接
 
 - 和讨论时不一样的：无
-- 需要你测的：Android 模拟器系统返回键、安全区、相机调起和键盘遮挡，见 AC-14。
+- 需要你测的：AC-14 的系统返回键、安全区、相机调起和键盘遮挡四项均已通过确认。
 
 ## 回修
 

@@ -1,6 +1,6 @@
 # 站内通知
 
-代码（归档时再生成）：`packages/shared/src/contract/notifications.ts`、`apps/api/src/controllers/notifications.controller.ts`、`apps/api/src/services/notifications.ts`、`apps/web/src/components/console/notification-inbox.tsx`
+代码（归档时再生成）：`packages/shared/src/contract/notifications.ts`、`apps/api/src/controllers/notifications.controller.ts`、`apps/api/src/services/notifications.ts`、`apps/web/src/components/console/notification-inbox.tsx`、`apps/mobile/app/(authenticated)/(tabs)/notifications.tsx`、`apps/mobile/app/(authenticated)/admin/(today)/notifications.tsx`、`apps/mobile/components/mobile/notification-inbox-screen.tsx`、`apps/mobile/components/mobile/notification-inbox-screen.styles.ts`、`apps/mobile/components/mobile/notification-inbox-admin.tsx`
 
 ## 事件与接收人
 
