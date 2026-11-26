@@ -66,7 +66,6 @@ export const taskItemStyles = StyleSheet.create({
     borderColor: tokens.mobile.border,
     borderRadius: tokens.mobileRadius.control,
     borderWidth: 1,
-    flex: 1,
     justifyContent: 'center',
     minHeight: 44,
     paddingHorizontal: tokens.mobileSpace.sm,
