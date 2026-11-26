@@ -216,6 +216,17 @@ class GateTests(unittest.TestCase):
         self.assertFalse(any("unit" in problem for problem in problems))
         self.assertIn("机器门 other 在当前代码上没跑过", problems)
 
+    def test_run_started_meanwhile_keeps_its_record(self) -> None:
+        # 后台全量门跑着时另起一个 gate.py：两边的记录都要留下，后写完的不能盖掉先写完的。
+        gate_script = str(SCRIPTS / "gate.py")
+        root = str(self.root)
+        nested = " ".join(f'"{part}"' if " " in part else part for part in (gate_script, "--root", root))
+        self.conf(f"gate outer {PYTHON} {nested} inner", f"gate inner {PYTHON} ok.py")
+        self.commit("嵌套的门")
+        code, output = self.run_gate("outer")
+        self.assertEqual(code, 0, output)
+        self.assertEqual(self.problems(), [])
+
     def test_changed_command_makes_record_stale(self) -> None:
         self.assertEqual(self.run_gate()[0], 0)
         self.conf(f"gate unit {PYTHON} ok.py --strict")

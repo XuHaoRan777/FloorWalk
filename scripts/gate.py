@@ -184,6 +184,16 @@ def save_records(directory: Path, data: dict) -> None:
     (directory / "gate.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
 
 
+def record_run(directory: Path, fingerprint: str, name: str, run: dict) -> None:
+    """跑完一个门就从磁盘重读再写入这一条：后台全量门跑着的时候另起的 `gate.py` 写的记录不会被盖掉。"""
+    data = load_records(directory)
+    data["runs"].setdefault(fingerprint, {})[name] = run
+    if fingerprint in data["order"]:
+        data["order"].remove(fingerprint)
+    data["order"].append(fingerprint)
+    save_records(directory, data)
+
+
 def tail_of(log: Path) -> list[str]:
     raw = log.read_bytes()
     try:
@@ -262,11 +272,6 @@ def run_gates(root: Path, names: list[str]) -> int:
                 "全量留到最终代码审查前。照样跑。"
             )
     directory.mkdir(parents=True, exist_ok=True)
-    data = load_records(directory)
-    runs = data["runs"].setdefault(fingerprint[0], {})
-    if fingerprint[0] in data["order"]:
-        data["order"].remove(fingerprint[0])
-    data["order"].append(fingerprint[0])
 
     blocking = 0
     for name, command in selected:
@@ -278,7 +283,7 @@ def run_gates(root: Path, names: list[str]) -> int:
             )
         seconds = round(time.monotonic() - started, 1)
         passed = result.returncode == 0
-        runs[name] = {
+        run = {
             "status": "passed" if passed else "failed",
             "exit": result.returncode,
             "command": command,
@@ -287,8 +292,8 @@ def run_gates(root: Path, names: list[str]) -> int:
             "dirty": bool(dirty),
             "at": _dt.datetime.now().isoformat(timespec="seconds"),
         }
-        save_records(directory, data)
-        append_history(root, {"gate": name, "full": not names, "fingerprint": fingerprint[0], **runs[name]})
+        record_run(directory, fingerprint[0], name, run)
+        append_history(root, {"gate": name, "full": not names, "fingerprint": fingerprint[0], **run})
         if passed:
             print(f"[gate] {name}  passed  {seconds}s  `{command}`")
             continue
