@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { BackHandler, Platform, Text, View } from 'react-native';
+import { BackHandler, Platform, View } from 'react-native';
 import type { TaskItemDecisionRequest, TaskReview } from '@libs/shared';
 import { reviewApi } from '../../../lib/api/review';
 import { ChatPanel } from '../chat-panel';
-import { ReviewScoreRing } from '../review-score-ring';
-import { AdminCard, AdminField, AdminPage, AdminText } from './admin-ui';
+import { MobileStatusTag, MobileText } from '../manager-ui';
+import { MobileSurfaceCard } from '../manager-data-ui';
+import { AdminField, AdminPage, AdminText } from './admin-ui';
 import { ReviewItem } from './review-item';
 import { reviewScore, reviewTime } from './review-format';
 import { useAdminAction, useAdminResource } from './use-admin-data';
 import { useAdminFocus } from './use-admin-focus';
 import { PrimaryButton } from '../primary-button';
-import { classes } from '../styles';
 import tokens from '../../../../../packages/tokens/native.json';
 
 const decisionStyles = {
@@ -36,7 +36,6 @@ export function ReviewDetailScreen({
   const resource = useAdminResource(fetcher, null as TaskReview | null);
   const action = useAdminAction();
   const [now, setNow] = useState(Date.now());
-  const [feedbackSequence, setFeedbackSequence] = useState(0);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [reworkDraft, setReworkDraft] = useState<{
     itemId: string;
@@ -98,13 +97,14 @@ export function ReviewDetailScreen({
         setPendingResult(null);
       }
     }, '判定已保存');
-    if (saved) setFeedbackSequence((sequence) => sequence + 1);
     return saved;
   }
 
+  const title = task?.templateName ?? '任务审核';
+
   return (
     <AdminPage
-      title="任务审核"
+      title={title}
       visual="route"
       backLabel="返回"
       onBack={goBack}
@@ -116,12 +116,44 @@ export function ReviewDetailScreen({
       fixedFooter={
         task && selectedItem ? (
           <View testID="review-decision-dock">
-            <Text
-              className={classes.mobileMuted}
-              style={{ fontSize: 12, marginBottom: 8 }}
+            <View
+              style={{
+                alignItems: 'center',
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                marginBottom: 8,
+              }}
             >
-              {'当前检查项　' + selectedItem.title}
-            </Text>
+              <MobileText
+                role="fixed"
+                size="xs"
+                tone="muted"
+                numberOfLines={1}
+                style={{ flex: 1 }}
+              >
+                {`当前检查项 · ${selectedItem.title}`}
+              </MobileText>
+              <MobileStatusTag
+                status={
+                  selectedItem.result === 'pass'
+                    ? 'completed'
+                    : selectedItem.result === 'fail'
+                      ? 'failed'
+                      : selectedItem.result === 'rework'
+                        ? 'rework'
+                        : 'pending'
+                }
+                label={
+                  selectedItem.result === 'pass'
+                    ? '通过'
+                    : selectedItem.result === 'fail'
+                      ? '不合格'
+                      : selectedItem.result === 'rework'
+                        ? '打回'
+                        : '待判定'
+                }
+              />
+            </View>
             {reworkDraft === null ? (
               <View style={{ flexDirection: 'row', gap: 7 }}>
                 <PrimaryButton
@@ -244,22 +276,58 @@ export function ReviewDetailScreen({
     >
       {task ? (
         <>
-          <AdminCard testID="review-summary">
-            <View
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}
-            >
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <AdminText>{task.site.name}</AdminText>
-                <AdminText>{`${task.site.code} · ${task.templateName} · ${task.taskDate}`}</AdminText>
-                <AdminText>{`截止 ${reviewTime(task.dueAt)}`}</AdminText>
-                <AdminText>{reviewScore(task)}</AdminText>
+          <View testID="review-summary">
+            <MobileSurfaceCard>
+              <View
+                style={{ alignItems: 'center', flexDirection: 'row', gap: 12 }}
+              >
+                <View style={{ flex: 1, gap: 5, minWidth: 0 }}>
+                  <MobileText role="fixed" size="lg" numberOfLines={2}>
+                    {task.site.name}
+                  </MobileText>
+                  <MobileText size="sm" tone="muted">
+                    {`${task.site.code} · ${task.taskDate}`}
+                  </MobileText>
+                  <MobileText role="number" size="xs" tone="muted">
+                    {`${reviewTime(task.startsAt)}–${reviewTime(task.dueAt)}`}
+                  </MobileText>
+                  <MobileText size="xs" tone="muted">
+                    {`${task.items.length} 个检查项 · ${reviewScore(task)}`}
+                  </MobileText>
+                </View>
+                <View
+                  accessibilityLabel={
+                    task.score === null
+                      ? '巡检分数待判定'
+                      : `巡检分数 ${task.score} 分`
+                  }
+                  style={{
+                    alignItems: 'center',
+                    borderColor: tokens.mobile.primary,
+                    borderRadius: tokens.mobileRadius.pill,
+                    borderWidth: 2,
+                    height: 72,
+                    justifyContent: 'center',
+                    width: 72,
+                  }}
+                >
+                  <MobileText role="number" size="2xl" tone="primary">
+                    {task.score ?? '—'}
+                  </MobileText>
+                  {task.score !== null ? (
+                    <MobileText role="fixed" size="xs" tone="muted">
+                      分
+                    </MobileText>
+                  ) : null}
+                </View>
               </View>
-              <ReviewScoreRing task={task} playbackKey={feedbackSequence} />
-            </View>
-            {task.decidedAt ? (
-              <AdminText>{`判定于 ${reviewTime(task.decidedAt)}，可逐条改判`}</AdminText>
-            ) : null}
-          </AdminCard>
+              {task.decidedAt ? (
+                <MobileText size="xs" tone="muted">
+                  {`判定于 ${reviewTime(task.decidedAt)}，可逐条改判`}
+                </MobileText>
+              ) : null}
+            </MobileSurfaceCard>
+          </View>
           {task.items.length === 0 ? (
             <AdminText>此任务没有可判定的检查项。</AdminText>
           ) : null}

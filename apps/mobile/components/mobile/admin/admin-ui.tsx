@@ -21,6 +21,7 @@ import { useTabColors } from '../use-tab-colors';
 import { BrandMark } from '../brand-mark';
 import { useNotifications } from '../notification-provider';
 import { Bell } from 'lucide-react-native';
+import { MobileText } from '../manager-ui';
 export { AdminField, AdminSelect, AdminToggle } from './admin-fields';
 
 const AdminVisualContext = createContext<'shared' | 'route'>('shared');
@@ -60,6 +61,8 @@ export function AdminPage({
   backLabel = '返回',
   onBack,
   homeHeader = false,
+  homeHeaderLabel = '门店运营',
+  homeHeaderMeta,
   fixedFooter,
   visual = 'shared',
 }: {
@@ -74,6 +77,8 @@ export function AdminPage({
   backLabel?: string;
   onBack?: () => void;
   homeHeader?: boolean;
+  homeHeaderLabel?: string;
+  homeHeaderMeta?: string;
   fixedFooter?: ReactNode;
   visual?: 'shared' | 'route';
 }) {
@@ -196,18 +201,21 @@ export function AdminPage({
               <View
                 style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}
               >
-                <BrandMark size={26} />
-                <Text
-                  className={
-                    visual === 'route'
-                      ? classes.mobileForeground
-                      : classes.foreground
-                  }
-                  style={styles.cardTitle}
-                >
-                  FloorWalk
-                </Text>
+                <BrandMark size={visual === 'route' ? 34 : 26} />
+                <MobileText role="fixed" size="base">
+                  {homeHeaderLabel}
+                </MobileText>
               </View>
+              {homeHeaderMeta ? (
+                <MobileText
+                  role="number"
+                  size="xs"
+                  tone="muted"
+                  style={{ flex: 1, textAlign: 'right' }}
+                >
+                  {homeHeaderMeta}
+                </MobileText>
+              ) : null}
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`通知${unreadCount ? `，${unreadCount} 条未读` : ''}`}

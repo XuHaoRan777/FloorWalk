@@ -42,12 +42,15 @@ test('FW-034 AC-03 今日任务、汇总、警告和人工待处理', async ({ p
     await dashboard.open();
     await page.getByRole('tab', { name: '今日视图' }).click();
     await expect(
-      page.getByRole('heading', { name: '今日视图', exact: true }),
+      page.getByRole('heading', { name: '今日门店', exact: true }),
     ).toBeVisible();
     const summary = page.getByTestId('admin-today-summary');
-    await expect(summary).toContainText('应完成 6');
-    await expect(summary).toContainText('已完成 4');
-    await expect(summary).toContainText('逾期 1');
+    await expect(summary).toContainText('预计任务');
+    await expect(summary).toContainText('6');
+    await expect(summary).toContainText('已完成');
+    await expect(summary).toContainText('4');
+    await expect(summary).toContainText('逾期');
+    await expect(summary).toContainText('1');
     const tasks = page.getByTestId('admin-today-tasks');
     await expect(tasks.getByTestId(/^today-task-/)).toHaveCount(6);
     await expect(tasks).toContainText('统计门店1');
@@ -89,12 +92,14 @@ test('FW-034 AC-03 今日任务、汇总、警告和人工待处理', async ({ p
     await expect(page.getByText('AI 审核中', { exact: true })).toHaveCount(0);
     await pending
       .getByTestId(`pending-task-${manual.taskId}`)
-      .getByRole('button', { name: '处理任务', exact: true })
+      .getByRole('link', { name: '处理任务', exact: true })
       .click();
     await expect(
-      page.getByRole('heading', { name: '任务审核', exact: true }),
+      page.getByTestId('review-summary'),
     ).toBeVisible();
-    await expect(page.getByTestId('review-summary')).toContainText('人工模板');
+    await expect(
+      page.getByRole('heading', { name: '人工模板', exact: true }),
+    ).toBeVisible();
     expect(page.url()).toContain(`/admin/review/${manual.taskId}`);
   } finally {
     await dashboard.cleanup();

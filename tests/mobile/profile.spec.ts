@@ -63,7 +63,7 @@ for (const account of [
         await page.getByTestId('login-button').click();
         if (account.canRename) {
           await expect(
-            page.getByRole('heading', { name: '今日视图' }),
+            page.getByRole('heading', { name: '今日门店' }),
           ).toBeVisible();
         } else {
           await expect(
@@ -94,7 +94,7 @@ for (const account of [
           .click();
         await expect(
           page.getByRole('heading', {
-            name: account.canRename ? '账号信息' : '我的',
+            name: '我的',
             exact: true,
           }),
         ).toBeVisible();
@@ -115,7 +115,7 @@ for (const account of [
         );
         await expect(
           page.getByRole('button', {
-            name: account.canRename ? '改密码' : '修改密码',
+            name: '修改密码',
             exact: true,
           }),
         ).toBeEnabled();
@@ -170,7 +170,7 @@ for (const account of [
         await page.reload();
         await expect(
           page.getByRole('heading', {
-            name: account.canRename ? '账号信息' : '我的',
+            name: '我的',
             exact: true,
           }),
         ).toBeVisible();
@@ -243,7 +243,7 @@ for (const account of [
           .click();
         await expect(
           target.getByRole('heading', {
-            name: account.canRename ? '账号信息' : '我的',
+            name: '我的',
             exact: true,
           }),
         ).toBeVisible();
@@ -257,7 +257,7 @@ for (const account of [
         await target.getByTestId('login-button').click();
         if (account.canRename) {
           await expect(
-            target.getByRole('heading', { name: '今日视图' }),
+            target.getByRole('heading', { name: '今日门店' }),
           ).toBeVisible();
         } else {
           await expect(
@@ -294,7 +294,7 @@ for (const account of [
         await openProfile(page);
         await page
           .getByRole('button', {
-            name: account.canRename ? '改密码' : '修改密码',
+            name: '修改密码',
             exact: true,
           })
           .click();
@@ -311,7 +311,7 @@ for (const account of [
         await page.getByRole('button', { name: '保存新密码' }).click();
         if (account.canRename) {
           await expect(
-            page.getByRole('heading', { name: '今日视图' }),
+            page.getByRole('heading', { name: '今日门店' }),
           ).toBeVisible();
         } else {
           await expect(

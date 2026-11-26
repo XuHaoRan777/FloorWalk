@@ -365,7 +365,7 @@ test('管理员通知入口标记逾期通知已读并进入审核队列', async
     await page.getByRole('button', { name: /巡检任务逾期/ }).click();
     await expect(page).toHaveURL(/\/admin\/review$/);
     await expect(
-      page.getByRole('heading', { name: '审核队列', exact: true }),
+      page.getByRole('heading', { name: '审核', exact: true }),
     ).toBeVisible();
     const count = await page.request.get(
       `${apiBase}/me/notifications/unread-count`,
@@ -411,9 +411,7 @@ test('管理员从待人工审核通知进入详情后返回通知收件箱', as
     await expect(page).toHaveURL(
       new RegExp(`/admin/review/${fixture.taskId}\\?returnTo=notifications$`),
     );
-    await expect(
-      page.getByRole('heading', { name: '任务审核', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByTestId('review-summary')).toBeVisible();
     await page.getByRole('button', { name: '返回', exact: true }).click();
     await expect(page).toHaveURL(/\/admin\/notifications$/);
     await expect(

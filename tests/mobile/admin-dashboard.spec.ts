@@ -87,10 +87,13 @@ test('FW-034 AC-04 周月指标与门店、店长和日期趋势', async ({ page
 
     await page.getByRole('button', { name: '刷新', exact: true }).click();
     const summary = page.getByTestId('admin-dashboard-summary');
-    await expect(summary).toContainText('完成率 50%');
-    await expect(summary).toContainText('逾期任务 1');
-    await expect(summary).toContainText('自检准确率 50%');
-    await expect(summary).toContainText('平均分 60 分');
+    await expect(summary).toContainText('完成率');
+    await expect(summary).toContainText('50%');
+    await expect(summary).toContainText('逾期任务');
+    await expect(summary).toContainText('1');
+    await expect(summary).toContainText('自检准确率');
+    await expect(summary).toContainText('平均分');
+    await expect(summary).toContainText('60 分');
     await expect(page.getByTestId('admin-dashboard-sites')).toContainText(
       '统计门店1',
     );
@@ -98,10 +101,13 @@ test('FW-034 AC-04 周月指标与门店、店长和日期趋势', async ({ page
       '统计门店2',
     );
     await page.getByRole('button', { name: '本月', exact: true }).click();
-    await expect(summary).toContainText('完成率 40%');
+    await expect(summary).toContainText('完成率');
+    await expect(summary).toContainText('40%');
     await expect(summary).toContainText('本月应完成 5 项');
-    await expect(summary).toContainText('自检准确率 50%');
-    await expect(summary).toContainText('平均分 60 分');
+    await expect(summary).toContainText('自检准确率');
+    await expect(summary).toContainText('50%');
+    await expect(summary).toContainText('平均分');
+    await expect(summary).toContainText('60 分');
 
     await page.getByRole('button', { name: '店长', exact: true }).click();
     const firstManager = page.getByTestId(`manager-${dashboard.managerId}`);

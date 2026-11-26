@@ -36,7 +36,7 @@
 
 | ID | 工作单元 | 状态 | 依赖 | 下一步 |
 | --- | --- | --- | --- | --- |
-| FW-048 | [Mobile 管理员主路径页面还原](work/FW-048-mobile-admin-main-path/spec.md) | `approved` | FW-047 | 运行 kickoff 检查后开始 T01 |
+| FW-048 | [Mobile 管理员主路径页面还原](work/FW-048-mobile-admin-main-path/spec.md) | `in_progress` | FW-047 | T08 全量机器门和最终代码审查已完成，等待方式 A 人工验收 |
 
 ## 待开单元（未批准，按建议顺序）
 
@@ -57,6 +57,7 @@
 
 | 单元 / 任务 | 需要你测的 | 交接位置 |
 | ----------- | ---------- | -------- |
+| FW-048 | Android 硬件返回与来源页；上下安全区及底部手势区；固定判定栏宽度规则；打回理由键盘的输入框、确认、取消；资料昵称编辑时键盘与保存、取消操作 | [FW-048 plan.md](work/FW-048-mobile-admin-main-path/plan.md)「交接」 |
 
 ## 已归档
 

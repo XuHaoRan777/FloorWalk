@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { BarChart3 } from 'lucide-react-native';
 import type {
   DashboardPeriod,
   DashboardPeriodResponse,
@@ -11,12 +12,14 @@ import {
   getPeriodDashboard,
   getSelfCheckStats,
 } from '../../../lib/api/dashboard';
-import { classes, styles } from '../styles';
-import { AdminCard, AdminPage, AdminText } from './admin-ui';
+import { MobileEmptyState, MobileSurfaceCard } from '../manager-data-ui';
+import { MobileText } from '../manager-ui';
+import { AdminPage } from './admin-ui';
 import { DashboardTrend } from './dashboard-trend';
 import { percentage, scoreLabel } from './dashboard-format';
 import { useAdminResource } from './use-admin-data';
 import { useAdminFocus } from './use-admin-focus';
+import tokens from '../../../../../packages/tokens/native.json';
 
 type DashboardData = {
   summary: DashboardPeriodResponse;
@@ -92,22 +95,36 @@ function Choice({
   selected: boolean;
   onPress: () => void;
 }) {
+  const selectedStyle = selected
+    ? {
+        backgroundColor: tokens.mobile.primarySoft,
+        borderColor: tokens.mobile.primary,
+      }
+    : {
+        backgroundColor: tokens.mobile.surface,
+        borderColor: tokens.mobile.border,
+      };
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
-      className={selected ? classes.primaryButton : classes.secondaryButton}
       onPress={onPress}
-      style={[styles.assessmentOption, { justifyContent: 'center' }]}
+      style={({ pressed }) => [
+        {
+          alignItems: 'center',
+          borderRadius: tokens.mobileRadius.pill,
+          borderWidth: 1,
+          justifyContent: 'center',
+          minHeight: 44,
+          paddingHorizontal: 14,
+        },
+        selectedStyle,
+        pressed && { backgroundColor: tokens.mobile.pressedBackground },
+      ]}
     >
-      <Text
-        className={
-          selected ? classes.primaryButtonText : classes.secondaryButtonText
-        }
-        style={styles.buttonText}
-      >
+      <MobileText role="fixed" size="sm" tone={selected ? 'primary' : 'muted'}>
         {label}
-      </Text>
+      </MobileText>
     </Pressable>
   );
 }
@@ -120,27 +137,44 @@ function Sites({
   showMetrics: boolean;
 }) {
   return (
-    <AdminCard testID="admin-dashboard-sites">
-      <AdminText>门店统计</AdminText>
-      {data.summary.sites.length === 0 ? <AdminText>暂无门店</AdminText> : null}
+    <View style={{ gap: 10 }} testID="admin-dashboard-sites">
+      <MobileText role="fixed" size="lg">
+        门店统计
+      </MobileText>
+      {data.summary.sites.length === 0 ? (
+        <MobileText size="sm" tone="muted">
+          暂无门店
+        </MobileText>
+      ) : null}
       {data.summary.sites.map(({ site, metrics }) => {
         const latest = data.latestSites[site.id];
         return (
-          <AdminCard key={site.id} testID={`site-${site.id}`}>
-            <AdminText>{`${site.name} · ${site.code}${site.active ? '' : ' · 已停用'}`}</AdminText>
+          <View key={site.id} testID={`site-${site.id}`}>
+            <MobileSurfaceCard style={{ gap: 7 }}>
+              <MobileText role="fixed" size="base">
+                {`${site.name} · ${site.code}${site.active ? '' : ' · 已停用'}`}
+              </MobileText>
             {showMetrics ? (
               <>
-                <AdminText>{`完成率 ${percentage(metrics.completionRate)} · ${metrics.completed}/${metrics.expected}`}</AdminText>
-                <AdminText>{`逾期 ${metrics.overdue} · 自检准确率 ${percentage(data.siteChecks[site.id]?.accuracy ?? null)}`}</AdminText>
-                <AdminText>{`平均分 ${scoreLabel(metrics.averageScore)}`}</AdminText>
+                  <MobileText size="sm">
+                    {`完成率 ${percentage(metrics.completionRate)} · ${metrics.completed}/${metrics.expected}`}
+                  </MobileText>
+                  <MobileText size="sm">
+                    {`逾期 ${metrics.overdue} · 自检准确率 ${percentage(data.siteChecks[site.id]?.accuracy ?? null)}`}
+                  </MobileText>
+                  <MobileText size="sm">
+                    {`平均分 ${scoreLabel(metrics.averageScore)}`}
+                  </MobileText>
               </>
             ) : null}
-            <AdminText>{`最近分数 ${latest?.latestScore == null ? '暂无' : scoreLabel(latest.latestScore)}`}</AdminText>
-            <AdminText>{`最近判定 ${latest?.latestStatus ? statusLabels[latest.latestStatus] : '暂无记录'}`}</AdminText>
-          </AdminCard>
+              <MobileText size="xs" tone="muted">
+                {`最近分数 ${latest?.latestScore == null ? '暂无' : scoreLabel(latest.latestScore)} · 最近判定 ${latest?.latestStatus ? statusLabels[latest.latestStatus] : '暂无记录'}`}
+              </MobileText>
+            </MobileSurfaceCard>
+          </View>
         );
       })}
-    </AdminCard>
+    </View>
   );
 }
 
@@ -157,14 +191,41 @@ export function AdminDashboardScreen() {
       ? resource.data
       : null;
   const label = period === 'week' ? '本周' : '本月';
+  const pageDate = new Intl.DateTimeFormat('zh-CN', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  }).format(new Date());
+  const metrics = data
+    ? [
+        {
+          label: '完成率',
+          value: percentage(data.summary.overall.completionRate),
+        },
+        { label: '逾期任务', value: String(data.summary.overall.overdue) },
+        { label: '自检准确率', value: percentage(data.accuracy) },
+        {
+          label: '平均分',
+          value: scoreLabel(data.summary.overall.averageScore),
+        },
+      ]
+    : [];
 
   return (
     <AdminPage
       title="总部看板"
       loading={resource.loading}
       error={resource.error}
+      homeHeader
+      homeHeaderLabel="商家巡检管理"
+      homeHeaderMeta={pageDate}
+      showBack={false}
+      visual="route"
       onRefresh={() => void resource.load()}
     >
+      <MobileText size="sm" tone="muted">
+        周度 / 月度
+      </MobileText>
       <View
         accessibilityLabel="统计周期"
         style={{ flexDirection: 'row', gap: 8 }}
@@ -180,24 +241,45 @@ export function AdminDashboardScreen() {
       </View>
       {data ? (
         <>
-          <AdminText>{`${data.summary.from} 至 ${data.summary.to} · ${data.summary.timezone}`}</AdminText>
+          <MobileText role="number" size="xs" tone="muted">
+            {`${data.summary.from} 至 ${data.summary.to} · ${data.summary.timezone}`}
+          </MobileText>
           {data.summary.overall.expected === 0 ? (
             <>
-              <AdminText>{`${label}暂无数据`}</AdminText>
+              <MobileEmptyState
+                title={`${label}暂无数据`}
+                description="选择其他统计周期查看巡检汇总。"
+                icon={<BarChart3 color={tokens.mobile.primary} size={28} />}
+              />
               <Sites data={data} showMetrics={false} />
             </>
           ) : (
             <>
-              <AdminCard testID="admin-dashboard-summary">
-                <AdminText>{`完成率 ${percentage(data.summary.overall.completionRate)}`}</AdminText>
-                <AdminText>{`逾期任务 ${data.summary.overall.overdue}`}</AdminText>
-                <AdminText>{`自检准确率 ${percentage(data.accuracy)}`}</AdminText>
-                <AdminText>{`平均分 ${scoreLabel(data.summary.overall.averageScore)}`}</AdminText>
-                <AdminText>{`${label}应完成 ${data.summary.overall.expected} 项，截止前交齐 ${data.summary.overall.completed} 项；平均分仅计已判定任务，无样本显示 —。`}</AdminText>
-              </AdminCard>
+              <View testID="admin-dashboard-summary">
+                <MobileSurfaceCard
+                  style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}
+                >
+                  {metrics.map(({ label: metricLabel, value }) => (
+                    <View
+                      key={metricLabel}
+                      style={{ flexBasis: '46%', flexGrow: 1, gap: 4 }}
+                    >
+                      <MobileText role="fixed" size="xs" tone="muted">
+                        {metricLabel}
+                      </MobileText>
+                      <MobileText role="number" size="2xl">
+                        {value}
+                      </MobileText>
+                    </View>
+                  ))}
+                  <MobileText size="xs" tone="muted">
+                    {`${label}应完成 ${data.summary.overall.expected} 项，截止前交齐 ${data.summary.overall.completed} 项；平均分仅计已判定任务，无样本显示 —。`}
+                  </MobileText>
+                </MobileSurfaceCard>
+              </View>
               <View
                 accessibilityLabel="统计维度"
-                style={{ flexDirection: 'row', gap: 8 }}
+                style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}
               >
                 {(
                   [
@@ -216,26 +298,37 @@ export function AdminDashboardScreen() {
               </View>
               {dimension === 'site' ? <Sites data={data} showMetrics /> : null}
               {dimension === 'manager' ? (
-                <AdminCard testID="admin-dashboard-managers">
-                  <AdminText>店长排行榜</AdminText>
-                  <AdminText>
+                <View style={{ gap: 10 }} testID="admin-dashboard-managers">
+                  <MobileText role="fixed" size="lg">
+                    店长排行榜
+                  </MobileText>
+                  <MobileText size="xs" tone="muted">
                     按提交条目数排序；通过率计已判定条目，自检准确率归首次上传人。
-                  </AdminText>
+                  </MobileText>
                   {data.summary.managers.length === 0 ? (
-                    <AdminText>{`${label}暂无店长提交`}</AdminText>
+                    <MobileText size="sm" tone="muted">
+                      {`${label}暂无店长提交`}
+                    </MobileText>
                   ) : null}
                   {data.summary.managers.map((manager, index) => (
-                    <AdminCard
-                      key={manager.id}
-                      testID={`manager-${manager.id}`}
-                    >
-                      <AdminText>{`${index + 1}. ${manager.displayName}`}</AdminText>
-                      <AdminText>{`提交条目数 ${manager.submittedItems}`}</AdminText>
-                      <AdminText>{`通过率 ${percentage(manager.passRate)}`}</AdminText>
-                      <AdminText>{`自检准确率 ${percentage(data.managerChecks[manager.id]?.accuracy ?? null)}`}</AdminText>
-                    </AdminCard>
+                    <View key={manager.id} testID={`manager-${manager.id}`}>
+                      <MobileSurfaceCard style={{ gap: 5 }}>
+                        <MobileText role="fixed" size="base">
+                          {`${index + 1}. ${manager.displayName}`}
+                        </MobileText>
+                        <MobileText size="sm">
+                          {`提交条目数 ${manager.submittedItems}`}
+                        </MobileText>
+                        <MobileText size="sm">
+                          {`通过率 ${percentage(manager.passRate)}`}
+                        </MobileText>
+                        <MobileText size="sm">
+                          {`自检准确率 ${percentage(data.managerChecks[manager.id]?.accuracy ?? null)}`}
+                        </MobileText>
+                      </MobileSurfaceCard>
+                    </View>
                   ))}
-                </AdminCard>
+                </View>
               ) : null}
               {dimension === 'date' ? (
                 <DashboardTrend dates={data.summary.dates} />

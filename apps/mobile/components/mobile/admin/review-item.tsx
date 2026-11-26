@@ -1,11 +1,10 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useState } from 'react';
 import type { TaskReviewItem } from '@libs/shared';
-import { AdminCard, AdminText } from './admin-ui';
+import { MobileStatusTag, MobileText } from '../manager-ui';
+import { AdminCard } from './admin-ui';
 import { ReviewEvidence } from './review-evidence';
 import { reviewTime } from './review-format';
-import tokens from '../../../../../packages/tokens/native.json';
-import { classes } from '../styles';
 import { useTabColors } from '../use-tab-colors';
 
 const labels = {
@@ -76,59 +75,58 @@ export function ReviewItem({
               justifyContent: 'center',
             }}
           >
-            <Text
-              style={{
-                color: selected
-                  ? tokens.colors.primaryForeground
-                  : colors.mobileRouteStrong,
-                fontFamily: tokens.font.mono.regular,
-                fontSize: tokens.mobileType.xs,
-                fontWeight: '600',
-              }}
+            <MobileText
+              role="number"
+              size="xs"
+              tone="primary"
+              style={[
+                { fontWeight: '600' },
+                selected && { color: colors.mobileSurface },
+              ]}
             >
               {String(item.position).padStart(2, '0')}
-            </Text>
+            </MobileText>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <AdminText>
+            <MobileText role="fixed" size="base">
               {item.title + (item.critical ? ' · 严重项' : '')}
-            </AdminText>
-            <AdminText>
+            </MobileText>
+            <MobileText size="xs" tone="muted">
               {item.minPhotoCount > 0
                 ? '至少 ' + item.minPhotoCount + ' 张照片'
                 : '可不上传照片，需填写备注'}
-            </AdminText>
+            </MobileText>
           </View>
-          <Text
-            className={
+          <MobileStatusTag
+            status={
               item.result === 'pass'
-                ? classes.mobileSuccessText
+                ? 'completed'
                 : item.result === 'fail'
-                  ? classes.mobileWarningTitle
-                  : classes.mobileMuted
+                  ? 'failed'
+                  : item.result === 'rework'
+                    ? 'rework'
+                    : 'pending'
             }
-            style={{ fontSize: tokens.mobileType.xs, fontWeight: '700' }}
-          >
-            {result + (item.incomplete ? ' · 未完成' : '')}
-          </Text>
+            label={result + (item.incomplete ? ' · 未完成' : '')}
+          />
         </View>
 
         <View style={{ gap: 5, paddingLeft: 38 }}>
-          <AdminText>
+          <MobileText size="xs" tone="muted">
             {(item.uploadedByName ?? '系统') +
               ' · 上传于 ' +
               reviewTime(item.uploadedAt)}
-          </AdminText>
+          </MobileText>
           {item.selfAssessment ? (
-            <AdminText>
+            <MobileText size="xs" tone="muted">
               {'自评：' + (item.selfAssessment === 'pass' ? '通过' : '不通过')}
-            </AdminText>
+            </MobileText>
           ) : null}
           {item.acceptanceCriteria ? (
-            <AdminText>{'验收要点：' + item.acceptanceCriteria}</AdminText>
+            <MobileText size="sm">{'验收要点：' + item.acceptanceCriteria}</MobileText>
           ) : null}
           {item.aiReason ? (
-            <AdminText>{'AI 理由：' + item.aiReason}</AdminText>
+            <MobileText size="sm">{'AI 理由：' + item.aiReason}</MobileText>
           ) : null}
           {item.lastReworkReason ? (
             <View
@@ -138,10 +136,14 @@ export function ReviewItem({
                 paddingLeft: 8,
               }}
             >
-              <AdminText>{'打回理由：' + item.lastReworkReason}</AdminText>
+              <MobileText size="sm">
+                {'打回理由：' + item.lastReworkReason}
+              </MobileText>
             </View>
           ) : null}
-          {item.note ? <AdminText>{'备注：' + item.note}</AdminText> : null}
+          {item.note ? (
+            <MobileText size="sm">{'备注：' + item.note}</MobileText>
+          ) : null}
           {hasHistory && firstResult ? (
             <View
               style={{
@@ -151,16 +153,13 @@ export function ReviewItem({
                 borderTopColor: colors.mobileBorder,
               }}
             >
-              <AdminText>
+              <MobileText size="xs" tone="muted">
                 {'首次结论：' + firstResult + '　→　当前结论：' + result}
-              </AdminText>
+              </MobileText>
               {item.manuallyDecidedAfterCompletion ? (
-                <Text
-                  className={classes.mobileRouteStrong}
-                  style={{ fontSize: tokens.mobileType.xs, fontWeight: '600' }}
-                >
+                <MobileText role="fixed" size="xs" tone="primary">
                   完成后人工改判
-                </Text>
+                </MobileText>
               ) : null}
             </View>
           ) : null}

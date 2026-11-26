@@ -39,9 +39,10 @@ test('FW-034 AC-01、AC-02 审核队列、失败转人工、打回重传与改�
     await fixture.waitForManual();
     await page.getByRole('tab', { name: '审核队列' }).click();
     await expect(
-      page.getByRole('heading', { name: '审核队列', exact: true }),
+      page.getByRole('heading', { name: '审核', exact: true }),
     ).toBeVisible();
-    await expect(page.getByText(/^待人工 · \d+ 个任务$/)).toBeVisible();
+    await expect(page.getByText('待处理', { exact: true })).toBeVisible();
+    await expect(page.getByText(/^\d+ 项$/)).toBeVisible();
     await expect(page.getByText('今天已判定', { exact: true })).toBeVisible();
     const taskCard = page.getByTestId(`review-task-${taskId}`);
     await expect(taskCard).toHaveCount(1);
@@ -52,9 +53,7 @@ test('FW-034 AC-01、AC-02 审核队列、失败转人工、打回重传与改�
     await taskCard
       .getByRole('button', { name: '查看任务', exact: true })
       .click();
-    await expect(
-      page.getByRole('heading', { name: '任务审核', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByTestId('review-summary')).toBeVisible();
     const firstItem = page.getByTestId('review-item-1');
     const secondItem = page.getByTestId('review-item-2');
     const summary = page.getByTestId('review-summary');
