@@ -36,7 +36,6 @@
 
 | ID | 工作单元 | 状态 | 依赖 | 下一步 |
 | --- | --- | --- | --- | --- |
-| FW-048 | [Mobile 管理员主路径页面还原](work/FW-048-mobile-admin-main-path/spec.md) | `in_progress` | FW-047 | T08 全量机器门和最终代码审查已完成，等待方式 A 人工验收 |
 
 ## 待开单元（未批准，按建议顺序）
 
@@ -57,12 +56,12 @@
 
 | 单元 / 任务 | 需要你测的 | 交接位置 |
 | ----------- | ---------- | -------- |
-| FW-048 | Android 硬件返回与来源页；上下安全区及底部手势区；固定判定栏宽度规则；打回理由键盘的输入框、确认、取消；资料昵称编辑时键盘与保存、取消操作 | [FW-048 plan.md](work/FW-048-mobile-admin-main-path/plan.md)「交接」 |
 
 ## 已归档
 
 | ID     | 工作单元                                                                            | 归档日期   | 提交                                                      |
 | ------ | ----------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------- |
+| FW-048 | [Mobile 管理员主路径页面还原](work/FW-048-mobile-admin-main-path/spec.md) | 2026-11-26 | 方式 A 确认、Promote、全量门与同会话最终审查；实现 e20751e |
 | FW-046 | [Mobile 视觉语言与两张样板页](work/FW-046-mobile-visual-language/spec.md) | 2026-11-24 | 方式 A 确认、Promote、机器门与独立审查（见 git log） |
 | FW-045 | [Mobile 视觉基础与样板页](work/FW-045-mobile-visual-foundation/spec.md) | 2026-11-23 | Android 样板验收、Promote、最终审查与归档（见 git log） |
 | FW-047 | [Mobile 店长端页面与视觉基础](work/FW-047-mobile-manager-visual-foundation/spec.md) | 2026-11-26 | AC-14 方式 A 确认、Promote、全量机器门与归档提交（见 git log） |

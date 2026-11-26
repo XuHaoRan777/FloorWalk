@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- 工作单元状态：`in_progress`
-- 归档状态：`active`
-- 当前任务：T08
+- 工作单元状态：`verified`
+- 归档状态：`archived`
+- 当前任务：完成
 - 阻塞：无。
-- 下一步：T08 全量机器门和最终代码审查已完成，等待方式 A 人工验收
+- 下一步：无。
 
 <!-- Preflight：编码前在此写一到三行——要动哪些模块；涉及既有数据时的只读统计计数；后端/库/开发者工具是否能起。不需要章节名。 -->
 
@@ -40,14 +40,14 @@
 | T07 | passed | `$env:FW_SLOT='1'; pnpm exec playwright test --config=playwright.mobile.config.ts tests/mobile/admin-visual-evidence.spec.ts --reporter=line` | `docs/work/FW-048-mobile-admin-main-path/evidence/AC-01-admin-today.png` | 首次截图就绪条件未等数据加载；更新为核验六条构造任务、两项警告及两条目标人工任务后截图用例通过。注册 fixture 自动产生的其他任务不计入六条目标任务断言，最终截图含该 fixture 数据 |
 | T08 | passed | `python scripts/gate.py`; `python scripts/validate_docs.py --sync-backlog`; `python scripts/gate.py docs` | `.git/workflow/gate.log` | 六个门全部通过：docs、workflow、mobile-types、mobile-lint、mobile-e2e、web-baseline；HEAD `13d8c07`，代码指纹 `6039989770eefb28`。最终文档同步后 docs gate 再次通过。全量 Mobile E2E 与 web-baseline 均通过，因此未触发不稳定用例的兜底重跑 |
 | T08 | passed | `同会话最终代码审查；依据 docs/howto/final-review.md` | `docs/work/FW-048-mobile-admin-main-path/spec.md`、`plan.md`、完整 `git diff` | 新会话或独立 Subagent 会违反用户明确要求的单会话审查。认证与授权投影：不适用，本单元只调整 Mobile 客户端展示与导航，权限服务未改。越权与混淆代理：不适用，未增加请求、代理身份或导出。并发与幂等：不适用，未改服务端写操作。数据解码与序列化：未改 API、SQL、分页或共享类型。迁移与回滚：不适用，未改迁移。敏感数据与日志：未新增凭据、Token、日志或含敏感内容的 artifact，截图使用合成 fixture。范围与结构膨胀：未改 schema、迁移、DTO、共享类型、配置或 `.env.example`。文件职责与重复：未发现超出 AC 的新增模块或重复业务逻辑。AC-01 至 AC-06 六页实现并各有 390×844 对照证据，差异逐条记录；AC-07 仅使用现有字段且图库照片以合成图替代；AC-08 页面级 types/lint、全量 Mobile E2E 和按需定向重跑均按记录完成，调整均为页面布局选择器/断言；AC-09 全量门通过且 web-baseline 通过；AC-10 原生路径留在交接待用户模拟器验证。未发现需修复 finding；权限、资金及外部回调失败路径不在本单元 AC 中 |
-| T08 | blocked | `等待用户模拟器验收` | `AC-10` | Android 硬件返回、安全区、底部固定判定栏宽度与键盘可达性待用户在模拟器验证；已登记 Backlog「待人工验收」 |
+| T08 | passed | `用户确认：「直接归档提交推送」` | `AC-10` | 用户授权直接归档，按整单通过处理；提交前仍建议在模拟器核验 Android 硬件返回、安全区、固定判定栏宽度和键盘可达性 |
 
 <!-- 行格式见 AGENTS.md 第 7 节。status：passed / failed / blocked / skipped。机器门的行照 `scripts/gate.py` 的输出写（门的名字、结果、HEAD），不自己判通过；artifact 只写代码格式的路径。 -->
 
 ## 交接
 
 - 和讨论时不一样的：今日页不展示设计稿中的门店照片、店长姓名，看板不新增取数实现设计稿中的今日概况；具体理由见「决策与偏差」及六页对照记录。
-- 需要你测的：Android 硬件返回应回到进入详情页的来源页；顶部与底部安全区、底部手势区和固定判定栏不重叠；判定按钮沿用 67f4c26 的宽度规则；打开打回理由键盘后输入框、确认和取消可达；我的页编辑昵称时键盘与保存/取消操作可达。
+- 需要你测的：Android 硬件返回应回到进入详情页的来源页；顶部与底部安全区、底部手势区和固定判定栏不重叠；判定按钮沿用 67f4c26 的宽度规则；打开打回理由键盘后输入框、确认和取消可达；我的页编辑昵称时键盘与保存/取消操作可达。用户指示「直接归档提交推送」，按整单通过处理。
 
 ## 回修
 
@@ -70,3 +70,4 @@
 - Mobile E2E gate wrapper 不支持按失败用例过滤；按用户效率要求，失败项重跑使用同一 Playwright 配置和 `--grep` 定向到失败标题。今日页 AC-03 的原始失败由链接内的角色定位方式导致，修正选择器后单独运行通过。
 - 因为用户明确要求不使用子 Agent 或另开复核会话，最终代码审查在本会话执行，并在证据备注记录同会话审查原因。
 - 按用户要求将全量 Mobile E2E 中定向重跑才通过的 7 项记为「全量运行时不稳定」，后续不循环重跑；T08 全量门再次失败时只单独重跑失败项一次，仍失败即停止并报告：`FW-034 AC-04 周月指标与门店、店长和日期趋势`、`FW-034 AC-01、AC-02 审核队列、失败转人工、打回重传与改判`、`管理员登录进入今日，管理页显示六个配置入口`、`管理员通知入口标记逾期通知已读并进入审核队列`、`管理员从待人工审核通知进入详情后返回通知收件箱`、`FW-035 AC-04/05 Mobile Web 个人资料：hq@northbean.example`、`FW-035 AC-03/05 Mobile Web 主动改密与其他会话登出：hq@northbean.example`。
+- 归档时起停脚本未登记的监听进程保留未处理：API 端口 3018（PID 238516）、Metro 端口 3020（PID 189520），另有非项目服务占用 3113（WebStorm embeddings-server，PID 97332）。按协议未终止这些进程。

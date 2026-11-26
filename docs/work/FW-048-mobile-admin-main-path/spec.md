@@ -38,7 +38,7 @@
 
 ## 涉及的当前事实
 
-- 无
+- [`docs/specs/mobile-admin.md`](../../specs/mobile-admin.md)「入口与配置」「审核与看板」「我的与通知」「没有的」
 
 ## 依赖
 
